@@ -53,6 +53,14 @@ def generate_text_report(
     lines.append(f"Note:                   {meta_ref.note or 'N/A'}")
     lines.append(f"Wika Nr:                {meta_ref.wika_nr or 'N/A'}")
     
+    pipe_text = getattr(meta_ref, "pipe_logs_text", "").strip()
+    if pipe_text:
+        pipe_items = [p.strip() for p in pipe_text.splitlines() if p.strip()]
+        if pipe_items:
+            lines.append("Pipe Logs (Tube Numbers):")
+            for pipe_item in pipe_items:
+                lines.append(f"  - {pipe_item}")
+    
     lines.append(f"Total CSV Rows:         {analysis.total_raw_rows}")
     lines.append(f"Valid Points:           {analysis.valid_points_count}")
     lines.append(f"Excluded Rows:          {analysis.excluded_rows_count}")

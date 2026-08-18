@@ -119,6 +119,8 @@ def process_single_csv(
         from wika_report.models import CustomMetadata
         if override_custom_meta:
             analysis.custom_meta = override_custom_meta
+            if not getattr(analysis.custom_meta, "pipe_logs_text", None):
+                analysis.custom_meta.pipe_logs_text = config.graph.pipe_logs_text
         else:
             analysis.custom_meta = CustomMetadata(
                 test_pressure=config.graph.default_test_pressure,
@@ -128,7 +130,8 @@ def process_single_csv(
                 custom_date="", # dynamically extracted or filled
                 project=config.graph.default_project,
                 note=config.graph.default_note,
-                wika_nr=config.graph.wika_nr_active
+                wika_nr=config.graph.wika_nr_active,
+                pipe_logs_text=config.graph.pipe_logs_text
             )
         
         logger.info(f"[{file_path.name}] Анализ завершён: Мин={analysis.min_pressure_bar:.3f} bar, Макс={analysis.max_pressure_bar:.3f} bar, Длительность={analysis.duration_formatted}")

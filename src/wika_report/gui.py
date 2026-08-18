@@ -426,7 +426,8 @@ class WikaAppGUI:
                 note=self.note_var.get(),
                 wika_nr=self.wika_nr_var.get(),
                 create_pdf=self.create_pdf_var.get(),
-                attach_photos=list(self.attached_photos)
+                attach_photos=list(self.attached_photos),
+                pipe_logs_text=self.pipe_logs_text.get("1.0", tk.END).strip()
             )
 
             # Process CSV with GUI metadata overrides directly

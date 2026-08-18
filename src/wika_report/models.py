@@ -73,6 +73,7 @@ class CustomMetadata:
     wika_nr: str = ""
     create_pdf: bool = False
     attach_photos: List[str] = field(default_factory=list)
+    pipe_logs_text: str = ""
 
 
 @dataclass

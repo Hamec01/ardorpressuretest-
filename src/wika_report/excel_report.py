@@ -72,6 +72,7 @@ def build_excel_report(
         ("Ins No:", analysis.custom_meta.ins_no or "N/A"),
         ("Project:", analysis.custom_meta.project or "N/A"),
         ("Note:", analysis.custom_meta.note or "N/A"),
+        ("Pipe Logs:", analysis.custom_meta.pipe_logs_text.replace("\n", ", ") if getattr(analysis.custom_meta, "pipe_logs_text", None) else "N/A"),
         ("Raw CSV Rows:", analysis.total_raw_rows),
         ("Valid Points:", analysis.valid_points_count),
         ("Excluded Rows:", analysis.excluded_rows_count),
