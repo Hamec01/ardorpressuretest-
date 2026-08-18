@@ -57,7 +57,7 @@ def generate_text_report(
     if pipe_text:
         pipe_items = [p.strip() for p in pipe_text.splitlines() if p.strip()]
         if pipe_items:
-            lines.append("Pipe Logs (Tube Numbers):")
+            lines.append("Pipe Logs (Pipe Numbers):")
             for pipe_item in pipe_items:
                 lines.append(f"  - {pipe_item}")
     

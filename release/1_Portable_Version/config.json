@@ -14,8 +14,8 @@
     "y_min_bar": 0.0,
     "y_max_bar": 160.0,
     "show_datetime": false,
-    "show_tube_logs": false,
-    "tube_logs_text": ""
+    "show_pipe_logs": false,
+    "pipe_logs_text": ""
   },
   "analysis": {
     "test_pressure_bar": null,
