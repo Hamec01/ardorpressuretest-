@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wika-cpg1500-graph"
+version = "1.0.0"
+description = "Автоматическая обработка и анализ CSV-файлов манометра WIKA CPG1500"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.0.0",
+    "matplotlib>=3.7.0",
+    "openpyxl>=3.1.0",
+    "charset-normalizer>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

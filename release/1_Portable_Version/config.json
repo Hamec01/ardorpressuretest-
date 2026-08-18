@@ -1,0 +1,29 @@
+{
+  "target_unit": "bar",
+  "default_input_unit": null,
+  "move_processed_files": false,
+  "open_output_folder_after_finish": true,
+  "graph": {
+    "dpi": 180,
+    "width_inches": 14,
+    "height_inches": 7,
+    "show_minimum": true,
+    "show_maximum": true,
+    "show_limits": true,
+    "show_hold_period": true,
+    "y_min_bar": 0.0,
+    "y_max_bar": 160.0,
+    "show_datetime": false,
+    "show_tube_logs": false,
+    "tube_logs_text": ""
+  },
+  "analysis": {
+    "test_pressure_bar": null,
+    "lower_limit_bar": null,
+    "upper_limit_bar": null,
+    "hold_start_time_minutes": null,
+    "hold_end_time_minutes": null,
+    "allowed_drop_bar": null,
+    "create_pass_fail_result": false
+  }
+}
