@@ -25,3 +25,19 @@ export async function fetchTestByLog(logNo: string): Promise<PressureTest> {
 export function getRevisionZipUrl(logNo: string, revisionId: string): string {
   return `${API_BASE}/tests/${encodeURIComponent(logNo)}/revisions/${encodeURIComponent(revisionId)}/zip`;
 }
+
+export async function fetchRecords(query?: string, status?: string): Promise<any[]> {
+  let url = `${API_BASE}/records`;
+  const params = new URLSearchParams();
+  if (query && query.trim()) params.append('q', query.trim());
+  if (status && status !== 'all') params.append('status', status);
+  if (params.toString()) url += `?${params.toString()}`;
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to load records (${res.status})`);
+  return res.json();
+}
+
+export function getRecordPdfUrl(recordId: string): string {
+  return `${API_BASE}/records/${encodeURIComponent(recordId)}/pdf`;
+}

@@ -45,3 +45,37 @@ export interface PressureTest {
   updated_at: string;
   revisions: TestRevision[];
 }
+
+export interface RecordItem {
+  id?: string;
+  item_no: number;
+  pipe_number: string;
+  drawing_no?: string | null;
+  spool_no?: string | null;
+  log_no?: string | null;
+  hold_start_bar?: string | null;
+  hold_end_bar?: string | null;
+  result: 'PASS' | 'FAIL' | 'PENDING';
+  notes?: string | null;
+}
+
+export interface PressureTestRecord {
+  id: string;
+  record_number: string;
+  project: string;
+  system: string;
+  ins_no?: string | null;
+  test_date?: string | null;
+  test_medium: string;
+  design_pressure?: string | null;
+  test_pressure?: string | null;
+  duration_min: string;
+  status: 'draft' | 'complete' | 'confirmed' | 'signed';
+  foreman_name?: string | null;
+  qc_inspector?: string | null;
+  client_surveyor?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  items: RecordItem[];
+}

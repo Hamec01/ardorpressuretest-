@@ -105,3 +105,45 @@ class AuditEvent(Base):
     entity_id = Column(String(64), nullable=False)
     details_json = Column(JSON, default=dict, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class PressureTestRecord(Base):
+    __tablename__ = "pressure_test_records"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    record_number = Column(String(64), unique=True, index=True, nullable=False)
+    project = Column(String(128), nullable=False, default="ARDOR Project")
+    system = Column(String(128), nullable=False, default="Piping System")
+    ins_no = Column(String(64), nullable=True)
+    test_date = Column(String(32), nullable=True)
+    test_medium = Column(String(64), default="Water")
+    design_pressure = Column(String(64), nullable=True)
+    test_pressure = Column(String(64), nullable=True)
+    duration_min = Column(String(32), default="60 min")
+    status = Column(String(32), default="draft", nullable=False)  # draft, complete, confirmed, signed
+    foreman_name = Column(String(128), nullable=True)
+    qc_inspector = Column(String(128), nullable=True)
+    client_surveyor = Column(String(128), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    items = relationship("PressureTestRecordItem", back_populates="record", cascade="all, delete-orphan")
+
+
+class PressureTestRecordItem(Base):
+    __tablename__ = "pressure_test_record_items"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    record_id = Column(String(36), ForeignKey("pressure_test_records.id"), nullable=False, index=True)
+    item_no = Column(Integer, nullable=False)
+    pipe_number = Column(String(128), nullable=False)
+    drawing_no = Column(String(128), nullable=True)
+    spool_no = Column(String(128), nullable=True)
+    log_no = Column(String(64), nullable=True)
+    hold_start_bar = Column(String(32), nullable=True)
+    hold_end_bar = Column(String(32), nullable=True)
+    result = Column(String(32), default="PASS", nullable=False)  # PASS, FAIL, PENDING
+    notes = Column(String(255), nullable=True)
+
+    record = relationship("PressureTestRecord", back_populates="items")
