@@ -499,5 +499,5 @@ def export_record_pdf(id: str, db: Session = Depends(get_db)):
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{record.record_number}_Record.pdf"'}
+        headers={"Content-Disposition": f'inline; filename="{record.record_number}_Record.pdf"'}
     )

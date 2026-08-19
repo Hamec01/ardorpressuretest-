@@ -97,12 +97,16 @@ def get_artifact_file(artifact_id: str, db: Session = Depends(get_db)):
         media_type = "image/png"
     elif artifact.name.endswith(".pdf"):
         media_type = "application/pdf"
-    elif artifact.name.endswith(".xlsx"):
-        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     elif artifact.name.endswith(".txt") or artifact.name.endswith(".csv"):
         media_type = "text/plain; charset=utf-8"
 
-    return FileResponse(path=file_path, media_type=media_type, filename=artifact.name)
+    is_inline = artifact.name.lower().endswith((".pdf", ".png", ".jpg", ".jpeg", ".txt", ".csv"))
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        filename=artifact.name,
+        content_disposition_type="inline" if is_inline else "attachment"
+    )
 
 
 @router.get("/{log_no}/revisions/{revision_id}/zip")
