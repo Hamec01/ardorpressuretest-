@@ -5,11 +5,22 @@ from services.api.main import app
 from services.api.database import Base, engine
 
 
+import shutil
+from pathlib import Path
+from services.api.config import settings
+from services.api.storage import storage
+
+
 @pytest.fixture(autouse=True)
 def setup_db():
     Base.metadata.create_all(bind=engine)
+    if settings.storage_dir.exists():
+        shutil.rmtree(settings.storage_dir, ignore_errors=True)
+    settings.storage_dir.mkdir(parents=True, exist_ok=True)
     yield
     Base.metadata.drop_all(bind=engine)
+    if settings.storage_dir.exists():
+        shutil.rmtree(settings.storage_dir, ignore_errors=True)
 
 
 def test_health_endpoints():

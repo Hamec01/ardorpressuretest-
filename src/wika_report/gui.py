@@ -226,7 +226,22 @@ class WikaAppGUI:
             style="Primary.TButton",
             command=self._start_processing
         )
-        self.btn_run.pack(side=tk.LEFT)
+        self.btn_run.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.btn_sync = ttk.Button(
+            bottom_frame,
+            text="🔄 Sync Server",
+            style="Action.TButton",
+            command=self._start_server_sync
+        )
+        self.btn_sync.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.btn_queue = ttk.Button(
+            bottom_frame,
+            text="📋 Queue",
+            command=self._show_queue_dialog
+        )
+        self.btn_queue.pack(side=tk.LEFT)
 
         btn_open_out = ttk.Button(
             bottom_frame,
@@ -507,6 +522,97 @@ class WikaAppGUI:
             )
 
         self.root.after(0, on_complete)
+
+    def _start_server_sync(self):
+        """Запускает синхронизацию локальной очереди с бэкенд-сервером."""
+        from wika_report.sync_client import SyncClient
+        from wika_report.sync_queue import sync_queue
+
+        summary = sync_queue.get_summary()
+        pending_count = summary.get("pending", 0) + summary.get("failed", 0)
+        if pending_count == 0:
+            self._log("[СИНХРОНИЗАЦИЯ] Все ревизии уже синхронизированы с сервером.")
+            messagebox.showinfo("Sync", "All test logs are already synced with the server.")
+            return
+
+        self._log(f"\n[СИНХРОНИЗАЦИЯ] Начало отправки {pending_count} элементов на сервер...")
+        self.btn_sync.configure(state=tk.DISABLED)
+
+        def sync_worker():
+            client = SyncClient()
+            if not client.check_health():
+                self._log("[СЕРВЕР НЕДОСТУПЕН] Сервер не запущен (http://localhost:8000). Логи безопасно сохранены в локальной офлайн-очереди.")
+                self.root.after(0, lambda: self.btn_sync.configure(state=tk.NORMAL))
+                self.root.after(0, lambda: messagebox.showwarning(
+                    "Server Offline",
+                    "Local backend server is offline.\n\nAll test logs remain safely queued offline in SQLite."
+                ))
+                return
+
+            res = client.sync_all_pending()
+            self._log(f"[СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА] Синхронизировано: {res['synced']}, Ошибок: {res['failed']}")
+            self.root.after(0, lambda: self.btn_sync.configure(state=tk.NORMAL))
+            self.root.after(0, lambda: messagebox.showinfo(
+                "Sync Finished",
+                f"Synchronization complete!\n\nSynced: {res['synced']}\nFailed: {res['failed']}"
+            ))
+
+        threading.Thread(target=sync_worker, daemon=True).start()
+
+    def _show_queue_dialog(self):
+        """Отображает окно с историей и статусом очереди синхронизации."""
+        from wika_report.sync_queue import sync_queue
+        items = sync_queue.get_all_items()
+
+        win = tk.Toplevel(self.root)
+        win.title("Offline Sync Queue")
+        win.geometry("680x400")
+        win.minsize(550, 300)
+
+        top_frame = ttk.Frame(win, padding=10)
+        top_frame.pack(fill=tk.X)
+
+        summary = sync_queue.get_summary()
+        lbl_stats = ttk.Label(
+            top_frame,
+            text=f"Total: {summary['total']} | Pending: {summary['pending']} | Synced: {summary['synced']} | Failed: {summary['failed']}",
+            font=("Segoe UI", 10, "bold")
+        )
+        lbl_stats.pack(side=tk.LEFT)
+
+        btn_sync_now = ttk.Button(top_frame, text="Sync Now", command=lambda: [win.destroy(), self._start_server_sync()])
+        btn_sync_now.pack(side=tk.RIGHT)
+
+        tree_frame = ttk.Frame(win, padding=10)
+        tree_frame.pack(fill=tk.BOTH, expand=True)
+
+        columns = ("log_no", "revision_id", "status", "created_at", "receipt")
+        tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=12)
+        tree.heading("log_no", text="Log No.")
+        tree.heading("revision_id", text="Revision ID")
+        tree.heading("status", text="Status")
+        tree.heading("created_at", text="Created At")
+        tree.heading("receipt", text="Receipt / Info")
+
+        tree.column("log_no", width=90, anchor=tk.CENTER)
+        tree.column("revision_id", width=140, anchor=tk.CENTER)
+        tree.column("status", width=80, anchor=tk.CENTER)
+        tree.column("created_at", width=150, anchor=tk.CENTER)
+        tree.column("receipt", width=180, anchor=tk.W)
+
+        scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        for it in items:
+            tree.insert("", tk.END, values=(
+                it.log_no,
+                it.revision_id,
+                it.status.upper(),
+                it.created_at[:19].replace("T", " "),
+                it.receipt_id or it.last_error or "-"
+            ))
 
 
 def launch_gui():

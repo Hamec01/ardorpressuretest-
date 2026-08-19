@@ -278,6 +278,14 @@ def process_test_input(
         result.manifest_path = manifest_file
         result.warnings = warnings
         result.success = True
+        
+        # Автоматическое добавление в локальную очередь синхронизации
+        try:
+            from wika_report.sync_queue import sync_queue
+            sync_queue.enqueue_revision(normalized_log, revision_id, manifest_file)
+        except Exception as q_ex:
+            logger.warning(f"Failed to enqueue to sync queue: {q_ex}")
+
         logger.info(f"[УСПЕХ] Ревизия лога {normalized_log} (ID: {revision_id}) успешно сформирована.")
 
     except Exception as e:
