@@ -32,6 +32,10 @@ wheels/
 output/
 processed/
 failed/
+storage/
+*.db
+*.sqlite3
+*.sqlite
 
 # Input CSV files (except samples)
 input/*.csv
