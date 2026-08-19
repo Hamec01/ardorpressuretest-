@@ -25,7 +25,6 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
   const [wikaNr, setWikaNr] = useState<string>('BG516-GDTZ-13-D');
   const [note, setNote] = useState<string>('');
   const [pipeRaw, setPipeRaw] = useState<string>('');
-  const [bundleRaw, setBundleRaw] = useState<string>('');
   const [pipePhotos, setPipePhotos] = useState<File[]>([]);
   const [gaugePhotos, setGaugePhotos] = useState<File[]>([]);
   
@@ -123,8 +122,17 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
       formData.append('operator', operator.trim());
       formData.append('wika_nr', wikaNr.trim());
       formData.append('note', note.trim());
+      // Extract bundle numbers from pipe lines formatted as "Bundle/Pipe" (e.g. 122153/41)
+      const extractedBundles = pipeRaw
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.includes('/'))
+        .map(line => line.split('/')[0].trim())
+        .filter(Boolean);
+      const autoBundles = Array.from(new Set(extractedBundles)).join('\n');
+
       formData.append('pipe_numbers_raw', pipeRaw);
-      formData.append('bundle_numbers_raw', bundleRaw);
+      formData.append('bundle_numbers_raw', autoBundles);
       formData.append('create_pdf', 'true');
 
       for (const pf of pipePhotos) {
@@ -410,38 +418,26 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
               </div>
             </div>
 
-            {/* Section 3: Pipes and Bundles */}
+            {/* Section 3: Pipe Logs & Bundles */}
             <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--accent-cyan)' }}>
-                3. Pipe Numbers & Bundles
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
-                    Pipe Numbers (one per line)
-                  </label>
-                  <textarea
-                    className="search-input"
-                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem', height: '70px', resize: 'vertical' }}
-                    placeholder="P-101&#10;P-102&#10;P-103"
-                    value={pipeRaw}
-                    onChange={(e) => setPipeRaw(e.target.value)}
-                  />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-cyan)' }}>
+                  3. Pipe Logs (Номера связок и труб)
                 </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
-                    Bundle Numbers
-                  </label>
-                  <textarea
-                    className="search-input"
-                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem', height: '70px', resize: 'vertical' }}
-                    placeholder="B-01&#10;B-02"
-                    value={bundleRaw}
-                    onChange={(e) => setBundleRaw(e.target.value)}
-                  />
-                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--accent-emerald)', fontWeight: 500 }}>
+                  Формат: Сначала Bundle, затем Pipe (Bundle/Pipe)
+                </span>
               </div>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                Вводите по одному номеру на строку. В начале пишется номер бандла (Bundle), затем через слеш номер трубы (Pipe):
+              </label>
+              <textarea
+                className="search-input"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.5rem 0.75rem', fontSize: '0.9rem', height: '95px', resize: 'vertical', fontFamily: 'Consolas, monospace', lineHeight: 1.4 }}
+                placeholder="122153/41&#10;122153/21&#10;122153/25"
+                value={pipeRaw}
+                onChange={(e) => setPipeRaw(e.target.value)}
+              />
             </div>
 
             {/* Section 4: Photo Attachments */}
