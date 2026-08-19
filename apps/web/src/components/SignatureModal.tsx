@@ -104,12 +104,16 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({ record, onClose,
       if (!canvas) return;
       const dataUrl = canvas.toDataURL('image/png');
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch(`/api/v1/records/${record.id}/signature`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({ image_base64: dataUrl })
       });
 

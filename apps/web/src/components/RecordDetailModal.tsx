@@ -40,11 +40,14 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({ record: in
       const formData = new FormData();
       formData.append('file', file);
 
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch(`/api/v1/records/${record.id}/signed-copy`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
+        headers,
         body: formData
       });
 

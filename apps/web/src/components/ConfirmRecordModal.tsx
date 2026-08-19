@@ -25,12 +25,16 @@ export const ConfirmRecordModal: React.FC<ConfirmRecordModalProps> = ({ record, 
       setIsSubmitting(true);
       setErrorMsg(null);
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const res = await fetch(`/api/v1/records/${record.id}/confirm`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        }
+        headers
       });
 
       if (!res.ok) {
