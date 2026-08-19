@@ -6,9 +6,10 @@ import { Plus, Download, User, Search, RefreshCw, FileSpreadsheet, ShieldCheck }
 interface RecordsTabProps {
   onSelectRecord: (rec: PressureTestRecord) => void;
   onNewRecordClick: () => void;
+  refreshTrigger?: number;
 }
 
-export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRecordClick }) => {
+export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRecordClick, refreshTrigger = 0 }) => {
   const [records, setRecords] = useState<PressureTestRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
@@ -29,9 +30,9 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRec
   useEffect(() => {
     const timer = setTimeout(() => {
       loadRecords();
-    }, 200);
+    }, 150);
     return () => clearTimeout(timer);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, refreshTrigger]);
 
   return (
     <div>

@@ -31,6 +31,7 @@ export const App: React.FC = () => {
   // PTR State
   const [selectedRecord, setSelectedRecord] = useState<PressureTestRecord | null>(null);
   const [isNewRecordOpen, setIsNewRecordOpen] = useState<boolean>(false);
+  const [recordsRefreshKey, setRecordsRefreshKey] = useState<number>(0);
 
   const loadData = async (query?: string) => {
     try {
@@ -188,6 +189,7 @@ export const App: React.FC = () => {
           </>
         ) : (
           <RecordsTab
+            refreshTrigger={recordsRefreshKey}
             onSelectRecord={(rec) => setSelectedRecord(rec)}
             onNewRecordClick={() => setIsNewRecordOpen(true)}
           />
@@ -228,7 +230,9 @@ export const App: React.FC = () => {
         <RecordDetailModal
           record={selectedRecord}
           onClose={() => setSelectedRecord(null)}
-          onUpdate={() => {}}
+          onUpdate={() => {
+            setRecordsRefreshKey(k => k + 1);
+          }}
         />
       )}
 
@@ -237,6 +241,7 @@ export const App: React.FC = () => {
           onClose={() => setIsNewRecordOpen(false)}
           onSuccess={(created) => {
             setIsNewRecordOpen(false);
+            setRecordsRefreshKey(k => k + 1);
             setSelectedRecord(created);
           }}
         />
