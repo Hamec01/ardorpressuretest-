@@ -31,12 +31,11 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="header-inner">
         <a href="/" className="brand-badge" style={{ gap: '0.85rem' }}>
           <img
-            src="/ardor_logo.png"
+            src="/ardor_logo_white.png"
             alt="ARDOR"
-            style={{ height: '28px', width: 'auto', display: 'block' }}
+            style={{ height: '28px', width: 'auto', display: 'block', filter: 'brightness(0) invert(1)' }}
             onError={(e) => {
-              // Fallback if image not rendered
-              e.currentTarget.style.display = 'none';
+              e.currentTarget.src = '/ardor_logo.png';
             }}
           />
           <div style={{ borderLeft: '1px solid var(--border-color)', paddingLeft: '0.85rem' }}>
