@@ -189,6 +189,10 @@ export const App: React.FC = () => {
         <TestDetailModal
           test={selectedTest}
           onClose={() => setSelectedTest(null)}
+          onUpdate={(updated) => {
+            setSelectedTest(updated);
+            loadData(searchQuery);
+          }}
         />
       )}
 

@@ -132,3 +132,119 @@ def download_revision_zip(log_no: str, revision_id: str, db: Session = Depends(g
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="Log_{norm_log}_{revision_id}.zip"'}
     )
+
+
+from pydantic import BaseModel
+
+class TestMetadataUpdate(BaseModel):
+    operator: Optional[str] = None
+    project: Optional[str] = None
+    system: Optional[str] = None
+    ins_no: Optional[str] = None
+    test_pressure: Optional[str] = None
+    wika_nr: Optional[str] = None
+    note: Optional[str] = None
+    pipe_numbers: Optional[List[str]] = None
+    bundle_numbers: Optional[List[str]] = None
+
+
+@router.put("/{log_no}/revisions/{revision_id}/metadata", response_model=PressureTestResponse)
+def update_revision_metadata(
+    log_no: str,
+    revision_id: str,
+    payload: TestMetadataUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Редактирование метаданных испытания (оператор, проект, система, инспекционный номер, трубы):
+    - Обновляет поля в TestRevision и metadata_json;
+    - Обновляет связанные записи Pipe и Bundle;
+    - Логирует изменение в журнале аудита;
+    - Возвращает обновлённую карточку испытания.
+    """
+    from services.api.routes.auth import log_audit_event
+    import json
+
+    norm_log = normalize_log_no(log_no)
+    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+    if not test:
+        raise HTTPException(status_code=404, detail="Pressure test not found.")
+
+    rev = (
+        db.query(TestRevision)
+        .filter(TestRevision.pressure_test_id == test.id, TestRevision.revision_id == revision_id)
+        .first()
+    )
+    if not rev:
+        raise HTTPException(status_code=404, detail="Revision not found.")
+
+    # 1. Update metadata json
+    meta = dict(rev.metadata_json or {})
+    if payload.operator is not None:
+        rev.operator = payload.operator.strip()
+        meta["operator"] = payload.operator.strip()
+    if payload.project is not None:
+        meta["project"] = payload.project.strip()
+    if payload.system is not None:
+        meta["system"] = payload.system.strip()
+    if payload.ins_no is not None:
+        meta["ins_no"] = payload.ins_no.strip()
+    if payload.test_pressure is not None:
+        meta["test_pressure"] = payload.test_pressure.strip()
+    if payload.wika_nr is not None:
+        meta["wika_nr"] = payload.wika_nr.strip()
+    if payload.note is not None:
+        meta["note"] = payload.note.strip()
+
+    if payload.pipe_numbers is not None:
+        meta["pipe_numbers"] = payload.pipe_numbers
+        # Recreate pipes in db
+        db.query(Pipe).filter(Pipe.test_revision_id == rev.id).delete()
+        for p in payload.pipe_numbers:
+            if p.strip():
+                db.add(Pipe(test_revision_id=rev.id, pipe_number=p.strip()))
+
+    if payload.bundle_numbers is not None:
+        meta["bundle_numbers"] = payload.bundle_numbers
+        # Recreate bundles in db
+        db.query(Bundle).filter(Bundle.test_revision_id == rev.id).delete()
+        for b in payload.bundle_numbers:
+            if b.strip():
+                db.add(Bundle(test_revision_id=rev.id, bundle_number=b.strip()))
+
+    rev.metadata_json = meta
+
+    # 2. Update stored manifest file if present in storage
+    manifest_art = db.query(Artifact).filter(
+        Artifact.test_revision_id == rev.id,
+        Artifact.name == "manifest.json"
+    ).first()
+    if manifest_art:
+        mf_path = storage.get_file_path(manifest_art.storage_key)
+        if mf_path and mf_path.exists():
+            try:
+                with open(mf_path, "r", encoding="utf-8") as mf_in:
+                    mf_data = json.load(mf_in)
+                mf_data["metadata"] = meta
+                with open(mf_path, "w", encoding="utf-8") as mf_out:
+                    json.dump(mf_data, mf_out, indent=2, ensure_ascii=False)
+            except Exception:
+                pass
+
+    log_audit_event(
+        db,
+        action="test_metadata_updated",
+        entity_type="test_revision",
+        entity_id=str(rev.id),
+        details={"log_no": norm_log, "revision_id": revision_id, "updated_by": rev.operator}
+    )
+
+    db.commit()
+
+    return (
+        db.query(PressureTest)
+        .options(joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts))
+        .filter(PressureTest.id == test.id)
+        .first()
+    )
+
