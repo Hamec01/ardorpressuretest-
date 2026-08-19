@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.api.config import settings
 from services.api.database import Base, engine
-from services.api.routes import health, sync, tests
+from services.api.routes import health, process, sync, tests
 
 logging.basicConfig(level=logging.INFO if not settings.debug else logging.DEBUG)
 logger = logging.getLogger("ardor_api")
@@ -36,3 +36,4 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(tests.router)
 app.include_router(sync.router)
+app.include_router(process.router)

@@ -3,6 +3,7 @@ import { Header } from './components/Header';
 import { SearchFilters } from './components/SearchFilters';
 import { TestCard } from './components/TestCard';
 import { TestDetailModal } from './components/TestDetailModal';
+import { NewTestModal } from './components/NewTestModal';
 import { fetchPressureTests } from './api';
 import { PressureTest } from './types';
 import { RefreshCw, Inbox, AlertCircle } from 'lucide-react';
@@ -14,6 +15,7 @@ export const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [selectedTest, setSelectedTest] = useState<PressureTest | null>(null);
+  const [isNewTestOpen, setIsNewTestOpen] = useState<boolean>(false);
 
   const loadData = async (query?: string) => {
     try {
@@ -47,9 +49,18 @@ export const App: React.FC = () => {
     return tests;
   }, [tests, activeFilter]);
 
+  const handleTestCreated = (createdTest: PressureTest) => {
+    setIsNewTestOpen(false);
+    loadData(searchQuery);
+    setSelectedTest(createdTest);
+  };
+
   return (
     <div className="app-container">
-      <Header totalCount={tests.length} />
+      <Header
+        totalCount={tests.length}
+        onNewTestClick={() => setIsNewTestOpen(true)}
+      />
 
       <main className="main-content">
         <SearchFilters
@@ -90,7 +101,7 @@ export const App: React.FC = () => {
             <div style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
               No matching tests found
             </div>
-            <p>Try searching with another Log Number, Pipe Number, or clear the search query.</p>
+            <p>Try searching with another Log Number, Pipe Number, or click "+ New Test" to upload one.</p>
           </div>
         ) : (
           <div className="cards-grid">
@@ -109,6 +120,13 @@ export const App: React.FC = () => {
         <TestDetailModal
           test={selectedTest}
           onClose={() => setSelectedTest(null)}
+        />
+      )}
+
+      {isNewTestOpen && (
+        <NewTestModal
+          onClose={() => setIsNewTestOpen(false)}
+          onSuccess={handleTestCreated}
         />
       )}
     </div>

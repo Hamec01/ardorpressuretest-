@@ -117,3 +117,33 @@ def test_sync_flow_and_query():
     list_res = client.get("/api/v1/tests")
     assert list_res.status_code == 200
     assert len(list_res.json()) >= 1
+
+
+def test_web_process_endpoint():
+    client = TestClient(app)
+    csv_sample_path = Path("samples/sample_1_semicolon_comma.csv")
+    assert csv_sample_path.exists()
+
+    with open(csv_sample_path, "rb") as f:
+        form_data = {
+            "log_no": "014FED",
+            "test_pressure": "15 bar",
+            "system": "Hydraulic Section A",
+            "operator": "Pekka",
+            "pipe_numbers_raw": "PIPE-901\nPIPE-902",
+            "bundle_numbers_raw": "B-10",
+            "create_pdf": "false"
+        }
+        files = {
+            "csv_file": ("sample_1.csv", f, "text/csv")
+        }
+        res = client.post("/api/v1/process", data=form_data, files=files)
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["log_no"] == "014FED"
+    assert len(data["revisions"]) == 1
+    rev = data["revisions"][0]
+    assert rev["operator"] == "Pekka"
+    assert len(rev["artifacts"]) >= 3  # CSV, PNG, XLSX, TXT
+

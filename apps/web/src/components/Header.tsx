@@ -1,11 +1,12 @@
 import React from 'react';
-import { ShieldCheck, Database } from 'lucide-react';
+import { ShieldCheck, Database, Plus } from 'lucide-react';
 
 interface HeaderProps {
   totalCount: number;
+  onNewTestClick: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ totalCount }) => {
+export const Header: React.FC<HeaderProps> = ({ totalCount, onNewTestClick }) => {
   return (
     <header className="app-header">
       <div className="header-inner">
@@ -27,6 +28,15 @@ export const Header: React.FC<HeaderProps> = ({ totalCount }) => {
             <ShieldCheck size={15} />
             <span>Local Node Online</span>
           </div>
+
+          <button
+            className="btn-primary"
+            onClick={onNewTestClick}
+            style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}
+          >
+            <Plus size={16} />
+            <span>New Test</span>
+          </button>
         </div>
       </div>
     </header>
