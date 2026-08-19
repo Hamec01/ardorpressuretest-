@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, X, LayoutGrid, List } from 'lucide-react';
+import { useI18n } from '../context/LanguageContext';
 
 interface SearchFiltersProps {
   query: string;
@@ -18,21 +19,23 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
   viewMode = 'grid',
   onViewModeChange
 }) => {
+  const { t } = useI18n();
+
   return (
     <div className="search-section">
       <div className="search-input-wrapper">
-        <Search className="search-icon" size={22} />
+        <Search className="search-icon" size={20} />
         <input
           type="text"
           className="search-input"
-          placeholder="Search by Log No. (e.g. 014FED), Pipe No. (e.g. 122153/41), Bundle, Operator or Project..."
+          placeholder={t('search_placeholder')}
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           autoFocus
         />
         {query && (
           <button className="search-clear-btn" onClick={() => onQueryChange('')} title="Clear search">
-            <X size={18} />
+            <X size={16} />
           </button>
         )}
       </div>
@@ -43,13 +46,13 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
             className={`filter-pill ${activeFilter === 'all' ? 'active' : ''}`}
             onClick={() => onFilterSelect('all')}
           >
-            All Tests
+            {t('filter_all')}
           </button>
           <button
             className={`filter-pill ${activeFilter === 'complete' ? 'active' : ''}`}
             onClick={() => onFilterSelect('complete')}
           >
-            Complete Revisions
+            {t('filter_complete')}
           </button>
           <button
             className={`filter-pill ${activeFilter === 'recent' ? 'active' : ''}`}
@@ -79,10 +82,10 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
                 fontWeight: 600,
                 transition: 'all 0.2s ease'
               }}
-              title="Плитка (Grid view with photo thumbnails)"
+              title="Cards / Grid view"
             >
               <LayoutGrid size={15} />
-              <span>Карточки</span>
+              <span>{t('view_grid')}</span>
             </button>
 
             <button
@@ -102,10 +105,10 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
                 fontWeight: 600,
                 transition: 'all 0.2s ease'
               }}
-              title="Таблица / Список (Compact table view)"
+              title="Table / List view"
             >
               <List size={15} />
-              <span>Таблица</span>
+              <span>{t('view_table')}</span>
             </button>
           </div>
         )}

@@ -1,6 +1,7 @@
 import React from 'react';
 import { PressureTest, TestRevision } from '../types';
 import { getRevisionZipUrl } from '../api';
+import { useI18n } from '../context/LanguageContext';
 import { Download, ExternalLink, User, Calendar } from 'lucide-react';
 
 interface TestTableViewProps {
@@ -9,22 +10,24 @@ interface TestTableViewProps {
 }
 
 export const TestTableView: React.FC<TestTableViewProps> = ({ tests, onSelectTest }) => {
+  const { t } = useI18n();
+
   return (
     <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
           <thead>
             <tr style={{ background: 'rgba(15, 23, 42, 0.6)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              <th style={{ padding: '0.85rem 1rem' }}>Log No.</th>
-              <th style={{ padding: '0.85rem 1rem' }}>System / Project</th>
-              <th style={{ padding: '0.85rem 1rem' }}>Target</th>
-              <th style={{ padding: '0.85rem 1rem' }}>Min / Max (bar)</th>
-              <th style={{ padding: '0.85rem 1rem' }}>Duration</th>
-              <th style={{ padding: '0.85rem 1rem' }}>Pipe Logs</th>
-              <th style={{ padding: '0.85rem 1rem' }}>Operator</th>
-              <th style={{ padding: '0.85rem 1rem' }}>Date</th>
-              <th style={{ padding: '0.85rem 1rem' }}>Status</th>
-              <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Actions</th>
+              <th style={{ padding: '0.85rem 1rem' }}>{t('col_log_no')}</th>
+              <th style={{ padding: '0.85rem 1rem' }}>{t('col_system_project')}</th>
+              <th style={{ padding: '0.85rem 1rem' }}>{t('col_target_p')}</th>
+              <th style={{ padding: '0.85rem 1rem' }}>{t('col_min_max')}</th>
+              <th style={{ padding: '0.85rem 1rem' }}>{t('col_duration')}</th>
+              <th style={{ padding: '0.85rem 1rem' }}>{t('col_pipes')}</th>
+              <th style={{ padding: '0.85rem 1rem' }}>{t('col_operator')}</th>
+              <th style={{ padding: '0.85rem 1rem' }}>{t('col_date')}</th>
+              <th style={{ padding: '0.85rem 1rem' }}>{t('col_status')}</th>
+              <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>{t('col_actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -132,7 +135,7 @@ export const TestTableView: React.FC<TestTableViewProps> = ({ tests, onSelectTes
                         title="View Details"
                       >
                         <ExternalLink size={13} />
-                        <span>View</span>
+                        <span>{t('btn_view')}</span>
                       </button>
                       {primaryRev && (
                         <a

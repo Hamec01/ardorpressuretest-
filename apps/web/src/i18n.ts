@@ -1,0 +1,219 @@
+export type Language = 'en' | 'fi' | 'ru';
+
+export const translations = {
+  en: {
+    // Header & Brand
+    brand_title: 'ARDOR Pressure Test',
+    brand_subtitle: 'Pipeline & Vessel Traceability Hub',
+    tab_tests: 'Pressure Tests (Logs)',
+    tab_records: 'Pressure Test Records (PTR)',
+    tab_faq: 'Guide & FAQ',
+    node_online: 'Local Node Online',
+    btn_new_test: '+ New Test',
+    btn_login: 'Sign In',
+    btn_logout: 'Logout',
+    btn_audit: 'Audit Log',
+    indexed_count: 'Indexed: {count} tests',
+
+    // Search & Filter
+    search_placeholder: 'Search by Log No (e.g. 014FED), Pipe/Bundle (122153/41), Project or Operator...',
+    filter_all: 'All Tests',
+    filter_complete: 'Complete',
+    filter_pending: 'Pending / Draft',
+    view_grid: 'Cards',
+    view_table: 'Table',
+    btn_refresh: 'Refresh',
+
+    // Test Cards
+    col_log_no: 'Log No.',
+    col_system_project: 'System / Project',
+    col_target_p: 'Target Press.',
+    col_min_max: 'Min / Max (bar)',
+    col_duration: 'Duration',
+    col_pipes: 'Pipe Numbers',
+    col_operator: 'Operator',
+    col_date: 'Date',
+    col_status: 'Status',
+    col_actions: 'Actions',
+    btn_view: 'View',
+    btn_download_zip: 'ZIP Package',
+    no_tests_title: 'No matching tests found',
+    no_tests_desc: 'Try searching with another query or upload a new test.',
+
+    // PTR Records Tab
+    ptr_banner_title: 'ARDOR Pressure Test Records (PTR Blanks)',
+    ptr_banner_desc: 'Official summary test records with pipe tables, pressure hold proofs, foreman signatures, and digital verification seal.',
+    btn_create_ptr: '+ Create Record (New PTR)',
+    ptr_search_placeholder: 'Search by Record No (e.g. NB1402PM-13388), Project, System or Foreman...',
+    filter_draft: 'Drafts',
+    filter_confirmed: 'Confirmed / Signed',
+    no_ptr_title: 'No Pressure Test Records found',
+    no_ptr_desc: 'Pressure Test Record combines multiple tested pipes into an official ARDOR blank with digital signatures and verification seal.',
+    btn_create_first_ptr: 'Create First PTR Record',
+
+    // Modals
+    modal_close: 'Close',
+    modal_cancel: 'Cancel',
+    modal_save: 'Save',
+    modal_saving: 'Saving...',
+
+    // PTR Detail & View
+    view_pdf_tab: '📄 Live PDF Document',
+    view_data_tab: '📋 Pipe Data Table',
+    btn_open_new_tab: 'Open in New Tab',
+    btn_download_pdf: 'Download PDF',
+    btn_draw_signature: '🔏 Draw Signature',
+    btn_seal_record: 'Seal & Verify',
+    verified_badge: 'Digitally Verified ARDOR Document',
+    signed_by: 'Signed by',
+
+    // FAQ Tab
+    faq_title: 'ARDOR Pressure Test — User Guide & FAQ',
+    faq_subtitle: 'Everything you need to know about uploading logs, reading graphs, creating official PTR blanks, and digital verification.',
+    faq_search: 'Search FAQ topics and questions...',
+  },
+
+  fi: {
+    // Header & Brand
+    brand_title: 'ARDOR Painekoejärjestelmä',
+    brand_subtitle: 'Putkistojen & säiliöiden jäljitettävyyskeskus',
+    tab_tests: 'Painekokeet (Lokit)',
+    tab_records: 'Painekoepöytäkirjat (PTR)',
+    tab_faq: 'Ohjeet & UKK',
+    node_online: 'Paikallinen solmu aktiivinen',
+    btn_new_test: '+ Uusi koe',
+    btn_login: 'Kirjaudu',
+    btn_logout: 'Kirjaudu ulos',
+    btn_audit: 'Tarkastusloki',
+    indexed_count: 'Indeksoitu: {count} koetta',
+
+    // Search & Filter
+    search_placeholder: 'Hae lokinumerolla (esim. 014FED), putkella (122153/41), projektilla tai testaajalla...',
+    filter_all: 'Kaikki kokeet',
+    filter_complete: 'Valmiit',
+    filter_pending: 'Keskeneräiset / Luonnokset',
+    view_grid: 'Kortit',
+    view_table: 'Taulukko',
+    btn_refresh: 'Päivitä',
+
+    // Test Cards
+    col_log_no: 'Lokin nro',
+    col_system_project: 'Systeemi / Projekti',
+    col_target_p: 'Koepaine',
+    col_min_max: 'Min / Max (bar)',
+    col_duration: 'Kesto',
+    col_pipes: 'Putkinumerot',
+    col_operator: 'Testaaja / Valvoja',
+    col_date: 'Pvm',
+    col_status: 'Tila',
+    col_actions: 'Toiminnot',
+    btn_view: 'Avaa',
+    btn_download_zip: 'ZIP-paketti',
+    no_tests_title: 'Kokeita ei löytynyt',
+    no_tests_desc: 'Kokeile toista hakusanaa tai lataa uusi koetiedosto.',
+
+    // PTR Records Tab
+    ptr_banner_title: 'ARDOR Painekoepöytäkirjat (PAINEKOEPÖYTÄKIRJA)',
+    ptr_banner_desc: 'Viralliset painekoepöytäkirjat putkistoluetteloineen, paineenpitotodistuksineen, työnjohtajan allekirjoituksineen ja digitaalisine varmennusleimoineen.',
+    btn_create_ptr: '+ Luo pöytäkirja (Uusi PTR)',
+    ptr_search_placeholder: 'Hae pöytäkirjanumerolla (esim. NB1402PM-13388), projektilla, systeemillä tai työnjohtajalla...',
+    filter_draft: 'Luonnokset',
+    filter_confirmed: 'Vahvistetut / Allekirjoitetut',
+    no_ptr_title: 'Ei luotuja painekoepöytäkirjoja',
+    no_ptr_desc: 'Painekoepöytäkirja yhdistää useat testatut putket viralliseksi ARDOR-asiakirjaksi sähköisine allekirjoituksineen.',
+    btn_create_first_ptr: 'Luo ensimmäinen pöytäkirja',
+
+    // Modals
+    modal_close: 'Sulje',
+    modal_cancel: 'Peruuta',
+    modal_save: 'Tallenna',
+    modal_saving: 'Tallennetaan...',
+
+    // PTR Detail & View
+    view_pdf_tab: '📄 Virallinen PDF-asiakirja',
+    view_data_tab: '📋 Putkitiedot ja taulukko',
+    btn_open_new_tab: 'Avaa uuteen välilehteen',
+    btn_download_pdf: 'Lataa PDF',
+    btn_draw_signature: '🔏 Piirrä allekirjoitus',
+    btn_seal_record: 'Vahvista leimalla',
+    verified_badge: 'Digitaalisesti vahvistettu ARDOR-asiakirja',
+    signed_by: 'Allekirjoittanut',
+
+    // FAQ Tab
+    faq_title: 'ARDOR Painekoe — Käyttöohjeet & UKK',
+    faq_subtitle: 'Kaikki mitä sinun tarvitsee tietää lokien lataamisesta, kuvaajien lukemisesta, pöytäkirjojen luomisesta ja sähköisestä allekirjoituksesta.',
+    faq_search: 'Hae ohjeista ja kysymyksistä...',
+  },
+
+  ru: {
+    // Header & Brand
+    brand_title: 'ARDOR Pressure Test',
+    brand_subtitle: 'Система контроля и протоколирования опрессовки',
+    tab_tests: 'Логи опрессовки (Tests)',
+    tab_records: 'Протоколы ARDOR (PTR)',
+    tab_faq: 'Руководство и FAQ',
+    node_online: 'Локальный сервер активен',
+    btn_new_test: '+ Загрузить лог',
+    btn_login: 'Войти',
+    btn_logout: 'Выйти',
+    btn_audit: 'Журнал аудита',
+    indexed_count: 'Индексировано: {count} испытаний',
+
+    // Search & Filter
+    search_placeholder: 'Поиск по номеру лога (014FED), трубе/связке (122153/41), проекту или оператору...',
+    filter_all: 'Все испытания',
+    filter_complete: 'Завершённые',
+    filter_pending: 'В обработке / Черновики',
+    view_grid: 'Карточки',
+    view_table: 'Таблица',
+    btn_refresh: 'Обновить',
+
+    // Test Cards
+    col_log_no: 'Log No.',
+    col_system_project: 'Система / Проект',
+    col_target_p: 'Целевое давл.',
+    col_min_max: 'Min / Max (bar)',
+    col_duration: 'Длительность',
+    col_pipes: 'Номера труб (Pipes)',
+    col_operator: 'Оператор / Прораб',
+    col_date: 'Дата',
+    col_status: 'Статус',
+    col_actions: 'Действия',
+    btn_view: 'Просмотр',
+    btn_download_zip: 'ZIP-пакет',
+    no_tests_title: 'Испытания не найдены',
+    no_tests_desc: 'Попробуйте изменить запрос поиска или загрузите новый лог опрессовки.',
+
+    // PTR Records Tab
+    ptr_banner_title: 'ARDOR Pressure Test Records (PAINEKOEPÖYTÄKIRJA)',
+    ptr_banner_desc: 'Сводные официальные протоколы испытаний со списком труб, выдержкой давления, росписью прораба и цифровым штампом верификации.',
+    btn_create_ptr: '+ Создать протокол (New PTR)',
+    ptr_search_placeholder: 'Поиск по номеру акта (NB1402PM-13388), проекту, системе или прорабу...',
+    filter_draft: 'Черновики',
+    filter_confirmed: 'Подписанные / Заверенные',
+    no_ptr_title: 'Пока нет созданных протоколов PTR',
+    no_ptr_desc: 'Протокол PTR объединяет испытанные трубы в официальный бланк ARDOR с электронной росписью и цифровым штампом.',
+    btn_create_first_ptr: 'Создать первый протокол',
+
+    // Modals
+    modal_close: 'Закрыть',
+    modal_cancel: 'Отмена',
+    modal_save: 'Сохранить',
+    modal_saving: 'Сохранение...',
+
+    // PTR Detail & View
+    view_pdf_tab: '📄 Официальный PDF бланк',
+    view_data_tab: '📋 Данные и трубы',
+    btn_open_new_tab: 'Открыть в новой вкладке',
+    btn_download_pdf: 'Скачать PDF',
+    btn_draw_signature: '🔏 Нарисовать роспись',
+    btn_seal_record: 'Заверить штампом',
+    verified_badge: 'Цифровой защитный штамп ARDOR',
+    signed_by: 'Подписано',
+
+    // FAQ Tab
+    faq_title: 'ARDOR Pressure Test — Руководство и FAQ',
+    faq_subtitle: 'Подробное руководство пользователя: как загружать логи, читать графики, оформлять протоколы PAINEKOEPÖYTÄKIRJA и заверять их электронной подписью.',
+    faq_search: 'Поиск по вопросам и руководству...',
+  }
+};

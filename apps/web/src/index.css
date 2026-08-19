@@ -1,18 +1,18 @@
 :root {
-  --bg-main: #0B1120;
-  --bg-surface: #1E293B;
-  --bg-card: rgba(30, 41, 59, 0.7);
-  --bg-glass: rgba(15, 23, 42, 0.85);
+  --bg-main: #0B132B;
+  --bg-surface: #1C2541;
+  --bg-card: rgba(28, 37, 65, 0.85);
+  --bg-glass: rgba(11, 19, 43, 0.92);
   
-  --border-color: rgba(148, 163, 184, 0.15);
-  --border-hover: rgba(56, 189, 248, 0.4);
+  --border-color: rgba(148, 163, 184, 0.18);
+  --border-hover: rgba(56, 189, 248, 0.5);
   
   --text-primary: #F8FAFC;
-  --text-secondary: #94A3B8;
-  --text-muted: #64748B;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
   
-  --brand-primary: #0284C7;
-  --brand-gradient: linear-gradient(135deg, #0284C7 0%, #06B6D4 100%);
+  --brand-primary: #1E40AF;
+  --brand-gradient: linear-gradient(135deg, #1E3A8A 0%, #0284C7 100%);
   --accent-cyan: #38BDF8;
   --accent-emerald: #10B981;
   --accent-amber: #F59E0B;
@@ -20,12 +20,12 @@
   
   --radius-sm: 6px;
   --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-lg: 14px;
   
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
-  --shadow-glow: 0 0 20px rgba(56, 189, 248, 0.2);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 12px 20px -3px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px rgba(56, 189, 248, 0.15);
   
   --font-main: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', Consolas, monospace;

@@ -10,12 +10,15 @@ import { AuditLogModal } from './components/AuditLogModal';
 import { RecordsTab } from './components/RecordsTab';
 import { NewRecordModal } from './components/NewRecordModal';
 import { RecordDetailModal } from './components/RecordDetailModal';
+import { FaqTab } from './components/FaqTab';
 import { fetchPressureTests } from './api';
 import { PressureTest, PressureTestRecord } from './types';
-import { RefreshCw, Inbox, AlertCircle, Layers, FileSpreadsheet } from 'lucide-react';
+import { useI18n } from './context/LanguageContext';
+import { RefreshCw, Inbox, AlertCircle, Layers, FileSpreadsheet, HelpCircle } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'tests' | 'records'>('tests');
+  const { t } = useI18n();
+  const [activeTab, setActiveTab] = useState<'tests' | 'records' | 'faq'>('tests');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   const [tests, setTests] = useState<PressureTest[]>([]);
@@ -83,8 +86,8 @@ export const App: React.FC = () => {
       />
 
       <main className="main-content">
-        {/* Navigation Tabs */}
-        <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+        {/* Navigation Tabs (3 Tabs: Tests, PTR, FAQ) */}
+        <div style={{ display: 'flex', gap: '0.75rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
           <button
             onClick={() => setActiveTab('tests')}
             style={{
@@ -94,7 +97,7 @@ export const App: React.FC = () => {
               color: activeTab === 'tests' ? 'var(--text-primary)' : 'var(--text-muted)',
               padding: '0.6rem 1rem',
               fontWeight: 600,
-              fontSize: '0.95rem',
+              fontSize: '0.92rem',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -102,7 +105,7 @@ export const App: React.FC = () => {
             }}
           >
             <Layers size={16} color={activeTab === 'tests' ? 'var(--accent-cyan)' : 'inherit'} />
-            <span>Pressure Tests (WIKA Logs)</span>
+            <span>{t('tab_tests')}</span>
           </button>
 
           <button
@@ -114,7 +117,7 @@ export const App: React.FC = () => {
               color: activeTab === 'records' ? 'var(--text-primary)' : 'var(--text-muted)',
               padding: '0.6rem 1rem',
               fontWeight: 600,
-              fontSize: '0.95rem',
+              fontSize: '0.92rem',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -122,7 +125,27 @@ export const App: React.FC = () => {
             }}
           >
             <FileSpreadsheet size={16} color={activeTab === 'records' ? 'var(--accent-amber)' : 'inherit'} />
-            <span>Pressure Test Records (PTR Blanks)</span>
+            <span>{t('tab_records')}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('faq')}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              borderBottom: activeTab === 'faq' ? '2px solid var(--accent-emerald)' : '2px solid transparent',
+              color: activeTab === 'faq' ? 'var(--text-primary)' : 'var(--text-muted)',
+              padding: '0.6rem 1rem',
+              fontWeight: 600,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <HelpCircle size={16} color={activeTab === 'faq' ? 'var(--accent-emerald)' : 'inherit'} />
+            <span>{t('tab_faq')}</span>
           </button>
         </div>
 
@@ -144,9 +167,9 @@ export const App: React.FC = () => {
               onViewModeChange={setViewMode}
             />
 
-            <div className="results-header">
-              <div className="results-count">
-                Showing <strong>{filteredTests.length}</strong> {filteredTests.length === 1 ? 'test record' : 'test records'}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', marginTop: '-0.5rem' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                Showing <strong>{filteredTests.length}</strong> of {tests.length} pressure tests
               </div>
 
               <button
@@ -154,7 +177,7 @@ export const App: React.FC = () => {
                 style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', padding: '0.4rem 0.8rem', borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
               >
                 <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-                <span>Refresh</span>
+                <span>{t('btn_refresh')}</span>
               </button>
             </div>
 
@@ -166,9 +189,9 @@ export const App: React.FC = () => {
               <div className="empty-state">
                 <Inbox size={48} style={{ opacity: 0.4, marginBottom: '1rem' }} />
                 <div style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
-                  No matching tests found
+                  {t('no_tests_title')}
                 </div>
-                <p>Try searching with another Log Number, Pipe Number, or click "+ New Test" to upload one.</p>
+                <p>{t('no_tests_desc')}</p>
               </div>
             ) : viewMode === 'table' ? (
               <TestTableView
@@ -187,12 +210,14 @@ export const App: React.FC = () => {
               </div>
             )}
           </>
-        ) : (
+        ) : activeTab === 'records' ? (
           <RecordsTab
             refreshTrigger={recordsRefreshKey}
             onSelectRecord={(rec) => setSelectedRecord(rec)}
             onNewRecordClick={() => setIsNewRecordOpen(true)}
           />
+        ) : (
+          <FaqTab />
         )}
       </main>
 

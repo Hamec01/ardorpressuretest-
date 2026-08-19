@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PressureTestRecord } from '../types';
 import { fetchRecords, getRecordPdfUrl } from '../api';
+import { useI18n } from '../context/LanguageContext';
 import { Plus, Download, User, Search, RefreshCw, FileSpreadsheet, ShieldCheck } from 'lucide-react';
 
 interface RecordsTabProps {
@@ -10,6 +11,7 @@ interface RecordsTabProps {
 }
 
 export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRecordClick, refreshTrigger = 0 }) => {
+  const { t } = useI18n();
   const [records, setRecords] = useState<PressureTestRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
@@ -42,10 +44,10 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRec
           <FileSpreadsheet size={24} color="var(--accent-amber)" />
           <div>
             <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--accent-amber)' }}>
-              ARDOR Pressure Test Records (PTR Blanks)
+              {t('ptr_banner_title')}
             </div>
             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Сводные официальные протоколы испытаний со списком труб, выдержкой давления, росписью прораба и цифровым штампом верификации.
+              {t('ptr_banner_desc')}
             </div>
           </div>
         </div>
@@ -56,7 +58,7 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRec
           style={{ background: 'var(--accent-amber)', color: '#0F172A', fontWeight: 700, padding: '0.5rem 1.1rem', fontSize: '0.85rem' }}
         >
           <Plus size={16} />
-          <span>+ Создать протокол (New PTR)</span>
+          <span>{t('btn_create_ptr')}</span>
         </button>
       </div>
 
@@ -68,16 +70,22 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRec
             <input
               type="text"
               className="search-input"
-              placeholder="Поиск по номеру акта (PTR-2026-001), проекту, системе или прорабу..."
+              placeholder={t('ptr_search_placeholder')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
 
           <div className="filter-pills" style={{ marginTop: 0 }}>
-            <button className={`filter-pill ${statusFilter === 'all' ? 'active' : ''}`} onClick={() => setStatusFilter('all')}>Все</button>
-            <button className={`filter-pill ${statusFilter === 'draft' ? 'active' : ''}`} onClick={() => setStatusFilter('draft')}>Черновики (Draft)</button>
-            <button className={`filter-pill ${statusFilter === 'confirmed' ? 'active' : ''}`} onClick={() => setStatusFilter('confirmed')}>Подписанные (Confirmed)</button>
+            <button className={`filter-pill ${statusFilter === 'all' ? 'active' : ''}`} onClick={() => setStatusFilter('all')}>
+              {t('filter_all')}
+            </button>
+            <button className={`filter-pill ${statusFilter === 'draft' ? 'active' : ''}`} onClick={() => setStatusFilter('draft')}>
+              {t('filter_draft')}
+            </button>
+            <button className={`filter-pill ${statusFilter === 'confirmed' ? 'active' : ''}`} onClick={() => setStatusFilter('confirmed')}>
+              {t('filter_confirmed')}
+            </button>
           </div>
         </div>
 
@@ -87,27 +95,27 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRec
             style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', padding: '0.45rem 0.85rem', borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>Обновить</span>
+            <span>{t('btn_refresh')}</span>
           </button>
 
           <button className="btn-primary" onClick={onNewRecordClick} style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}>
             <Plus size={16} />
-            <span>Новый протокол</span>
+            <span>{t('btn_create_ptr')}</span>
           </button>
         </div>
       </div>
 
       {/* Grid or Empty State */}
       {loading ? (
-        <div className="empty-state">Загрузка документов Pressure Test Record...</div>
+        <div className="empty-state">Loading Pressure Test Records...</div>
       ) : records.length === 0 ? (
         <div className="empty-state" style={{ padding: '3rem 2rem', textAlign: 'center' }}>
           <FileSpreadsheet size={56} color="var(--accent-amber)" style={{ opacity: 0.7, marginBottom: '1rem' }} />
           <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
-            Пока нет созданных протоколов PTR
+            {t('no_ptr_title')}
           </div>
           <p style={{ maxWidth: '540px', margin: '0 auto 1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            Протокол Pressure Test Record позволяет объединить несколько труб в один официальный акт опрессовки ARDOR, завизировать его электронной росписью прораба и сформировать утверждённый PDF с QR-штампом.
+            {t('no_ptr_desc')}
           </p>
           <button
             className="btn-primary"
@@ -115,7 +123,7 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRec
             style={{ margin: '0 auto', padding: '0.65rem 1.4rem', fontSize: '0.95rem' }}
           >
             <Plus size={18} />
-            <span>Создать первый протокол (Create First PTR)</span>
+            <span>{t('btn_create_first_ptr')}</span>
           </button>
         </div>
       ) : (
