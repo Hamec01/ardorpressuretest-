@@ -1,4 +1,5 @@
 export interface Artifact {
+  id?: string;
   name: string;
   relative_path: string;
   file_type: 'source_csv' | 'graph_png' | 'excel_xlsx' | 'text_txt' | 'report_pdf' | 'photo';

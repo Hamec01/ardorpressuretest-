@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Header } from './components/Header';
 import { SearchFilters } from './components/SearchFilters';
 import { TestCard } from './components/TestCard';
+import { TestTableView } from './components/TestTableView';
 import { TestDetailModal } from './components/TestDetailModal';
 import { NewTestModal } from './components/NewTestModal';
 import { LoginModal } from './components/LoginModal';
@@ -15,6 +16,7 @@ import { RefreshCw, Inbox, AlertCircle, Layers, FileSpreadsheet } from 'lucide-r
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'tests' | 'records'>('tests');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   const [tests, setTests] = useState<PressureTest[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -137,6 +139,8 @@ export const App: React.FC = () => {
               onQueryChange={setSearchQuery}
               activeFilter={activeFilter}
               onFilterSelect={setActiveFilter}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
             />
 
             <div className="results-header">
@@ -165,6 +169,11 @@ export const App: React.FC = () => {
                 </div>
                 <p>Try searching with another Log Number, Pipe Number, or click "+ New Test" to upload one.</p>
               </div>
+            ) : viewMode === 'table' ? (
+              <TestTableView
+                tests={filteredTests}
+                onSelectTest={(t) => setSelectedTest(t)}
+              />
             ) : (
               <div className="cards-grid">
                 {filteredTests.map((test) => (

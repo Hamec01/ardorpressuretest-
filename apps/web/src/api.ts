@@ -26,6 +26,10 @@ export function getRevisionZipUrl(logNo: string, revisionId: string): string {
   return `${API_BASE}/tests/${encodeURIComponent(logNo)}/revisions/${encodeURIComponent(revisionId)}/zip`;
 }
 
+export function getArtifactFileUrl(artifactId: string): string {
+  return `${API_BASE}/tests/artifacts/${encodeURIComponent(artifactId)}/file`;
+}
+
 export async function fetchRecords(query?: string, status?: string): Promise<any[]> {
   let url = `${API_BASE}/records`;
   const params = new URLSearchParams();

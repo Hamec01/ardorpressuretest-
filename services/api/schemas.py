@@ -12,6 +12,7 @@ class HealthResponse(BaseModel):
 class ArtifactSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    id: Optional[str] = None
     name: str
     relative_path: str
     file_type: str

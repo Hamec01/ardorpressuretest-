@@ -1,6 +1,7 @@
 import React from 'react';
 import { PressureTest, TestRevision } from '../types';
-import { Calendar, User } from 'lucide-react';
+import { getArtifactFileUrl } from '../api';
+import { Calendar, User, Gauge, Pipette, Image as ImageIcon } from 'lucide-react';
 
 interface TestCardProps {
   test: PressureTest;
@@ -21,6 +22,27 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
   const createdDate = primaryRev?.created_at 
     ? new Date(primaryRev.created_at).toLocaleDateString()
     : new Date(test.created_at).toLocaleDateString();
+
+  // Find gauge photo and pipe photo
+  const photos = (primaryRev?.artifacts || []).filter(
+    a => a.file_type === 'photo' || a.name.match(/\.(jpg|jpeg|png)$/i)
+  );
+  const gaugePhoto = photos.find(p => p.category === 'gauge') || photos.find(p => p.name.toLowerCase().includes('gauge') || p.name.toLowerCase().includes('manometer'));
+  const pipePhoto = photos.find(p => p.category === 'pipe') || photos.find(p => p !== gaugePhoto && (p.name.toLowerCase().includes('pipe') || p.name.toLowerCase().includes('tube')));
+  const displayPhotos = [
+    ...(gaugePhoto ? [{ photo: gaugePhoto, label: 'Gauge (Манометр)', icon: Gauge }] : []),
+    ...(pipePhoto ? [{ photo: pipePhoto, label: 'Pipe (Труба)', icon: Pipette }] : []),
+  ];
+  // Fallback if not categorized: show first 2 photos
+  if (displayPhotos.length === 0 && photos.length > 0) {
+    photos.slice(0, 2).forEach((p, idx) => {
+      displayPhotos.push({
+        photo: p,
+        label: idx === 0 ? 'Photo 1' : 'Photo 2',
+        icon: ImageIcon
+      });
+    });
+  }
 
   return (
     <div className="test-card" onClick={() => onSelect(test)}>
@@ -53,6 +75,54 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
             <span className="metric-val">{metrics.duration_formatted || '00:00:00'}</span>
           </div>
         </div>
+
+        {/* Compact Photo Thumbnails Strip */}
+        {displayPhotos.length > 0 && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.65rem', marginBottom: '0.2rem' }}>
+            {displayPhotos.map(({ photo, label }, idx) => (
+              <div
+                key={idx}
+                style={{
+                  position: 'relative',
+                  width: '64px',
+                  height: '52px',
+                  borderRadius: 'var(--radius-sm)',
+                  overflow: 'hidden',
+                  border: '1px solid var(--border-color)',
+                  background: 'rgba(15, 23, 42, 0.8)',
+                  flexShrink: 0
+                }}
+                title={label}
+              >
+                <img
+                  src={getArtifactFileUrl(photo.id || '')}
+                  alt={label}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  loading="lazy"
+                />
+                <span
+                  style={{
+                    position: 'absolute',
+                    bottom: '0',
+                    left: '0',
+                    right: '0',
+                    background: 'rgba(15, 23, 42, 0.85)',
+                    color: 'var(--accent-cyan)',
+                    fontSize: '8.5px',
+                    fontWeight: 600,
+                    textAlign: 'center',
+                    padding: '1px 2px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  {label.split(' ')[0]}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="tags-section">
           {pipes.length > 0 && (
