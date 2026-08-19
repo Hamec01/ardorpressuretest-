@@ -4,6 +4,8 @@ import { SearchFilters } from './components/SearchFilters';
 import { TestCard } from './components/TestCard';
 import { TestDetailModal } from './components/TestDetailModal';
 import { NewTestModal } from './components/NewTestModal';
+import { LoginModal } from './components/LoginModal';
+import { AuditLogModal } from './components/AuditLogModal';
 import { fetchPressureTests } from './api';
 import { PressureTest } from './types';
 import { RefreshCw, Inbox, AlertCircle } from 'lucide-react';
@@ -16,6 +18,8 @@ export const App: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [selectedTest, setSelectedTest] = useState<PressureTest | null>(null);
   const [isNewTestOpen, setIsNewTestOpen] = useState<boolean>(false);
+  const [isLoginOpen, setIsLoginOpen] = useState<boolean>(false);
+  const [isAuditOpen, setIsAuditOpen] = useState<boolean>(false);
 
   const loadData = async (query?: string) => {
     try {
@@ -60,6 +64,8 @@ export const App: React.FC = () => {
       <Header
         totalCount={tests.length}
         onNewTestClick={() => setIsNewTestOpen(true)}
+        onLoginClick={() => setIsLoginOpen(true)}
+        onAuditClick={() => setIsAuditOpen(true)}
       />
 
       <main className="main-content">
@@ -127,6 +133,18 @@ export const App: React.FC = () => {
         <NewTestModal
           onClose={() => setIsNewTestOpen(false)}
           onSuccess={handleTestCreated}
+        />
+      )}
+
+      {isLoginOpen && (
+        <LoginModal
+          onClose={() => setIsLoginOpen(false)}
+        />
+      )}
+
+      {isAuditOpen && (
+        <AuditLogModal
+          onClose={() => setIsAuditOpen(false)}
         />
       )}
     </div>

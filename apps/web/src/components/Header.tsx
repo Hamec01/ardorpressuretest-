@@ -1,12 +1,22 @@
 import React from 'react';
-import { ShieldCheck, Database, Plus } from 'lucide-react';
+import { ShieldCheck, Database, Plus, LogIn, LogOut, ShieldAlert } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   totalCount: number;
   onNewTestClick: () => void;
+  onLoginClick: () => void;
+  onAuditClick: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ totalCount, onNewTestClick }) => {
+export const Header: React.FC<HeaderProps> = ({
+  totalCount,
+  onNewTestClick,
+  onLoginClick,
+  onAuditClick
+}) => {
+  const { user, logout } = useAuth();
+
   return (
     <header className="app-header">
       <div className="header-inner">
@@ -29,6 +39,17 @@ export const Header: React.FC<HeaderProps> = ({ totalCount, onNewTestClick }) =>
             <span>Local Node Online</span>
           </div>
 
+          {user && (user.role === 'admin' || user.role === 'foreman') && (
+            <button
+              onClick={onAuditClick}
+              style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', color: 'var(--accent-amber)', padding: '0.45rem 0.75rem', borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', fontWeight: 600 }}
+              title="View immutable audit trail"
+            >
+              <ShieldAlert size={15} />
+              <span>Audit Trail</span>
+            </button>
+          )}
+
           <button
             className="btn-primary"
             onClick={onNewTestClick}
@@ -37,6 +58,32 @@ export const Header: React.FC<HeaderProps> = ({ totalCount, onNewTestClick }) =>
             <Plus size={16} />
             <span>New Test</span>
           </button>
+
+          {user ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', borderLeft: '1px solid var(--border-color)', paddingLeft: '1rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{user.full_name}</span>
+                <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: user.role === 'admin' ? 'var(--accent-rose)' : user.role === 'foreman' ? 'var(--accent-cyan)' : 'var(--accent-emerald)', fontWeight: 700 }}>
+                  {user.role}
+                </span>
+              </div>
+              <button
+                onClick={logout}
+                style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-muted)', padding: '0.4rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
+                title="Sign Out"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onLoginClick}
+              style={{ background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.3)', color: 'var(--accent-cyan)', padding: '0.45rem 0.85rem', borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 600 }}
+            >
+              <LogIn size={16} />
+              <span>Sign In</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

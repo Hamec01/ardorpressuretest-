@@ -99,6 +99,7 @@ class AuditEvent(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     user_id = Column(String(36), nullable=True)
+    actor_name = Column(String(128), nullable=True)
     action = Column(String(64), nullable=False, index=True)
     entity_type = Column(String(64), nullable=False)
     entity_id = Column(String(64), nullable=False)
