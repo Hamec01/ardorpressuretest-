@@ -169,3 +169,185 @@ async def process_csv_web(
             .filter(PressureTest.id == test.id)
             .first()
         )
+
+
+@router.post("/package", response_model=List[PressureTestResponse])
+async def upload_package_or_zip(
+    package_file: Optional[UploadFile] = File(None, description="ZIP-архив с логом или ревизией"),
+    files: List[UploadFile] = File([], description="Файлы из загруженной папки"),
+    db: Session = Depends(get_db)
+):
+    """
+    Универсальная загрузка испытания целой папкой или ZIP-архивом:
+    - Принимает .zip архив или пачку файлов из папки;
+    - Если внутри есть manifest.json, импортирует существующую ревизию;
+    - Если внутри CSV и фото, автоматически обрабатывает через ядро WIKA CPG1500;
+    - Возвращает обновлённый список испытаний.
+    """
+    import zipfile
+
+    results: List[PressureTest] = []
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        extracted_dir = tmp_path / "extracted"
+        extracted_dir.mkdir()
+
+        # 1. Сохранение и распаковка файлов
+        if package_file and package_file.filename:
+            pkg_dest = tmp_path / package_file.filename
+            with open(pkg_dest, "wb") as f:
+                shutil.copyfileobj(package_file.file, f)
+
+            if package_file.filename.lower().endswith(".zip"):
+                try:
+                    with zipfile.ZipFile(pkg_dest, "r") as zf:
+                        zf.extractall(extracted_dir)
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Invalid ZIP archive: {e}")
+            elif package_file.filename.lower().endswith(".csv"):
+                shutil.copy(pkg_dest, extracted_dir / package_file.filename)
+            else:
+                shutil.copy(pkg_dest, extracted_dir / package_file.filename)
+
+        for f in files:
+            if f.filename:
+                # Keep subfolder structure if provided in filename
+                rel_parts = Path(f.filename).parts
+                clean_rel = Path(*rel_parts[1:]) if len(rel_parts) > 1 else Path(f.filename)
+                target = extracted_dir / clean_rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with open(target, "wb") as out_f:
+                    shutil.copyfileobj(f.file, out_f)
+
+        # 2. Поиск манифестов
+        manifests = list(extracted_dir.rglob("manifest.json"))
+        if manifests:
+            for mf_path in manifests:
+                with open(mf_path, "r", encoding="utf-8") as mf_f:
+                    manifest_data = json.load(mf_f)
+
+                log_no = manifest_data.get("log_no") or normalize_log_no("", fallback_name=mf_path.parent.name)
+                revision_id = manifest_data.get("revision_id") or datetime.now().strftime("%Y%m%d_%H%M%S")
+                rev_dir = mf_path.parent
+
+                # Сохраняем в базу данных
+                test = db.query(PressureTest).filter(PressureTest.log_no == log_no).first()
+                if not test:
+                    test = PressureTest(log_no=log_no)
+                    db.add(test)
+                    db.flush()
+
+                db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id).update({"is_primary": False})
+                rev = TestRevision(
+                    pressure_test_id=test.id,
+                    revision_id=revision_id,
+                    status="complete",
+                    is_primary=True,
+                    metadata_json=manifest_data.get("metadata", {}),
+                    metrics_json=manifest_data.get("metrics", {})
+                )
+                db.add(rev)
+                db.flush()
+
+                for art in manifest_data.get("artifacts", []):
+                    art_file = rev_dir / art["relative_path"]
+                    storage_key = f"logs/{log_no}/revisions/{revision_id}/{art['relative_path']}"
+                    if art_file.exists():
+                        with open(art_file, "rb") as af:
+                            storage.store_file(storage_key, af)
+
+                    db.add(Artifact(
+                        test_revision_id=rev.id,
+                        name=art["name"],
+                        relative_path=art["relative_path"],
+                        file_type=art["file_type"],
+                        category=art.get("category"),
+                        size_bytes=art["size_bytes"],
+                        sha256=art["sha256"],
+                        storage_key=storage_key
+                    ))
+
+                # Добавляем трубы
+                for p in manifest_data.get("metadata", {}).get("pipe_numbers", []):
+                    db.add(Pipe(test_revision_id=rev.id, pipe_number=p))
+
+                db.commit()
+                results.append(test)
+
+        else:
+            # 3. Поиск исходных CSV файлов
+            csv_files = list(extracted_dir.rglob("*.csv"))
+            if not csv_files:
+                raise HTTPException(status_code=400, detail="No CSV files or manifest.json found in the uploaded package.")
+
+            for csv_path in csv_files:
+                norm_log = normalize_log_no("", fallback_name=csv_path.stem)
+                photo_files = [
+                    p for p in extracted_dir.rglob("*")
+                    if p.suffix.lower() in [".jpg", ".jpeg", ".png"] and p != csv_path
+                ]
+                photos = [PhotoAttachment(path=p, category="other") for p in photo_files]
+
+                test_input = TestInput(
+                    csv_path=csv_path,
+                    log_no=norm_log,
+                    photos=photos,
+                    create_pdf=True
+                )
+                temp_out = tmp_path / f"out_{norm_log}"
+                temp_out.mkdir(exist_ok=True)
+                core_res = process_test_input(test_input, output_base_dir=temp_out, config=AppConfig())
+
+                if core_res.success and core_res.manifest_path:
+                    with open(core_res.manifest_path, "r", encoding="utf-8") as mf_f:
+                        manifest_data = json.load(mf_f)
+
+                    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+                    if not test:
+                        test = PressureTest(log_no=norm_log)
+                        db.add(test)
+                        db.flush()
+
+                    db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id).update({"is_primary": False})
+                    rev = TestRevision(
+                        pressure_test_id=test.id,
+                        revision_id=core_res.revision_id,
+                        status="complete",
+                        is_primary=True,
+                        metadata_json=manifest_data.get("metadata", {}),
+                        metrics_json=manifest_data.get("metrics", {})
+                    )
+                    db.add(rev)
+                    db.flush()
+
+                    for art in manifest_data.get("artifacts", []):
+                        art_file = core_res.revision_dir / art["relative_path"]
+                        storage_key = f"logs/{norm_log}/revisions/{core_res.revision_id}/{art['relative_path']}"
+                        if art_file.exists():
+                            with open(art_file, "rb") as af:
+                                storage.store_file(storage_key, af)
+
+                        db.add(Artifact(
+                            test_revision_id=rev.id,
+                            name=art["name"],
+                            relative_path=art["relative_path"],
+                            file_type=art["file_type"],
+                            category=art.get("category"),
+                            size_bytes=art["size_bytes"],
+                            sha256=art["sha256"],
+                            storage_key=storage_key
+                        ))
+
+                    db.commit()
+                    results.append(test)
+
+    # Return refreshed test cards
+    test_ids = [t.id for t in results]
+    return (
+        db.query(PressureTest)
+        .options(joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts))
+        .filter(PressureTest.id.in_(test_ids))
+        .all()
+    )
+

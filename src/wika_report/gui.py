@@ -539,13 +539,13 @@ class WikaAppGUI:
         self.btn_sync.configure(state=tk.DISABLED)
 
         def sync_worker():
-            client = SyncClient()
+            client = SyncClient(base_url="http://127.0.0.1:8080")
             if not client.check_health():
-                self._log("[СЕРВЕР НЕДОСТУПЕН] Сервер не запущен (http://localhost:8000). Логи безопасно сохранены в локальной офлайн-очереди.")
+                self._log("[СЕРВЕР НЕДОСТУПЕН] Сервер не запущен (http://127.0.0.1:8080). Логи безопасно сохранены в локальной офлайн-очереди.")
                 self.root.after(0, lambda: self.btn_sync.configure(state=tk.NORMAL))
                 self.root.after(0, lambda: messagebox.showwarning(
                     "Server Offline",
-                    "Local backend server is offline.\n\nAll test logs remain safely queued offline in SQLite."
+                    "Local backend server is offline (http://127.0.0.1:8080).\n\nPlease start run_local.bat first.\nAll test logs remain safely queued offline in SQLite."
                 ))
                 return
 

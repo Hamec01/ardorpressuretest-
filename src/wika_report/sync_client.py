@@ -12,7 +12,7 @@ logger = logging.getLogger("wika_report")
 class SyncClient:
     """Клиент для синхронизации локальных ревизий с FastAPI бэкендом."""
 
-    def __init__(self, base_url: str = "http://127.0.0.1:8000", timeout: float = 30.0):
+    def __init__(self, base_url: str = "http://127.0.0.1:8080", timeout: float = 30.0):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
 
