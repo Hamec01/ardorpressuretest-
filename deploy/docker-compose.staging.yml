@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: ardor_api_staging
+    environment:
+      - ARDOR_ENV=staging
+      - ARDOR_DATABASE_URL=postgresql://ardor_user:ardor_pass@postgres:5432/ardor_pressure_test
+      - ARDOR_STORAGE_DIR=/data/storage
+      - ARDOR_JWT_SECRET=staging_secret_key_ardor_pipeline_2026
+    volumes:
+      - ardor_storage:/data/storage
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: ../deploy/Dockerfile.web
+    container_name: ardor_web_staging
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ardor_postgres_staging
+    environment:
+      - POSTGRES_USER=ardor_user
+      - POSTGRES_PASSWORD=ardor_pass
+      - POSTGRES_DB=ardor_pressure_test
+    volumes:
+      - ardor_pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  ardor_storage:
+  ardor_pgdata:
