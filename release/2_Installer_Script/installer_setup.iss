@@ -34,9 +34,6 @@ Source: "resources\app_icon.ico"; DestDir: "{app}\resources"; Flags: ignoreversi
 
 [Dirs]
 Name: "{app}\output"
-Name: "{app}\output\graphs"
-Name: "{app}\output\excel"
-Name: "{app}\output\reports"
 Name: "{app}\output\logs"
 
 [Icons]
