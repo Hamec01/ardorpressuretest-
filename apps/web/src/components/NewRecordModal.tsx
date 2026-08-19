@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Plus, Trash2, Check, AlertCircle, FileText } from 'lucide-react';
+import { X, Plus, Trash2, Check, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import { PressureTestRecord, RecordItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 
@@ -9,24 +9,67 @@ interface NewRecordModalProps {
 }
 
 export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSuccess }) => {
-  const { user, token } = useAuth();
-  const [recordNumber, setRecordNumber] = useState<string>(`PTR-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900) + 100)}`);
-  const [project, setProject] = useState<string>('Meyer Turku NB-1400');
-  const [system, setSystem] = useState<string>('Main Fuel Gas Line');
-  const [insNo, setInsNo] = useState<string>('INS-2026-001');
-  const [testDate, setTestDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [testMedium, setTestMedium] = useState<string>('Water');
-  const [testPressure, setTestPressure] = useState<string>('15.0 bar');
-  const [designPressure, setDesignPressure] = useState<string>('10.0 bar');
-  const [durationMin, setDurationMin] = useState<string>('60 min');
-  const [foremanName, setForemanName] = useState<string>(user?.full_name || 'Matti Meikäläinen');
-  const [qcInspector, setQcInspector] = useState<string>('Jari Korhonen');
-  const [clientSurveyor, setClientSurveyor] = useState<string>('DNV Inspector');
-  const [notes, setNotes] = useState<string>('Pressure hold test completed successfully under normal ambient temperature.');
+  const { token } = useAuth();
 
+  // Document Fields matching official ARDOR PAINEKOEPÖYTÄKIRJA
+  const [recordNumber, setRecordNumber] = useState<string>('NB1402PM-13388');
+  const [insNo, setInsNo] = useState<string>('Inspection 044');
+  const [jobNo, setJobNo] = useState<string>('NB402');
+  const [project, setProject] = useState<string>('ICON3 LNG PF inspection');
+  const [designPressure, setDesignPressure] = useState<string>('16');
+  const [testPressure, setTestPressure] = useState<string>('24');
+  const [wikaNr, setWikaNr] = useState<string>('1A01JFDQ12E');
+  const [testMedium, setTestMedium] = useState<string>('Water');
+  const [durationMin] = useState<string>('60 min');
+  const [foremanName, setForemanName] = useState<string>('DE LUCA');
+  const [notes, setNotes] = useState<string>('Hold test completed. No pressure drops detected. Test passed successfully.');
+
+  // Table rows matching Drawing No, System, Part No, Date, Duration, Log No
   const [items, setItems] = useState<RecordItem[]>([
-    { item_no: 1, pipe_number: 'P-101', drawing_no: 'DWG-01-A', spool_no: 'SP-01', log_no: '014FED', hold_start_bar: '15.2', hold_end_bar: '15.1', result: 'PASS', notes: 'OK' },
-    { item_no: 2, pipe_number: 'P-102', drawing_no: 'DWG-01-A', spool_no: 'SP-02', log_no: '014FED', hold_start_bar: '15.2', hold_end_bar: '15.1', result: 'PASS', notes: 'OK' },
+    {
+      item_no: 1,
+      drawing_no: 'D.1402.006D.0006C.725.117_C',
+      spool_no: '64722P1201',
+      pipe_number: '1001C',
+      log_no: '044-1',
+      hold_start_bar: '24.0',
+      hold_end_bar: '24.0',
+      result: 'PASS',
+      notes: '60 min'
+    },
+    {
+      item_no: 2,
+      drawing_no: 'D.1402.006D.0006D.725.117_C',
+      spool_no: '64722P1201',
+      pipe_number: '1001C',
+      log_no: '044-1',
+      hold_start_bar: '24.0',
+      hold_end_bar: '24.0',
+      result: 'PASS',
+      notes: '60 min'
+    },
+    {
+      item_no: 3,
+      drawing_no: 'D.1402.005D.00WT8.775.117_A',
+      spool_no: '64722P1201',
+      pipe_number: '1002',
+      log_no: '044-1',
+      hold_start_bar: '24.0',
+      hold_end_bar: '24.0',
+      result: 'PASS',
+      notes: '60 min'
+    },
+    {
+      item_no: 4,
+      drawing_no: 'D.1402.005D.00WT8.775.117_A',
+      spool_no: '64722P1105',
+      pipe_number: '1003',
+      log_no: '044-1',
+      hold_start_bar: '24.0',
+      hold_end_bar: '24.0',
+      result: 'PASS',
+      notes: '60 min'
+    }
   ]);
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -37,14 +80,14 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       ...items,
       {
         item_no: items.length + 1,
-        pipe_number: `P-${100 + items.length + 1}`,
-        drawing_no: 'DWG-01-A',
-        spool_no: '',
-        log_no: '014FED',
-        hold_start_bar: '15.2',
-        hold_end_bar: '15.1',
+        drawing_no: 'D.1402.005D.00WT8.775.117_A',
+        spool_no: '64722P1201',
+        pipe_number: `100${items.length + 1}`,
+        log_no: '044-1',
+        hold_start_bar: testPressure,
+        hold_end_bar: testPressure,
         result: 'PASS',
-        notes: ''
+        notes: durationMin
       }
     ]);
   };
@@ -69,16 +112,16 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       const payload = {
         record_number: recordNumber.trim(),
         project: project.trim(),
-        system: system.trim(),
+        system: jobNo.trim(),
         ins_no: insNo.trim(),
-        test_date: testDate,
+        test_date: new Date().toISOString().split('T')[0],
         test_medium: testMedium,
         test_pressure: testPressure,
         design_pressure: designPressure,
         duration_min: durationMin,
-        foreman_name: foremanName,
-        qc_inspector: qcInspector,
-        client_surveyor: clientSurveyor,
+        foreman_name: foremanName.trim(),
+        qc_inspector: 'Inspector',
+        client_surveyor: 'Witnessed / Reviewed',
         notes: notes,
         items: items
       };
@@ -98,13 +141,13 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.detail || `Failed to create record (${res.status})`);
+        throw new Error(errJson.detail || `Ошибка создания протокола (${res.status})`);
       }
 
       const created = await res.json();
       onSuccess(created);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to create record.');
+      setErrorMsg(err.message || 'Не удалось сохранить протокол.');
     } finally {
       setIsSubmitting(false);
     }
@@ -112,11 +155,19 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" style={{ maxWidth: '900px' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" style={{ maxWidth: '980px', width: '94vw' }} onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
         <div className="modal-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <FileText size={20} color="var(--accent-amber)" />
-            <span style={{ fontSize: '1.25rem', fontWeight: 700 }}>New Pressure Test Record (PTR)</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <FileSpreadsheet size={22} color="var(--accent-amber)" />
+            <div>
+              <span style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                PAINEKOEPÖYTÄKIRJA / PRESSURE TEST RECORD
+              </span>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                Официальный протокол опрессовки ARDOR
+              </div>
+            </div>
           </div>
           <button className="modal-close-btn" onClick={onClose} disabled={isSubmitting}>
             <X size={20} />
@@ -131,78 +182,150 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
             </div>
           )}
 
-          {/* Section 1: General Info */}
+          {/* Section 1: Header Metadata Grid matching ARDOR Form */}
           <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--accent-amber)' }}>
-              1. Document & System Information
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Record Number *</label>
-                <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={recordNumber} onChange={(e) => setRecordNumber(e.target.value)} required />
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  Numero tai tunnus / Number or mark *
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem', fontSize: '0.9rem' }}
+                  value={insNo}
+                  onChange={(e) => setInsNo(e.target.value)}
+                  placeholder="Inspection 044"
+                  required
+                />
               </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Project Name</label>
-                <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={project} onChange={(e) => setProject(e.target.value)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  Record / Document Number *
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem', fontSize: '0.9rem' }}
+                  value={recordNumber}
+                  onChange={(e) => setRecordNumber(e.target.value)}
+                  placeholder="NB1402PM-13388"
+                  required
+                />
               </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>System / Line</label>
-                <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={system} onChange={(e) => setSystem(e.target.value)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  Työnumero / Job No
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem', fontSize: '0.9rem' }}
+                  value={jobNo}
+                  onChange={(e) => setJobNo(e.target.value)}
+                  placeholder="NB402"
+                />
               </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Inspection No.</label>
-                <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={insNo} onChange={(e) => setInsNo(e.target.value)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  Projektin nro tai nimi / Project No or name
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem', fontSize: '0.9rem' }}
+                  value={project}
+                  onChange={(e) => setProject(e.target.value)}
+                  placeholder="ICON3 LNG PF inspection"
+                />
               </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Test Date</label>
-                <input type="date" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={testDate} onChange={(e) => setTestDate(e.target.value)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  Suunnittelupaine / Design pressure (bar)
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem', fontSize: '0.9rem' }}
+                  value={designPressure}
+                  onChange={(e) => setDesignPressure(e.target.value)}
+                  placeholder="16"
+                />
               </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Test Medium</label>
-                <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={testMedium} onChange={(e) => setTestMedium(e.target.value)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  Koepaine / Test pressure (bar)
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem', fontSize: '0.9rem' }}
+                  value={testPressure}
+                  onChange={(e) => setTestPressure(e.target.value)}
+                  placeholder="24"
+                />
               </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Target Test Pressure</label>
-                <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={testPressure} onChange={(e) => setTestPressure(e.target.value)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  Mittarin nro / WIKA S#
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem', fontSize: '0.9rem' }}
+                  value={wikaNr}
+                  onChange={(e) => setWikaNr(e.target.value)}
+                  placeholder="1A01JFDQ12E"
+                />
               </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Design Pressure</label>
-                <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={designPressure} onChange={(e) => setDesignPressure(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Min Hold Duration</label>
-                <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={durationMin} onChange={(e) => setDurationMin(e.target.value)} />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>General Notes</label>
-                <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  Testiaine / Test material
+                </label>
+                <select
+                  className="search-input"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem', fontSize: '0.9rem' }}
+                  value={testMedium}
+                  onChange={(e) => setTestMedium(e.target.value)}
+                >
+                  <option value="Water">Vesi / Water</option>
+                  <option value="Air">Ilma / Air</option>
+                  <option value="Glycol">Glykoli / Glycol</option>
+                  <option value="Nitrogen">Typpi / Nitrogen</option>
+                </select>
               </div>
             </div>
           </div>
 
-          {/* Section 2: Items Table */}
+          {/* Section 2: Items Table (Piirustus nro, Systeemi, Osa nro, Pvm, Kesto, Log nro) */}
           <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-amber)' }}>
-                2. Tested Pipeline Elements ({items.length} rows)
+                Таблица опрессованных элементов ({items.length} строк)
               </div>
-              <button type="button" onClick={addItemRow} className="filter-pill" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem' }}>
-                <Plus size={13} />
-                <span>Add Pipe Row</span>
+              <button type="button" onClick={addItemRow} className="filter-pill" style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem' }}>
+                <Plus size={14} />
+                <span>+ Добавить строку (Add Row)</span>
               </button>
             </div>
 
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
-                    <th style={{ padding: '0.4rem', textAlign: 'center', width: '35px' }}>#</th>
-                    <th style={{ padding: '0.4rem', textAlign: 'left' }}>Pipe Number *</th>
-                    <th style={{ padding: '0.4rem', textAlign: 'left' }}>Dwg / Spool</th>
-                    <th style={{ padding: '0.4rem', textAlign: 'left' }}>Log No</th>
-                    <th style={{ padding: '0.4rem', textAlign: 'left', width: '80px' }}>Start bar</th>
-                    <th style={{ padding: '0.4rem', textAlign: 'left', width: '80px' }}>End bar</th>
-                    <th style={{ padding: '0.4rem', textAlign: 'center', width: '85px' }}>Result</th>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                    <th style={{ padding: '0.4rem', textAlign: 'center', width: '30px' }}>#</th>
+                    <th style={{ padding: '0.4rem', textAlign: 'left' }}>Piirustus nro (Drawing No) *</th>
+                    <th style={{ padding: '0.4rem', textAlign: 'left', width: '140px' }}>Systeemi (System)</th>
+                    <th style={{ padding: '0.4rem', textAlign: 'left', width: '110px' }}>Osa nro (Part No)</th>
+                    <th style={{ padding: '0.4rem', textAlign: 'left', width: '100px' }}>Log nro</th>
+                    <th style={{ padding: '0.4rem', textAlign: 'center', width: '80px' }}>Tulos (Result)</th>
                     <th style={{ padding: '0.4rem', width: '35px' }}></th>
                   </tr>
                 </thead>
@@ -211,35 +334,61 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                     <tr key={idx} style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.08)' }}>
                       <td style={{ padding: '0.4rem', textAlign: 'center', color: 'var(--text-muted)' }}>{it.item_no}</td>
                       <td style={{ padding: '0.3rem' }}>
-                        <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.25rem 0.4rem', fontSize: '0.8rem' }} value={it.pipe_number} onChange={(e) => updateItemField(idx, 'pipe_number', e.target.value)} required />
+                        <input
+                          type="text"
+                          className="search-input"
+                          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.35rem 0.5rem', fontSize: '0.85rem' }}
+                          value={it.drawing_no || ''}
+                          onChange={(e) => updateItemField(idx, 'drawing_no', e.target.value)}
+                          placeholder="D.1402.006D.0006C.725.117_C"
+                          required
+                        />
                       </td>
                       <td style={{ padding: '0.3rem' }}>
-                        <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.25rem 0.4rem', fontSize: '0.8rem' }} value={it.drawing_no || ''} onChange={(e) => updateItemField(idx, 'drawing_no', e.target.value)} placeholder="DWG-01" />
+                        <input
+                          type="text"
+                          className="search-input"
+                          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.35rem 0.5rem', fontSize: '0.85rem' }}
+                          value={it.spool_no || ''}
+                          onChange={(e) => updateItemField(idx, 'spool_no', e.target.value)}
+                          placeholder="64722P1201"
+                        />
                       </td>
                       <td style={{ padding: '0.3rem' }}>
-                        <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.25rem 0.4rem', fontSize: '0.8rem' }} value={it.log_no || ''} onChange={(e) => updateItemField(idx, 'log_no', e.target.value)} placeholder="014FED" />
+                        <input
+                          type="text"
+                          className="search-input"
+                          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.35rem 0.5rem', fontSize: '0.85rem' }}
+                          value={it.pipe_number}
+                          onChange={(e) => updateItemField(idx, 'pipe_number', e.target.value)}
+                          placeholder="1001C"
+                          required
+                        />
                       </td>
                       <td style={{ padding: '0.3rem' }}>
-                        <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.25rem 0.4rem', fontSize: '0.8rem' }} value={it.hold_start_bar || ''} onChange={(e) => updateItemField(idx, 'hold_start_bar', e.target.value)} />
-                      </td>
-                      <td style={{ padding: '0.3rem' }}>
-                        <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.25rem 0.4rem', fontSize: '0.8rem' }} value={it.hold_end_bar || ''} onChange={(e) => updateItemField(idx, 'hold_end_bar', e.target.value)} />
+                        <input
+                          type="text"
+                          className="search-input"
+                          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.35rem 0.5rem', fontSize: '0.85rem' }}
+                          value={it.log_no || ''}
+                          onChange={(e) => updateItemField(idx, 'log_no', e.target.value)}
+                          placeholder="044-1"
+                        />
                       </td>
                       <td style={{ padding: '0.3rem', textAlign: 'center' }}>
                         <select
                           value={it.result}
                           onChange={(e) => updateItemField(idx, 'result', e.target.value)}
-                          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: it.result === 'PASS' ? 'var(--accent-emerald)' : 'var(--accent-rose)', borderRadius: 'var(--radius-sm)', padding: '0.25rem', fontSize: '0.75rem', fontWeight: 600 }}
+                          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', color: it.result === 'PASS' ? 'var(--accent-emerald)' : 'var(--accent-rose)', borderRadius: 'var(--radius-sm)', padding: '0.3rem', fontSize: '0.8rem', fontWeight: 600 }}
                         >
                           <option value="PASS">PASS</option>
                           <option value="FAIL">FAIL</option>
-                          <option value="PENDING">PENDING</option>
                         </select>
                       </td>
                       <td style={{ padding: '0.3rem', textAlign: 'center' }}>
                         {items.length > 1 && (
                           <button type="button" onClick={() => removeItemRow(idx)} style={{ background: 'transparent', border: 'none', color: 'var(--accent-rose)', cursor: 'pointer' }}>
-                            <Trash2 size={14} />
+                            <Trash2 size={15} />
                           </button>
                         )}
                       </td>
@@ -250,23 +399,34 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
             </div>
           </div>
 
-          {/* Section 3: Signatures */}
+          {/* Section 3: Remarks & Signatures */}
           <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--accent-amber)' }}>
-              3. Verification & Signatures
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Foreman Name</label>
-                <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={foremanName} onChange={(e) => setForemanName(e.target.value)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  Witnessed / Reviewed by (Прораб / Ответственное лицо)
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem', fontSize: '0.9rem' }}
+                  value={foremanName}
+                  onChange={(e) => setForemanName(e.target.value)}
+                  placeholder="DE LUCA"
+                />
               </div>
+
               <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>QC Inspector Name</label>
-                <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={qcInspector} onChange={(e) => setQcInspector(e.target.value)} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Client / Surveyor Name</label>
-                <input type="text" className="search-input" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.85rem' }} value={clientSurveyor} onChange={(e) => setClientSurveyor(e.target.value)} />
+                <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                  Huomautukset / Remarks (Примечания)
+                </label>
+                <input
+                  type="text"
+                  className="search-input"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem', fontSize: '0.9rem' }}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
               </div>
             </div>
           </div>
@@ -274,11 +434,11 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
           {/* Actions */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
             <button type="button" onClick={onClose} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', padding: '0.6rem 1.2rem', borderRadius: 'var(--radius-md)', cursor: 'pointer' }} disabled={isSubmitting}>
-              Cancel
+              Отмена
             </button>
-            <button type="submit" className="btn-primary" disabled={isSubmitting}>
+            <button type="submit" className="btn-primary" disabled={isSubmitting} style={{ padding: '0.6rem 1.4rem', fontWeight: 700 }}>
               <Check size={16} />
-              <span>{isSubmitting ? 'Saving Record...' : 'Save & Generate Official Blank'}</span>
+              <span>{isSubmitting ? 'Формирование бланка...' : 'Сформировать официальный бланк ARDOR'}</span>
             </button>
           </div>
         </form>
