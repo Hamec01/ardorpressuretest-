@@ -50,9 +50,16 @@ def generate_text_report(
     lines.append(f"Log No:                 {meta_ref.log_no or 'N/A'}")
     lines.append(f"Ins No:                 {meta_ref.ins_no or 'N/A'}")
     lines.append(f"Project:                {meta_ref.project or 'N/A'}")
+    lines.append(f"Operator:               {getattr(meta_ref, 'operator', '') or 'N/A'}")
     lines.append(f"Note:                   {meta_ref.note or 'N/A'}")
     lines.append(f"Wika Nr:                {meta_ref.wika_nr or 'N/A'}")
     
+    bundle_items = getattr(meta_ref, "bundle_numbers", [])
+    if bundle_items:
+        lines.append("Bundle Numbers:")
+        for b_item in bundle_items:
+            lines.append(f"  - {b_item}")
+            
     pipe_text = getattr(meta_ref, "pipe_logs_text", "").strip()
     if pipe_text:
         pipe_items = [p.strip() for p in pipe_text.splitlines() if p.strip()]
