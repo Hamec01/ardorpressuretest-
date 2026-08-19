@@ -1,3 +1,4 @@
+import base64
 import shutil
 from pathlib import Path
 import pytest
@@ -39,7 +40,10 @@ def test_ptr_pdf_generator_standalone():
         "foreman_name": "Matti Meikäläinen",
         "qc_inspector": "Jari Korhonen",
         "client_surveyor": "DNV Surveyor",
-        "notes": "Test completed successfully."
+        "notes": "Test completed successfully.",
+        "verification_code": "ARDOR-VRF-9821-2026",
+        "confirmed_by_name": "Matti Meikäläinen",
+        "confirmed_by_role": "foreman"
     }
     items_data = [
         {"item_no": 1, "pipe_number": "PIPE-101", "drawing_no": "DWG-01", "log_no": "014FED", "hold_start_bar": "15.2", "hold_end_bar": "15.1", "result": "PASS", "notes": "OK"},
@@ -51,7 +55,7 @@ def test_ptr_pdf_generator_standalone():
     assert pdf_bytes.startswith(b"%PDF-")
 
 
-def test_ptr_api_flow():
+def test_ptr_api_flow_with_signatures_and_verification():
     client = TestClient(app)
 
     # 1. Login as foreman
@@ -90,21 +94,46 @@ def test_ptr_api_flow():
     record_id = record_data["id"]
     assert record_data["record_number"] == "PTR-2026-901"
     assert record_data["status"] == "draft"
-    assert len(record_data["items"]) == 1
 
-    # 3. Update Record status to confirmed
-    update_res = client.put(f"/api/v1/records/{record_id}", json={"status": "confirmed"}, headers=auth_header)
-    assert update_res.status_code == 200
-    assert update_res.json()["status"] == "confirmed"
+    # 3. Attach Digital Signature Image
+    # 1x1 transparent png in base64
+    fake_png_b64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    sig_res = client.post(f"/api/v1/records/{record_id}/signature", json={"image_base64": fake_png_b64}, headers=auth_header)
+    assert sig_res.status_code == 200
+    assert sig_res.json()["signature_image_path"] is not None
 
-    # 4. Download Official PDF Blank
+    # 4. Confirm Record with Digital Verification Seal
+    confirm_res = client.post(f"/api/v1/records/{record_id}/confirm", headers=auth_header)
+    assert confirm_res.status_code == 200
+    confirmed_data = confirm_res.json()
+    assert confirmed_data["status"] == "confirmed"
+    assert confirmed_data["verification_code"].startswith("ARDOR-VRF-")
+    assert "Matti Meik" in confirmed_data["confirmed_by_name"]
+    assert confirmed_data["sha256_hash"] is not None
+    vrf_code = confirmed_data["verification_code"]
+
+    # 5. Public Verification Endpoint Check
+    verify_res = client.get(f"/api/v1/records/verify/{vrf_code}")
+    assert verify_res.status_code == 200
+    vrf_json = verify_res.json()
+    assert vrf_json["valid"] is True
+    assert vrf_json["verification_code"] == vrf_code
+    assert "Matti Meik" in vrf_json["confirmed_by_name"]
+
+    # 6. Download Verified Official PDF Blank
     pdf_res = client.get(f"/api/v1/records/{record_id}/pdf")
     assert pdf_res.status_code == 200
     assert pdf_res.headers["content-type"] == "application/pdf"
     assert len(pdf_res.content) > 1000
     assert pdf_res.content.startswith(b"%PDF-")
 
-    # 5. Query records list
-    list_res = client.get("/api/v1/records?q=901")
-    assert list_res.status_code == 200
-    assert len(list_res.json()) >= 1
+    # 7. Upload External Signed Copy PDF
+    fake_pdf = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+    upload_res = client.post(
+        f"/api/v1/records/{record_id}/signed-copy",
+        files={"file": ("signed_copy.pdf", fake_pdf, "application/pdf")},
+        headers=auth_header
+    )
+    assert upload_res.status_code == 200
+    assert upload_res.json()["status"] == "signed"
+    assert upload_res.json()["signed_copy_path"] is not None

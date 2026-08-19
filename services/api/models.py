@@ -125,6 +125,17 @@ class PressureTestRecord(Base):
     qc_inspector = Column(String(128), nullable=True)
     client_surveyor = Column(String(128), nullable=True)
     notes = Column(Text, nullable=True)
+    
+    # Электронная верификация и подписи
+    verification_code = Column(String(64), unique=True, index=True, nullable=True)
+    confirmed_by_user_id = Column(String(36), nullable=True)
+    confirmed_by_name = Column(String(128), nullable=True)
+    confirmed_by_role = Column(String(64), nullable=True)
+    confirmed_at = Column(DateTime(timezone=True), nullable=True)
+    signature_image_path = Column(String(255), nullable=True)
+    signed_copy_path = Column(String(255), nullable=True)
+    sha256_hash = Column(String(64), nullable=True)
+
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 

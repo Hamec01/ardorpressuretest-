@@ -1,12 +1,16 @@
+import base64
+import hashlib
 import io
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session, joinedload
 from services.api.auth import get_current_user, require_role
 from services.api.audit import log_audit_event
+from services.api.config import settings
 from services.api.database import get_db
 from services.api.models import PressureTestRecord, PressureTestRecordItem, User
 from wika_report.ptr_generator import generate_ptr_pdf
@@ -75,6 +79,10 @@ class RecordUpdateRequest(BaseModel):
     items: Optional[List[RecordItemCreate]] = None
 
 
+class SignatureUploadRequest(BaseModel):
+    image_base64: str  # data:image/png;base64,... or raw base64
+
+
 class RecordResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -93,9 +101,32 @@ class RecordResponse(BaseModel):
     qc_inspector: Optional[str] = None
     client_surveyor: Optional[str] = None
     notes: Optional[str] = None
+    
+    # Verification & Signature Fields
+    verification_code: Optional[str] = None
+    confirmed_by_name: Optional[str] = None
+    confirmed_by_role: Optional[str] = None
+    confirmed_at: Optional[datetime] = None
+    signature_image_path: Optional[str] = None
+    signed_copy_path: Optional[str] = None
+    sha256_hash: Optional[str] = None
+
     created_at: datetime
     updated_at: datetime
     items: List[RecordItemResponse] = []
+
+
+class VerificationResult(BaseModel):
+    valid: bool
+    verification_code: str
+    record_number: str
+    project: str
+    system: str
+    confirmed_by_name: Optional[str]
+    confirmed_by_role: Optional[str]
+    confirmed_at: Optional[str]
+    sha256_hash: Optional[str]
+    status: str
 
 
 @router.get("", response_model=List[RecordResponse])
@@ -122,6 +153,27 @@ def list_records(
 
     records = query.order_by(PressureTestRecord.updated_at.desc()).offset(skip).limit(limit).all()
     return records
+
+
+@router.get("/verify/{verification_code}", response_model=VerificationResult)
+def verify_record_public(verification_code: str, db: Session = Depends(get_db)):
+    """Публичная проверка подлинности подписанного акта по коду верификации."""
+    record = db.query(PressureTestRecord).filter(PressureTestRecord.verification_code == verification_code.strip()).first()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Verification code not found or invalid.")
+
+    return VerificationResult(
+        valid=True,
+        verification_code=record.verification_code,
+        record_number=record.record_number,
+        project=record.project,
+        system=record.system,
+        confirmed_by_name=record.confirmed_by_name,
+        confirmed_by_role=record.confirmed_by_role,
+        confirmed_at=record.confirmed_at.isoformat() if record.confirmed_at else None,
+        sha256_hash=record.sha256_hash,
+        status=record.status
+    )
 
 
 @router.post("", response_model=RecordResponse)
@@ -260,9 +312,142 @@ def update_record(
     )
 
 
+@router.post("/{id}/confirm", response_model=RecordResponse)
+def confirm_record(
+    id: str,
+    current_user: User = Depends(require_role(["foreman", "admin"])),
+    db: Session = Depends(get_db)
+):
+    """
+    Электронное аккаунтное подтверждение прорабом / инспектором с генерацией Verification Code и SHA-256 Digest.
+    """
+    record = db.query(PressureTestRecord).filter(PressureTestRecord.id == id).first()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found.")
+
+    # Generate unique Verification Code
+    short_hash = hashlib.sha256(f"{record.id}-{datetime.now(timezone.utc).isoformat()}".encode()).hexdigest()[:8].upper()
+    vrf_code = f"ARDOR-VRF-{short_hash}-{datetime.now().year}"
+
+    # Compute content SHA-256 hash
+    content_raw = f"{record.record_number}:{record.project}:{record.system}:{record.test_pressure}:{current_user.username}"
+    doc_sha = hashlib.sha256(content_raw.encode("utf-8")).hexdigest()
+
+    record.verification_code = vrf_code
+    record.confirmed_by_user_id = str(current_user.id)
+    record.confirmed_by_name = current_user.full_name
+    record.confirmed_by_role = current_user.role
+    record.confirmed_at = datetime.now(timezone.utc)
+    record.sha256_hash = doc_sha
+    record.status = "confirmed"
+
+    db.commit()
+
+    log_audit_event(
+        db,
+        entity_type="pressure_test_record",
+        entity_id=record.id,
+        action="confirmed",
+        actor_id=str(current_user.id),
+        actor_name=current_user.full_name,
+        details={"verification_code": vrf_code, "sha256": doc_sha}
+    )
+
+    return (
+        db.query(PressureTestRecord)
+        .options(joinedload(PressureTestRecord.items))
+        .filter(PressureTestRecord.id == id)
+        .first()
+    )
+
+
+@router.post("/{id}/signature", response_model=RecordResponse)
+def upload_signature(
+    id: str,
+    req: SignatureUploadRequest,
+    current_user: User = Depends(require_role(["foreman", "admin"])),
+    db: Session = Depends(get_db)
+):
+    """Сохраняет нарисованную/загруженную подпись PNG для впечатывания в документ."""
+    record = db.query(PressureTestRecord).filter(PressureTestRecord.id == id).first()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found.")
+
+    img_data = req.image_base64
+    if "," in img_data:
+        img_data = img_data.split(",", 1)[1]
+
+    raw_bytes = base64.b64decode(img_data)
+    sig_dir = settings.storage_dir / "signatures"
+    sig_dir.mkdir(parents=True, exist_ok=True)
+    sig_path = sig_dir / f"sig_{record.id}.png"
+    sig_path.write_bytes(raw_bytes)
+
+    record.signature_image_path = str(sig_path)
+    db.commit()
+
+    log_audit_event(
+        db,
+        entity_type="pressure_test_record",
+        entity_id=record.id,
+        action="signature_uploaded",
+        actor_id=str(current_user.id),
+        actor_name=current_user.full_name,
+        details={"file_size": len(raw_bytes)}
+    )
+
+    return (
+        db.query(PressureTestRecord)
+        .options(joinedload(PressureTestRecord.items))
+        .filter(PressureTestRecord.id == id)
+        .first()
+    )
+
+
+@router.post("/{id}/signed-copy", response_model=RecordResponse)
+async def upload_signed_copy(
+    id: str,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_role(["foreman", "admin"])),
+    db: Session = Depends(get_db)
+):
+    """Загружает внешний подписанный скан PDF."""
+    record = db.query(PressureTestRecord).filter(PressureTestRecord.id == id).first()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found.")
+
+    copies_dir = settings.storage_dir / "signed_copies"
+    copies_dir.mkdir(parents=True, exist_ok=True)
+    out_file = copies_dir / f"signed_{record.record_number}.pdf"
+
+    content = await file.read()
+    out_file.write_bytes(content)
+
+    record.signed_copy_path = str(out_file)
+    record.status = "signed"
+    db.commit()
+
+    log_audit_event(
+        db,
+        entity_type="pressure_test_record",
+        entity_id=record.id,
+        action="signed_copy_uploaded",
+        actor_id=str(current_user.id),
+        actor_name=current_user.full_name,
+        details={"filename": file.filename, "size": len(content)}
+    )
+
+    return (
+        db.query(PressureTestRecord)
+        .options(joinedload(PressureTestRecord.items))
+        .filter(PressureTestRecord.id == id)
+        .first()
+    )
+
+
 @router.get("/{id}/pdf")
 def export_record_pdf(id: str, db: Session = Depends(get_db)):
-    """Генерирует и скачивает официальный PDF Pressure Test Record."""
+    """Генерирует и скачивает официальный PDF Pressure Test Record с цифровым штампом."""
     record = (
         db.query(PressureTestRecord)
         .options(joinedload(PressureTestRecord.items))
@@ -286,7 +471,13 @@ def export_record_pdf(id: str, db: Session = Depends(get_db)):
         "foreman_name": record.foreman_name,
         "qc_inspector": record.qc_inspector,
         "client_surveyor": record.client_surveyor,
-        "notes": record.notes
+        "notes": record.notes,
+        "verification_code": record.verification_code,
+        "confirmed_by_name": record.confirmed_by_name,
+        "confirmed_by_role": record.confirmed_by_role,
+        "confirmed_at": record.confirmed_at.isoformat() if record.confirmed_at else None,
+        "signature_image_path": record.signature_image_path,
+        "sha256_hash": record.sha256_hash
     }
 
     items_list = [

@@ -75,6 +75,16 @@ export interface PressureTestRecord {
   qc_inspector?: string | null;
   client_surveyor?: string | null;
   notes?: string | null;
+  
+  // Verification & Signatures
+  verification_code?: string | null;
+  confirmed_by_name?: string | null;
+  confirmed_by_role?: string | null;
+  confirmed_at?: string | null;
+  signature_image_path?: string | null;
+  signed_copy_path?: string | null;
+  sha256_hash?: string | null;
+
   created_at: string;
   updated_at: string;
   items: RecordItem[];
