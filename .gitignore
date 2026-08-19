@@ -28,6 +28,11 @@ wheels/
 .vscode/
 .idea/
 
+# Node.js / Web
+node_modules/
+apps/web/dist/
+.vite/
+
 # Application Runtime Output
 output/
 processed/
