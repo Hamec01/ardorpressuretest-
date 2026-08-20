@@ -10,11 +10,14 @@ import {
   Eye,
   Table,
   Upload,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Trash2
 } from 'lucide-react';
 import { SignatureModal } from './SignatureModal';
 import { ConfirmRecordModal } from './ConfirmRecordModal';
 import { useAuth } from '../context/AuthContext';
+import { useI18n } from '../context/LanguageContext';
+import { deleteRecord } from '../api';
 
 interface RecordDetailModalProps {
   record: PressureTestRecord;
@@ -28,11 +31,29 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   onUpdate
 }) => {
   const { token } = useAuth();
+  const { t } = useI18n();
   const [record, setRecord] = useState<PressureTestRecord>(initialRecord);
   const [activeView, setActiveView] = useState<'pdf' | 'data'>('pdf');
   const [isSignOpen, setIsSignOpen] = useState<boolean>(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState<boolean>(false);
   const [isUploadingCopy, setIsUploadingCopy] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  const handleDeleteRecord = async () => {
+    const confirmed = window.confirm(t('delete_record_confirm', { record: record.record_number }));
+    if (!confirmed) return;
+
+    try {
+      setIsDeleting(true);
+      await deleteRecord(record.id, token);
+      onUpdate();
+      onClose();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete record');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleSignatureSuccess = (updated: PressureTestRecord) => {
     setRecord(updated);
@@ -102,16 +123,28 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <button
+                type="button"
+                onClick={handleDeleteRecord}
+                disabled={isDeleting}
+                className="filter-pill"
+                style={{ background: 'rgba(244, 63, 94, 0.12)', color: 'var(--accent-rose)', border: '1px solid var(--accent-rose)', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
+                title={t('btn_delete_record')}
+              >
+                <Trash2 size={14} />
+                <span>{isDeleting ? t('modal_saving') : t('btn_delete')}</span>
+              </button>
+
               <a
                 href={pdfUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="filter-pill"
                 style={{ background: 'rgba(56, 189, 248, 0.12)', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.8rem', fontSize: '0.85rem', textDecoration: 'none' }}
-                title="Открыть PDF в новой вкладке"
+                title={t('btn_open_new_tab')}
               >
                 <ExternalLink size={14} />
-                <span>Открыть в новой вкладке</span>
+                <span>{t('btn_open_new_tab')}</span>
               </a>
 
               <a
@@ -121,7 +154,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}
               >
                 <Download size={15} />
-                <span>Скачать PDF</span>
+                <span>{t('btn_download_pdf')}</span>
               </a>
 
               <button className="modal-close-btn" onClick={onClose}>

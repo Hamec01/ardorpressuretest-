@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { PressureTestRecord } from '../types';
-import { fetchRecords, getRecordPdfUrl } from '../api';
+import { fetchRecords, getRecordPdfUrl, deleteRecord } from '../api';
 import { useI18n } from '../context/LanguageContext';
-import { Plus, Download, User, Search, RefreshCw, FileSpreadsheet, ShieldCheck } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Plus, Download, User, Search, RefreshCw, FileSpreadsheet, ShieldCheck, Trash2 } from 'lucide-react';
 
 interface RecordsTabProps {
   onSelectRecord: (rec: PressureTestRecord) => void;
@@ -12,6 +13,7 @@ interface RecordsTabProps {
 
 export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRecordClick, refreshTrigger = 0 }) => {
   const { t } = useI18n();
+  const { token } = useAuth();
   const [records, setRecords] = useState<PressureTestRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
@@ -26,6 +28,19 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRec
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (rec: PressureTestRecord, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const ok = window.confirm(t('delete_record_confirm', { record: rec.record_number }));
+    if (!ok) return;
+
+    try {
+      await deleteRecord(rec.id, token);
+      loadRecords();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete record');
     }
   };
 
@@ -197,6 +212,16 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRec
                       <Download size={12} />
                       <span>PDF Blank</span>
                     </a>
+
+                    <button
+                      type="button"
+                      onClick={(e) => handleDelete(rec, e)}
+                      className="filter-pill"
+                      style={{ background: 'rgba(244, 63, 94, 0.1)', color: 'var(--accent-rose)', border: '1px solid rgba(244, 63, 94, 0.3)', padding: '0.35rem 0.5rem', cursor: 'pointer' }}
+                      title={t('btn_delete_record')}
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
               </div>

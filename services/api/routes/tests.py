@@ -6,9 +6,11 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from services.api.database import get_db
-from services.api.models import Artifact, Bundle, Pipe, PressureTest, TestRevision
+from services.api.models import Artifact, Bundle, Pipe, PressureTest, TestRevision, User
 from services.api.schemas import PressureTestResponse
 from services.api.storage import storage
+from services.api.auth import require_role
+from services.api.audit import log_audit_event
 from wika_report.models import normalize_log_no
 
 router = APIRouter(prefix="/api/v1/tests", tags=["Pressure Tests"])
@@ -251,4 +253,40 @@ def update_revision_metadata(
         .filter(PressureTest.id == test.id)
         .first()
     )
+
+
+@router.delete("/{log_no}")
+def delete_test(
+    log_no: str,
+    current_user: User = Depends(require_role(["foreman", "admin"])),
+    db: Session = Depends(get_db)
+):
+    """Удаляет испытание, все его ревизии и артефакты."""
+    norm_log = normalize_log_no(log_no)
+    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+    if not test:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Test Log_{norm_log} not found.")
+
+    # Delete revisions, bundles, pipes, artifacts
+    revs = db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id).all()
+    for r in revs:
+        db.query(Pipe).filter(Pipe.test_revision_id == r.id).delete()
+        db.query(Bundle).filter(Bundle.test_revision_id == r.id).delete()
+        db.query(Artifact).filter(Artifact.test_revision_id == r.id).delete()
+        db.delete(r)
+
+    db.delete(test)
+    db.commit()
+
+    log_audit_event(
+        db,
+        action="test_deleted",
+        entity_type="pressure_test",
+        entity_id=str(test.id),
+        actor_id=str(current_user.id),
+        actor_name=current_user.full_name,
+        details={"log_no": norm_log}
+    )
+
+    return {"status": "success", "message": f"Test Log_{norm_log} deleted successfully."}
 

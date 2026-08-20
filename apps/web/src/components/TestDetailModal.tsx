@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { PressureTest, TestRevision, Artifact } from '../types';
-import { getRevisionZipUrl, getArtifactFileUrl } from '../api';
+import { getRevisionZipUrl, getArtifactFileUrl, deletePressureTest } from '../api';
+import { useI18n } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import {
   X,
   Download,
@@ -13,7 +15,8 @@ import {
   Edit3,
   Check,
   Save,
-  Maximize2
+  Maximize2,
+  Trash2
 } from 'lucide-react';
 
 interface TestDetailModalProps {
@@ -43,6 +46,28 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const { t } = useI18n();
+  const { token } = useAuth();
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  const handleDeleteTest = async () => {
+    const ok = window.confirm(t('delete_test_confirm', { log: currentTest.log_no }));
+    if (!ok) return;
+
+    try {
+      setIsDeleting(true);
+      await deletePressureTest(currentTest.log_no, token);
+      if (onUpdate) {
+        onUpdate(currentTest);
+      }
+      onClose();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete test');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const revisions = currentTest.revisions || [];
   const currentRev: TestRevision | undefined = revisions[selectedRevIndex] || revisions[0];
@@ -188,7 +213,19 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <button
+              type="button"
+              onClick={handleDeleteTest}
+              disabled={isDeleting}
+              className="filter-pill"
+              style={{ background: 'rgba(244, 63, 94, 0.12)', color: 'var(--accent-rose)', border: '1px solid var(--accent-rose)', display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', padding: '0.5rem 0.8rem', fontSize: '0.85rem' }}
+              title={t('btn_delete_test')}
+            >
+              <Trash2 size={14} />
+              <span>{isDeleting ? t('modal_saving') : t('btn_delete')}</span>
+            </button>
+
             {!isEditing && (
               <button
                 type="button"

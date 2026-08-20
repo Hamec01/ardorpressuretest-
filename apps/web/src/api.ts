@@ -45,3 +45,31 @@ export async function fetchRecords(query?: string, status?: string): Promise<any
 export function getRecordPdfUrl(recordId: string): string {
   return `${API_BASE}/records/${encodeURIComponent(recordId)}/pdf`;
 }
+
+export async function deleteRecord(recordId: string, token?: string | null): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}/records/${encodeURIComponent(recordId)}`, {
+    method: 'DELETE',
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to delete record (${res.status})`);
+  }
+}
+
+export async function deletePressureTest(logNo: string, token?: string | null): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}/tests/${encodeURIComponent(logNo)}`, {
+    method: 'DELETE',
+    headers,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to delete test (${res.status})`);
+  }
+}

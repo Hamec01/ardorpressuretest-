@@ -312,6 +312,37 @@ def update_record(
     )
 
 
+@router.delete("/{id}")
+def delete_record(
+    id: str,
+    current_user: User = Depends(require_role(["foreman", "admin"])),
+    db: Session = Depends(get_db)
+):
+    """Удаляет Pressure Test Record и связанные строки с фиксацией в аудите."""
+    record = db.query(PressureTestRecord).filter(PressureTestRecord.id == id).first()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found.")
+
+    rec_num = record.record_number
+    # Remove items
+    db.query(PressureTestRecordItem).filter(PressureTestRecordItem.record_id == id).delete()
+    # Remove record
+    db.delete(record)
+    db.commit()
+
+    log_audit_event(
+        db,
+        entity_type="pressure_test_record",
+        entity_id=id,
+        action="deleted",
+        actor_id=str(current_user.id),
+        actor_name=current_user.full_name,
+        details={"record_number": rec_num}
+    )
+
+    return {"status": "success", "message": f"Record {rec_num} deleted successfully."}
+
+
 @router.post("/{id}/confirm", response_model=RecordResponse)
 def confirm_record(
     id: str,

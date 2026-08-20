@@ -137,3 +137,12 @@ def test_ptr_api_flow_with_signatures_and_verification():
     assert upload_res.status_code == 200
     assert upload_res.json()["status"] == "signed"
     assert upload_res.json()["signed_copy_path"] is not None
+
+    # 8. Delete Record
+    del_res = client.delete(f"/api/v1/records/{record_id}", headers=auth_header)
+    assert del_res.status_code == 200
+    assert del_res.json()["status"] == "success"
+
+    # Verify deleted
+    get_del = client.get(f"/api/v1/records/{record_id}")
+    assert get_del.status_code == 404
