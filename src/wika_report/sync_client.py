@@ -163,6 +163,14 @@ class SyncClient:
         summary = {"total": len(items), "synced": 0, "failed": 0}
 
         for it in items:
+            if getattr(it, "manifest_path", None):
+                m_path = Path(it.manifest_path)
+                if not m_path.exists():
+                    logger.warning(f"Skipping stale queue item {it.log_no}: manifest not found ({it.manifest_path})")
+                    target_queue.update_status(it.operation_id, status="failed", error=f"Manifest not found on disk: {it.manifest_path}")
+                    summary["failed"] += 1
+                    continue
+
             try:
                 self.sync_item(it, queue=target_queue)
                 summary["synced"] += 1

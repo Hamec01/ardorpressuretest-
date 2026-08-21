@@ -529,39 +529,67 @@ class WikaAppGUI:
         self.root.after(0, on_complete)
 
     def _start_server_sync(self):
-        """Запускает синхронизацию локальной очереди с бэкенд-сервером."""
+        """Запускает проверку связи и синхронизацию локальной очереди с бэкенд-сервером."""
         from wika_report.sync_client import SyncClient
         from wika_report.sync_queue import sync_queue
 
-        summary = sync_queue.get_summary()
-        pending_count = summary.get("pending", 0) + summary.get("failed", 0)
-        if pending_count == 0:
-            self._log("[СИНХРОНИЗАЦИЯ] Все ревизии уже синхронизированы с сервером.")
-            messagebox.showinfo("Sync", "All test logs are already synced with the server.")
-            return
-
-        server_url = self.config.get("server_url") or os.environ.get("ARDOR_SERVER_URL") or "http://127.0.0.1:8080"
-        self._log(f"\n[СИНХРОНИЗАЦИЯ] Начало отправки {pending_count} элементов на сервер ({server_url})...")
+        server_url = self.config.get("server_url") or os.environ.get("ARDOR_SERVER_URL") or "http://84.247.130.242:8000"
         self.btn_sync.configure(state=tk.DISABLED)
+        self._log(f"\n[СИНХРОНИЗАЦИЯ] Подключение к серверу ({server_url})...")
 
         def sync_worker():
-            client = SyncClient(base_url=server_url)
-            if not client.check_health():
-                self._log(f"[СЕРВЕР НЕДОСТУПЕН] Сервер не отвечает ({server_url}). Логи безопасно сохранены в локальной офлайн-очереди.")
-                self.root.after(0, lambda: self.btn_sync.configure(state=tk.NORMAL))
-                self.root.after(0, lambda: messagebox.showwarning(
-                    "Server Offline",
-                    f"Backend server is offline or unreachable ({server_url}).\n\nPlease verify connection and server status.\nAll test logs remain safely queued offline in SQLite."
-                ))
-                return
+            try:
+                client = SyncClient(base_url=server_url)
+                is_online = client.check_health()
 
-            res = client.sync_all_pending()
-            self._log(f"[СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА] Синхронизировано: {res['synced']}, Ошибок: {res['failed']}")
-            self.root.after(0, lambda: self.btn_sync.configure(state=tk.NORMAL))
-            self.root.after(0, lambda: messagebox.showinfo(
-                "Sync Finished",
-                f"Synchronization complete!\n\nSynced: {res['synced']}\nFailed: {res['failed']}"
-            ))
+                if not is_online:
+                    self._log(f"[СЕРВЕР НЕДОСТУПЕН] Сервер не отвечает ({server_url}). Логи безопасно сохранены в локальной офлайн-очереди.")
+                    self.root.after(0, lambda: messagebox.showwarning(
+                        "Server Offline",
+                        f"Backend server is offline or unreachable ({server_url}).\n\nPlease check server status or internet connection.\nAll test logs remain safely saved locally in SQLite.",
+                        parent=self.root
+                    ))
+                    return
+
+                self._log(f"[СЕРВЕР ОНЛАЙН] Соединение с сервером ({server_url}) успешно установлено.")
+
+                summary = sync_queue.get_summary()
+                pending_count = summary.get("pending", 0) + summary.get("failed", 0)
+
+                if pending_count == 0:
+                    self._log("[СИНХРОНИЗАЦИЯ] Все ревизии уже синхронизированы (в очереди 0 новых файлов).")
+                    self._log("ℹ️ Чтобы отправить новые данные: добавьте CSV файл и нажмите '▶ START PROCESSING'.")
+                    self.root.after(0, lambda: messagebox.showinfo(
+                        "Server Online - Sync Status",
+                        f"Connected to server successfully ({server_url})!\n\nAll test logs are already synced (Queue is empty).\n\nTo send new data, process a CSV file using '▶ START PROCESSING'.",
+                        parent=self.root
+                    ))
+                    return
+
+                self._log(f"[СИНХРОНИЗАЦИЯ] Отправка {pending_count} элементов на сервер...")
+                items = sync_queue.get_pending_items()
+                synced_count = 0
+                failed_count = 0
+
+                for i, it in enumerate(items, 1):
+                    try:
+                        self._log(f"  [{i}/{len(items)}] Отправка лога {it.log_no}...")
+                        client.sync_item(it, queue=sync_queue)
+                        synced_count += 1
+                        self._log(f"  [{i}/{len(items)}] Лог {it.log_no} успешно синхронизирован!")
+                    except Exception as item_err:
+                        failed_count += 1
+                        self._log(f"  [{i}/{len(items)}] Ошибка синхронизации лога {it.log_no}: {item_err}")
+
+                self._log(f"[СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА] Синхронизировано: {synced_count}, Ошибок: {failed_count}")
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "Sync Finished",
+                    f"Synchronization complete!\n\nSynced: {synced_count}\nFailed: {failed_count}",
+                    parent=self.root
+                ))
+
+            finally:
+                self.root.after(0, lambda: self.btn_sync.configure(state=tk.NORMAL))
 
         threading.Thread(target=sync_worker, daemon=True).start()
 
