@@ -187,3 +187,13 @@ def require_role(allowed_roles: List[str]):
                 detail="Invalid token"
             )
     return role_checker
+
+
+def require_authenticated_user(
+    auth: Optional[HTTPAuthorizationCredentials] = Security(security_bearer),
+    db: Session = Depends(get_db)
+) -> User:
+    """Проверяет активную сессию любого авторизованного сотрудника (operator, foreman, manager, admin)."""
+    checker = require_role(["operator", "foreman", "manager", "admin"])
+    return checker(auth, db)
+

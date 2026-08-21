@@ -60,6 +60,20 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
           >
             Recent (24h)
           </button>
+          <button
+            className={`filter-pill ${activeFilter === 'pipecloud_added' ? 'active' : ''}`}
+            onClick={() => onFilterSelect('pipecloud_added')}
+            style={{ borderColor: activeFilter === 'pipecloud_added' ? '#10b981' : undefined }}
+          >
+            ☁ {t('pipecloud_filter_added')}
+          </button>
+          <button
+            className={`filter-pill ${activeFilter === 'pipecloud_not_added' ? 'active' : ''}`}
+            onClick={() => onFilterSelect('pipecloud_not_added')}
+            style={{ borderColor: activeFilter === 'pipecloud_not_added' ? '#f87171' : undefined }}
+          >
+            ☁ {t('pipecloud_filter_not_added')}
+          </button>
         </div>
 
         {/* View Mode Toggle: Grid vs Table */}

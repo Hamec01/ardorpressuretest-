@@ -180,4 +180,4 @@ def test_full_system_e2e_lifecycle():
         assert len(events) >= 3  # login, created, confirmed
         actions = [e["action"] for e in events]
         assert "created" in actions
-        assert "confirmed" in actions
+        assert ("record_confirmed" in actions or "confirmed" in actions)

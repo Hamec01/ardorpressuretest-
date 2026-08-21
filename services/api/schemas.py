@@ -52,9 +52,25 @@ class PressureTestResponse(BaseModel):
 
     id: str
     log_no: str
+    pipecloud_added: bool = False
+    pipecloud_updated_at: Optional[datetime] = None
+    pipecloud_updated_by_name: Optional[str] = None
+    is_archived: bool = False
     created_at: datetime
     updated_at: datetime
     revisions: List[RevisionResponse] = []
+
+
+class PipeCloudUpdateRequest(BaseModel):
+    added: bool
+    idempotency_key: Optional[str] = None
+
+
+class PipeCloudUpdateResponse(BaseModel):
+    log_no: str
+    pipecloud_added: bool
+    pipecloud_updated_at: Optional[datetime] = None
+    pipecloud_updated_by_name: Optional[str] = None
 
 
 class SyncSessionRequest(BaseModel):

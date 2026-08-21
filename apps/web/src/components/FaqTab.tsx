@@ -4,11 +4,14 @@ import {
   HelpCircle,
   Search,
   UploadCloud,
-  FileSpreadsheet,
   ShieldCheck,
   ChevronDown,
   ChevronUp,
-  Terminal
+  Terminal,
+  Cloud,
+  Layers,
+  Camera,
+  Trash2
 } from 'lucide-react';
 
 interface FaqItem {
@@ -24,8 +27,9 @@ export const FaqTab: React.FC = () => {
   const [search, setSearch] = useState<string>('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [openItems, setOpenItems] = useState<Record<string, boolean>>({
-    'upload_package': true,
-    'ptr_blank': true,
+    'composite_ptr': true,
+    'pipecloud_status': true,
+    'upload_package': false,
   });
 
   const toggleItem = (id: string) => {
@@ -33,6 +37,234 @@ export const FaqTab: React.FC = () => {
   };
 
   const faqItems: FaqItem[] = [
+    {
+      id: 'composite_ptr',
+      category: 'ptr',
+      icon: Layers,
+      title: {
+        en: 'How does the Composite Pressure Test Record (Official Blank + Full PDF) work?',
+        fi: 'Miten yhdistetty Painekoepöytäkirja (Virallinen lomake + Full PDF) toimii?',
+        ru: 'Как работает составной протокол (Официальный бланк ARDOR + Полный Full Composite PDF)?',
+      },
+      content: {
+        en: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            <p>
+              The system allows creating comprehensive multi-log quality packages according to ARDOR standards:
+            </p>
+            <ol style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <li>
+                <strong>Official ARDOR Blank (Official PDF):</strong> Multi-page vector form containing the pipe specification (supports 30–40+ pipes across pages with repeated headers), design parameters, and digital verification seal.
+              </li>
+              <li>
+                <strong>Full Composite PDF:</strong> A single consolidated engineering package combining:
+                <ul style={{ paddingLeft: '1.2rem', marginTop: '0.3rem' }}>
+                  <li>All pages of the Official ARDOR Record;</li>
+                  <li>Sequential Log Sections (Log summary, pressure graph, attached photos);</li>
+                  <li>Optional complete WIKA CPG1500 raw CSV measurement tables (~4 pages per log without downsampling).</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Interactive Builder:</strong> In the <code>+ Create PTR</code> modal, click <code>+ Add Pressure Test Log</code> to search and attach logs, toggle measurement tables, reorder sections with (↑/↓), and view live page count estimation.
+              </li>
+            </ol>
+            <p style={{ color: 'var(--accent-cyan)', fontSize: '0.85rem' }}>
+              ✓ Both the Official Blank and Full Composite PDF compute cryptographic SHA-256 byte hashes upon confirmation.
+            </p>
+          </div>
+        ),
+        fi: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            <p>
+              Järjestelmä mahdollistaa useiden lokien yhdistämisen viralliseksi ARDOR-laatuasiakirjaksi:
+            </p>
+            <ol style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <li>
+                <strong>Virallinen ARDOR-lomake (Official PDF):</strong> Monisivuinen vektorilomake, joka sisältää putkilistan (tukee 30–40+ putkea sivutuksella ja toistuvilla otsikoilla), suunnittelupaineet ja digitaalisen varmennusleiman.
+              </li>
+              <li>
+                <strong>Täydellinen koontitiedosto (Full Composite PDF):</strong> Yhdistää yhteen PDF-tiedostoon:
+                <ul style={{ paddingLeft: '1.2rem', marginTop: '0.3rem' }}>
+                  <li>Kaikki virallisen ARDOR-pöytäkirjan sivut;</li>
+                  <li>Jokaisen liitetyn lokin osiot (yhteenveto, painekuvan kuvaaja, valokuvat);</li>
+                  <li>WIKA CPG1500 -mittauspistetaulukon (~4 sivua per loki ilman näytteenottoa).</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Vuorovaikutteinen luontityökalu:</strong> <code>+ Luo pöytäkirja</code> -ikkunassa napsauta <code>+ Lisää koeloki</code> liittääksesi kokeita, valitaksesi valokuvia ja nähdäksesi arvioidun sivumäärän.
+              </li>
+            </ol>
+          </div>
+        ),
+        ru: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            <p>
+              Система позволяет формировать составные инженерные пакеты качества по стандартам ARDOR:
+            </p>
+            <ol style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <li>
+                <strong>Официальный бланк ARDOR (Official PDF):</strong> Многостраничный векторный документ со спецификацией труб (поддерживает 30–40+ труб с переносом строк на следующие листы), параметрами испытания и защитным штампом.
+              </li>
+              <li>
+                <strong>Полный составной пакет (Full Composite PDF):</strong> Единый файл, объединяющий:
+                <ul style={{ paddingLeft: '1.2rem', marginTop: '0.3rem' }}>
+                  <li>Все листы официального бланка ARDOR;</li>
+                  <li>Разделы по каждому прикрепленному логу (сводка параметров, график 0–160 bar, отобранные фото манометра и труб);</li>
+                  <li>Полную таблицу всех точек измерений WIKA CPG1500 из CSV (~4 стр. на лог без сэмплинга и потерь данных).</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Конструктор протокола:</strong> В окне <code>+ Создать протокол</code> нажмите <code>+ Добавить лог испытания</code>, чтобы выбрать логи из базы, включить/отключить таблицы измерений, настроить фотографии и увидеть живую оценку количества страниц.
+              </li>
+            </ol>
+            <p style={{ color: 'var(--accent-emerald)', fontSize: '0.85rem' }}>
+              ✓ При подтверждении протокола рассчитываются два независимых SHA-256 хэша: для официального бланка и для полного PDF-пакета.
+            </p>
+          </div>
+        ),
+      },
+    },
+    {
+      id: 'pipecloud_status',
+      category: 'pipecloud',
+      icon: Cloud,
+      title: {
+        en: 'What is the "Added to PipeCloud" status and how does it work?',
+        fi: 'Mikä on "Lisätty PipeCloudiin" -tila ja miten se toimii?',
+        ru: 'Что означает статус "Добавлено в PipeCloud" (PipeCloud Workflow)?',
+      },
+      content: {
+        en: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            <p>
+              <strong>Added to PipeCloud</strong> is a manual tracking indicator for production staff:
+            </p>
+            <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <li>
+                <strong>Manual control:</strong> Every new test starts with status <span style={{ color: 'var(--accent-rose)', fontWeight: 700 }}>PIPECLOUD: NOT ADDED</span>. It is never set or reset automatically.
+              </li>
+              <li>
+                <strong>Independent workflow:</strong> Updating pipe lists, notes, or creating new test revisions does not reset the PipeCloud status.
+              </li>
+              <li>
+                <strong>Quick toggle:</strong> Any authorized team member can toggle the status directly in the log card, table view, or modal window.
+              </li>
+              <li>
+                <strong>Audit Trail:</strong> Every change logs the user name, timestamp, and previous status in the immutable Audit Log.
+              </li>
+              <li>
+                <strong>Desktop sync:</strong> When working offline in the Windows Desktop app, status changes are queued and synced safely upon reconnecting.
+              </li>
+            </ul>
+          </div>
+        ),
+        fi: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            <p>
+              <strong>Lisätty PipeCloudiin (Added to PipeCloud)</strong> on manuaalinen työnkulun tila:
+            </p>
+            <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <li>
+                <strong>Manuaalinen ohjaus:</strong> Kaikki uudet kokeet luodaan tilassa <span style={{ color: 'var(--accent-rose)', fontWeight: 700 }}>PIPECLOUD: EI LISÄTTY</span>. Tilaa ei koskaan aseteta tai nollata automaattisesti.
+              </li>
+              <li>
+                <strong>Itsenäisyys:</strong> Putkilistan, muistiinpanojen tai uusien revisioiden luominen ei muuta PipeCloud-tilaa.
+              </li>
+              <li>
+                <strong>Nopea kytkentä:</strong> Kuka tahansa kirjautunut työntekijä voi vaihtaa tilan suoraan koekortilta tai taulukosta.
+              </li>
+              <li>
+                <strong>Auditointi:</strong> Jokainen tilanmuutos tallentaa käyttäjän nimen, aikaleiman ja vanhan arvon tarkastuslokiin.
+              </li>
+            </ul>
+          </div>
+        ),
+        ru: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            <p>
+              <strong>Добавлено в PipeCloud (Added to PipeCloud)</strong> — это ручной индикатор учета для опрессовщиков и мастеров:
+            </p>
+            <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <li>
+                <strong>Полностью ручной контроль:</strong> Все новые испытания создаются со статусом <span style={{ color: 'var(--accent-rose)', fontWeight: 700 }}>PIPECLOUD: NOT ADDED</span> (красный бейдж). Статус никогда не выставляется и не сбрасывается программой автоматически.
+              </li>
+              <li>
+                <strong>Независимость данных:</strong> Добавление новых ревизий, изменение номеров труб или редактирование заметок не сбрасывают отметку PipeCloud.
+              </li>
+              <li>
+                <strong>Переключение в один клик:</strong> Любой авторизованный сотрудник может переключить тумблер прямо в карточке лога, в таблице или в окне просмотра.
+              </li>
+              <li>
+                <strong>Журнал аудита:</strong> Каждое переключение фиксирует имя сотрудника, дату, время и источник действия в неизменяемом Audit Trail.
+              </li>
+              <li>
+                <strong>Офлайн-синхронизация:</strong> В Windows EXE приложении переключение сохраняется в локальный sidecar-файл <code>pipecloud_status.txt</code> и отправляется на сервер через очередь синхронизации.
+              </li>
+            </ul>
+          </div>
+        ),
+      },
+    },
+    {
+      id: 'photos_and_evidence',
+      category: 'upload',
+      icon: Camera,
+      title: {
+        en: 'How to attach and manage gauge & pipe inspection photos?',
+        fi: 'Miten liittää ja hallita painemittarin ja putkien valokuvia?',
+        ru: 'Как прикреплять и просматривать фотографии манометра и труб?',
+      },
+      content: {
+        en: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            <p>Inspection photos provide essential evidence for pressure tests:</p>
+            <ol style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <li>
+                <strong>Automatic Folder Import:</strong> When uploading a folder or ZIP package containing an <code>attached_photos/</code> directory or image files (<code>.jpg</code>, <code>.png</code>), the system automatically discovers and categorizes photos as Gauge (Манометр) or Pipe (Труба).
+              </li>
+              <li>
+                <strong>Direct Web Attachment:</strong> Open any test log $\rightarrow$ in the <em>"Attached Photographs"</em> section click <code>📷 Attach Photos</code> to add photos directly from your computer or smartphone.
+              </li>
+              <li>
+                <strong>Fullscreen Preview:</strong> Click on any photo thumbnail in the log details to open full-resolution inspection zoom.
+              </li>
+            </ol>
+          </div>
+        ),
+        fi: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            <p>Tarkastusvalokuvat ovat olennainen osa koetodistusta:</p>
+            <ol style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <li>
+                <strong>Automaattinen kansion tuonti:</strong> Kun lataat kansion tai ZIP-paketin, järjestelmä tunnistaa automaattisesti <code>attached_photos/</code> -kansion kuvat ja luokittelee ne (Mittari / Putki).
+              </li>
+              <li>
+                <strong>Suora lataus selaimessa:</strong> Avaa koe $\rightarrow$ napsauta <em>"Liitetyt valokuvat"</em> -kohdassa <code>📷 Liitä valokuvia</code> lisätäksesi kuvia milloin tahansa.
+              </li>
+              <li>
+                <strong>Täysikokoinen esikatselu:</strong> Napsauta mitä tahansa pikkukuvaa avataksesi kuvan suurennuksen.
+              </li>
+            </ol>
+          </div>
+        ),
+        ru: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            <p>Фотографии манометра и труб являются доказательной базой опрессовки:</p>
+            <ol style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <li>
+                <strong>Автоматическое обнаружение при загрузке папки:</strong> При загрузке папки или архива из Windows-приложения система автоматически находит все вложенные фотографии (в том числе в подпапке <code>attached_photos/</code>) и присваивает бейджи <em>«Манометр (Gauge)»</em> или <em>«Труба (Pipe)»</em>.
+              </li>
+              <li>
+                <strong>Кнопка прямого прикрепления:</strong> В окне просмотра любого лога нажмите кнопку <code>📷 Прикрепить фото</code>, чтобы добавить фото манометра или труб прямо с телефона или компьютера.
+              </li>
+              <li>
+                <strong>Просмотр во весь экран:</strong> Кликните на любую фотографию в галерее лога для открытия полноразмерного изображения.
+              </li>
+            </ol>
+          </div>
+        ),
+      },
+    },
     {
       id: 'upload_package',
       category: 'upload',
@@ -94,60 +326,6 @@ export const FaqTab: React.FC = () => {
       },
     },
     {
-      id: 'ptr_blank',
-      category: 'ptr',
-      icon: FileSpreadsheet,
-      title: {
-        en: 'What is a Pressure Test Record (PTR) and how to create an official ARDOR blank?',
-        fi: 'Mikä on Painekoepöytäkirja (PTR) ja miten luodaan virallinen ARDOR-lomake?',
-        ru: 'Что такое Pressure Test Record (PTR) и как создать официальный бланк ARDOR?',
-      },
-      content: {
-        en: (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
-            <p>
-              <strong>Pressure Test Record (PAINEKOEPÖYTÄKIRJA)</strong> is the official summary engineering document for clients and classification societies (DNV, Meyer Turku, etc.):
-            </p>
-            <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-              <li>Includes Job No (<code>NB402</code>), Project Name, Inspection No, Design & Test Pressure.</li>
-              <li>Contains a table of all tested pipes, drawings (<code>Piirustus nro</code>), and systems (<code>Systeemi</code>).</li>
-              <li>Features official ARDOR branding, test medium checkboxes (Air / Water / Glycol / Nitrogen).</li>
-              <li>Can be previewed live in the browser and downloaded with 1 click.</li>
-            </ul>
-            <p>To create one: Go to the <strong>Pressure Test Records</strong> tab $\rightarrow$ click <strong>+ Create Record</strong> $\rightarrow$ fill in parameters $\rightarrow$ click <strong>Save & Generate Official Blank</strong>.</p>
-          </div>
-        ),
-        fi: (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
-            <p>
-              <strong>Painekoepöytäkirja (PAINEKOEPÖYTÄKIRJA / PRESSURE TEST RECORD)</strong> on virallinen laatudokumentti tilaajalle ja luokituslaitoksille (DNV, Meyer Turku):
-            </p>
-            <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-              <li>Sisältää työnumeron (<code>NB402</code>), projektin nimen, tarkastusnumeron sekä suunnittelu- ja koepaineet.</li>
-              <li>Sisältää taulukon testatuista putkista, piirustuksista (<code>Piirustus nro</code>) ja järjestelmistä (<code>Systeemi</code>).</li>
-              <li>Sisältää virallisen ARDOR-logon ja testiainevalinnat (Vesi / Ilma / Glykoli / Typpi).</li>
-              <li>Voidaan esikatsella reaaliaikaisesti verkkosivulla ja ladata PDF-muodossa.</li>
-            </ul>
-            <p>Luominen: Siirry <strong>Painekoepöytäkirjat</strong> -välilehdelle $\rightarrow$ napsauta <strong>+ Luo pöytäkirja</strong> $\rightarrow$ täytä tiedot $\rightarrow$ napsauta <strong>Tallenna & Muodosta virallinen lomake</strong>.</p>
-          </div>
-        ),
-        ru: (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
-            <p>
-              <strong>Pressure Test Record (PAINEKOEPÖYTÄKIRJA)</strong> — это официальный сводный протокол опрессовки для заказчика и технадзора (DNV, Meyer Turku и др.):
-            </p>
-            <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-              <li>Включает номер заказа (<code>NB402</code>), проект, номер инспекции, расчетное и испытательное давление.</li>
-              <li>Содержит таблицу всех проверенных труб, чертежей (<code>Piirustus nro</code>) и систем (<code>Systeemi</code>).</li>
-              <li>Оформлен по утверждённому финско-английскому стандарту ARDOR с оригинальным логотипом.</li>
-              <li>Просматривается прямо на сайте во встроенном окне без необходимости скачивания.</li>
-            </ul>
-            <p>Как создать: Вкладка <strong>Протоколы ARDOR (PTR)</strong> $\rightarrow$ кнопка <strong>+ Создать протокол</strong> $\rightarrow$ заполните параметры $\rightarrow$ нажмите <strong>Сформировать официальный бланк</strong>.</p>
-          </div>
-        ),
-      },
-    },
-    {
       id: 'digital_signature',
       category: 'signature',
       icon: ShieldCheck,
@@ -193,6 +371,54 @@ export const FaqTab: React.FC = () => {
       },
     },
     {
+      id: 'soft_deletion',
+      category: 'ptr',
+      icon: Trash2,
+      title: {
+        en: 'How does deletion work and are records stored permanently?',
+        fi: 'Miten poistaminen toimii ja säilyvätkö tiedot pysyvästi?',
+        ru: 'Как устроено удаление протоколов и логов (Soft Deletion & Audit Trail)?',
+      },
+      content: {
+        en: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            <p>
+              According to quality and traceability standards, data deletion is <strong>logical (Soft Delete)</strong>:
+            </p>
+            <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <li>Deleted items are marked as <code>is_archived = True</code> and hidden from normal active views.</li>
+              <li>Physical files, CSVs, photographs, and historical SHA-256 revision manifests are preserved in permanent storage.</li>
+              <li>Every deletion action records the operator name, timestamp, and reason in the immutable Audit Trail.</li>
+            </ul>
+          </div>
+        ),
+        fi: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            <p>
+              Laatu- ja jäljitettävyysvaatimusten mukaisesti poistaminen on <strong>loogista (Soft Delete)</strong>:
+            </p>
+            <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <li>Poistetut kohteet merkitään arkistoiduiksi ja piilotetaan aktiivisesta näkymästä.</li>
+              <li>Fyysiset tiedostot, CSV-lokit, valokuvat ja SHA-256-tarkistussummat säilytetään pysyvästi.</li>
+              <li>Kaikki poistotapahtumat kirjataan tarkastuslokiin (Audit Trail).</li>
+            </ul>
+          </div>
+        ),
+        ru: (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            <p>
+              В соответствии с правилами постоянного хранения и стандартами качества удаление является <strong>логическим (Soft Delete)</strong>:
+            </p>
+            <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <li>При нажатии на значок корзины сущность помечается как архивная (<code>is_archived = True</code>) и скрывается из основного рабочего списка.</li>
+              <li>Исходные CSV-файлы, фотографии, сгенерированные графики и доказательные SHA-256 манифесты никогда не уничтожаются с диска.</li>
+              <li>Каждое удаление фиксируется в Журнале аудита (Audit Trail) с указанием автора, времени и параметров объекта.</li>
+            </ul>
+          </div>
+        ),
+      },
+    },
+    {
       id: 'search_filters',
       category: 'search',
       icon: Search,
@@ -211,6 +437,7 @@ export const FaqTab: React.FC = () => {
               <li><strong>Log Number:</strong> e.g. <code>014FED</code> or <code>Log_014FED</code></li>
               <li><strong>Pipe or Bundle:</strong> e.g. <code>122153/41</code> or <code>122153</code></li>
               <li><strong>Operator or Project:</strong> e.g. <code>Matti</code> or <code>ICON3</code></li>
+              <li><strong>PipeCloud Filter:</strong> filter by <em>All / Added / Not Added</em> to find pending PipeCloud entries quickly.</li>
             </ul>
             <p>
               To switch display mode, click the <strong>🔲 Cards</strong> or <strong>📋 Table</strong> buttons on the right side of the filter bar for compact high-density list view.
@@ -226,6 +453,7 @@ export const FaqTab: React.FC = () => {
               <li><strong>Lokinumero:</strong> esim. <code>014FED</code></li>
               <li><strong>Putki tai nippu:</strong> esim. <code>122153/41</code> tai <code>122153</code></li>
               <li><strong>Testaaja tai projekti:</strong> esim. <code>Matti</code> tai <code>ICON3</code></li>
+              <li><strong>PipeCloud-suodatin:</strong> suodata <em>Kaikki / Lisätty / Ei lisätty</em> löytääksesi kirjaamattomat kokeet nopeasti.</li>
             </ul>
             <p>
               Vaihda näkymää napsauttamalla suodatinpalkin oikeassa reunassa olevia painikkeita: <strong>🔲 Kortit</strong> tai <strong>📋 Taulukko</strong>.
@@ -240,7 +468,8 @@ export const FaqTab: React.FC = () => {
             <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
               <li><strong>Номеру лога:</strong> например <code>014FED</code>;</li>
               <li><strong>Номеру трубы или связки:</strong> например <code>122153/41</code> или <code>122153</code>;</li>
-              <li><strong>Оператору или проекту:</strong> например <code>Matti</code> или <code>ARDOR</code>.</li>
+              <li><strong>Оператору или проекту:</strong> например <code>Matti</code> или <code>ARDOR</code>;</li>
+              <li><strong>Фильтру PipeCloud:</strong> переключатели <em>Все / Добавлено / Не добавлено</em> для мгновенного поиска не занесённых в PipeCloud логов.</li>
             </ul>
             <p>
               Справа от фильтров находятся кнопки переключения вида: <strong>🔲 Карточки</strong> (с графиками и миниатюрами фото) или <strong>📋 Таблица</strong> (компактный индустриальный список).
@@ -267,7 +496,7 @@ export const FaqTab: React.FC = () => {
             <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
               <li>Located at <code>dist/WIKA CPG1500 Processor.exe</code> (portable, no installation required).</li>
               <li>Processes CSV files, builds graphs and Excel sheets locally into the <code>testlogs/</code> folder.</li>
-              <li>Queues tests for automatic 1-click synchronization to the central server when back online.</li>
+              <li>Supports offline PipeCloud toggle and queues changes for safe 1-click synchronization to the central server when back online.</li>
             </ul>
           </div>
         ),
@@ -279,7 +508,7 @@ export const FaqTab: React.FC = () => {
             <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
               <li>Sijaitsee kansiossa <code>dist/WIKA CPG1500 Processor.exe</code> (ei vaadi asennusta).</li>
               <li>Käsittelee CSV-tiedostot, piirtää kuvaajat ja luo Excel-raportit paikalliseen <code>testlogs/</code> -kansioon.</li>
-              <li>Synkronoi kokeet automaattisesti palvelimelle verkkoyhteyden palauduttua.</li>
+              <li>Tukee offline PipeCloud -kytkintä ja synkronoi kokeet palvelimelle verkkoyhteyden palauduttua.</li>
             </ul>
           </div>
         ),
@@ -291,7 +520,7 @@ export const FaqTab: React.FC = () => {
             <ul style={{ paddingLeft: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
               <li>Файл <code>dist/WIKA CPG1500 Processor.exe</code> (портативный, не требует установки).</li>
               <li>Обрабатывает CSV-логи манометра WIKA, строит графики и генерирует Excel-отчеты локально на диске.</li>
-              <li>Автоматически ставит файлы в очередь синхронизации и отправляет на сервер при появлении сети.</li>
+              <li>Поддерживает офлайн-тумблер PipeCloud и автоматически ставит изменения в очередь синхронизации.</li>
             </ul>
           </div>
         ),
@@ -340,17 +569,20 @@ export const FaqTab: React.FC = () => {
         <button className={`filter-pill ${activeCategory === 'all' ? 'active' : ''}`} onClick={() => setActiveCategory('all')}>
           {lang === 'fi' ? 'Kaikki aiheet' : lang === 'ru' ? 'Все темы' : 'All Topics'}
         </button>
-        <button className={`filter-pill ${activeCategory === 'upload' ? 'active' : ''}`} onClick={() => setActiveCategory('upload')}>
-          {lang === 'fi' ? '📦 Lokien lataus' : lang === 'ru' ? '📦 Загрузка логов' : '📦 Uploading Logs'}
-        </button>
         <button className={`filter-pill ${activeCategory === 'ptr' ? 'active' : ''}`} onClick={() => setActiveCategory('ptr')}>
-          {lang === 'fi' ? '📋 Pöytäkirjat (PTR)' : lang === 'ru' ? '📋 Протоколы (PTR)' : '📋 PTR Blanks'}
+          {lang === 'fi' ? '📋 Pöytäkirjat (PTR & Full PDF)' : lang === 'ru' ? '📋 Составные PTR & Full PDF' : '📋 Composite PTR & PDF'}
+        </button>
+        <button className={`filter-pill ${activeCategory === 'pipecloud' ? 'active' : ''}`} onClick={() => setActiveCategory('pipecloud')}>
+          {lang === 'fi' ? '☁️ PipeCloud-tila' : lang === 'ru' ? '☁️ Статус PipeCloud' : '☁️ PipeCloud Workflow'}
+        </button>
+        <button className={`filter-pill ${activeCategory === 'upload' ? 'active' : ''}`} onClick={() => setActiveCategory('upload')}>
+          {lang === 'fi' ? '📦 Lokit & Valokuvat' : lang === 'ru' ? '📦 Загрузка и Фотографии' : '📦 Upload & Photos'}
         </button>
         <button className={`filter-pill ${activeCategory === 'signature' ? 'active' : ''}`} onClick={() => setActiveCategory('signature')}>
           {lang === 'fi' ? '🔏 Allekirjoitus & Leima' : lang === 'ru' ? '🔏 Подпись и Штамп' : '🔏 Verification'}
         </button>
-        <button className={`filter-pill ${activeCategory === 'search' ? 'active' : ''}`} onClick={() => setActiveCategory('search')}>
-          {lang === 'fi' ? '🔍 Haku & Taulukko' : lang === 'ru' ? '🔍 Поиск и Таблица' : '🔍 Search & Table'}
+        <button className={`filter-pill ${activeCategory === 'desktop' ? 'active' : ''}`} onClick={() => setActiveCategory('desktop')}>
+          {lang === 'fi' ? '💻 Työpöytäsovellus' : lang === 'ru' ? '💻 Desktop EXE' : '💻 Desktop App'}
         </button>
       </div>
 

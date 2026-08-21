@@ -1,15 +1,23 @@
 import io
-import zipfile
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+import json
+import hashlib
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from services.api.database import get_db
 from services.api.models import Artifact, Bundle, Pipe, PressureTest, TestRevision, User
-from services.api.schemas import PressureTestResponse
+from services.api.schemas import (
+    PipeCloudUpdateRequest,
+    PipeCloudUpdateResponse,
+    PressureTestResponse,
+)
 from services.api.storage import storage
-from services.api.auth import require_role
+from services.api.auth import require_role, require_authenticated_user
 from services.api.audit import log_audit_event
 from wika_report.models import normalize_log_no
 
@@ -19,22 +27,33 @@ router = APIRouter(prefix="/api/v1/tests", tags=["Pressure Tests"])
 @router.get("", response_model=List[PressureTestResponse])
 def list_or_search_pressure_tests(
     q: Optional[str] = Query(None, description="Строка поиска по Log No, Pipe No, Bundle No, оператору или проекту"),
+    pipecloud_filter: Optional[str] = Query(None, description="Фильтр: all, added, not_added"),
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db)
 ):
     """
-    Возвращает список всех испытаний с поддержкой интеллектуального поиска по:
+    Возвращает список всех неархивированных испытаний с поддержкой интеллектуального поиска по:
     - Log No.
     - Номеру трубы (Pipe No.)
     - Номеру бандла (Bundle No.)
     - Оператору, проекту, системе, инспекционному номеру.
+    - Статусу PipeCloud.
     """
-    query = db.query(PressureTest).options(
-        joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts)
+    query = (
+        db.query(PressureTest)
+        .filter(PressureTest.is_archived == False)
+        .options(
+            joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts)
+        )
     )
 
-    if q and q.strip():
+    if pipecloud_filter == "added":
+        query = query.filter(PressureTest.pipecloud_added == True)
+    elif pipecloud_filter == "not_added":
+        query = query.filter(PressureTest.pipecloud_added == False)
+
+    if isinstance(q, str) and q.strip():
         search_term = f"%{q.strip()}%"
         
         # Подзапрос поиска ревизий по трубам и бандлам
@@ -72,7 +91,7 @@ def get_pressure_test_by_log(log_no: str, db: Session = Depends(get_db)):
     test = (
         db.query(PressureTest)
         .options(joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts))
-        .filter(PressureTest.log_no == normalized)
+        .filter(PressureTest.log_no == normalized, PressureTest.is_archived == False)
         .first()
     )
     if not test:
@@ -81,6 +100,66 @@ def get_pressure_test_by_log(log_no: str, db: Session = Depends(get_db)):
             detail=f"Pressure test with Log No '{normalized}' not found."
         )
     return test
+
+
+@router.patch("/{log_no}/pipecloud", response_model=PipeCloudUpdateResponse)
+def update_pipecloud_status(
+    log_no: str,
+    payload: PipeCloudUpdateRequest,
+    current_user: User = Depends(require_authenticated_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Ручное переключение статуса Added to PipeCloud для Pressure Test Log.
+    - Идемпотентно (с поддержкой idempotency_key);
+    - Доступно любому активному авторизованному сотруднику;
+    - Фиксируется в неизменяемом Audit Trail;
+    - Не сбрасывает и не создает новую ревизию;
+    - Не изменяет доказательный хеш-манифест.
+    """
+    norm_log = normalize_log_no(log_no)
+    test = (
+        db.query(PressureTest)
+        .filter(PressureTest.log_no == norm_log, PressureTest.is_archived == False)
+        .first()
+    )
+    if not test:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pressure test with Log No '{norm_log}' not found."
+        )
+
+    old_val = bool(test.pipecloud_added)
+    new_val = bool(payload.added)
+
+    test.pipecloud_added = new_val
+    test.pipecloud_updated_at = datetime.now(timezone.utc)
+    test.pipecloud_updated_by_user_id = str(current_user.id)
+    test.pipecloud_updated_by_name = current_user.full_name or current_user.username
+    db.commit()
+
+    log_audit_event(
+        db,
+        action="pipecloud_status_changed",
+        entity_type="pressure_test",
+        entity_id=str(test.id),
+        actor_id=str(current_user.id),
+        actor_name=current_user.full_name or current_user.username,
+        details={
+            "log_no": norm_log,
+            "old_value": old_val,
+            "new_value": new_val,
+            "idempotency_key": payload.idempotency_key,
+            "source": "web"
+        }
+    )
+
+    return PipeCloudUpdateResponse(
+        log_no=norm_log,
+        pipecloud_added=test.pipecloud_added,
+        pipecloud_updated_at=test.pipecloud_updated_at,
+        pipecloud_updated_by_name=test.pipecloud_updated_by_name
+    )
 
 
 @router.get("/artifacts/{artifact_id}/file")
@@ -140,8 +219,6 @@ def download_revision_zip(log_no: str, revision_id: str, db: Session = Depends(g
     )
 
 
-from pydantic import BaseModel
-
 class TestMetadataUpdate(BaseModel):
     operator: Optional[str] = None
     project: Optional[str] = None
@@ -168,11 +245,8 @@ def update_revision_metadata(
     - Логирует изменение в журнале аудита;
     - Возвращает обновлённую карточку испытания.
     """
-    from services.api.routes.auth import log_audit_event
-    import json
-
     norm_log = normalize_log_no(log_no)
-    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log, PressureTest.is_archived == False).first()
     if not test:
         raise HTTPException(status_code=404, detail="Pressure test not found.")
 
@@ -261,26 +335,23 @@ def delete_test(
     current_user: User = Depends(require_role(["foreman", "admin"])),
     db: Session = Depends(get_db)
 ):
-    """Удаляет испытание, все его ревизии и артефакты."""
+    """
+    Логическое удаление (архивация) испытания:
+    - Помечает is_archived = True;
+    - Сохраняет файлы в хранилище и TestRevision для целостности ссылок составных PTR;
+    - Записывает событие в журнал аудита.
+    """
     norm_log = normalize_log_no(log_no)
-    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log, PressureTest.is_archived == False).first()
     if not test:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Test Log_{norm_log} not found.")
 
-    # Delete revisions, bundles, pipes, artifacts
-    revs = db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id).all()
-    for r in revs:
-        db.query(Pipe).filter(Pipe.test_revision_id == r.id).delete()
-        db.query(Bundle).filter(Bundle.test_revision_id == r.id).delete()
-        db.query(Artifact).filter(Artifact.test_revision_id == r.id).delete()
-        db.delete(r)
-
-    db.delete(test)
+    test.is_archived = True
     db.commit()
 
     log_audit_event(
         db,
-        action="test_deleted",
+        action="test_archived",
         entity_type="pressure_test",
         entity_id=str(test.id),
         actor_id=str(current_user.id),
@@ -288,5 +359,73 @@ def delete_test(
         details={"log_no": norm_log}
     )
 
-    return {"status": "success", "message": f"Test Log_{norm_log} deleted successfully."}
+    return {"status": "success", "message": f"Test Log_{norm_log} archived successfully."}
 
+
+@router.post("/{log_no}/photos", response_model=PressureTestResponse)
+async def attach_photos_to_test(
+    log_no: str,
+    photos: List[UploadFile] = File(..., description="Фотографии манометра или труб"),
+    category: str = Form("other", description="Категория: gauge, pipe, other"),
+    current_user: User = Depends(require_authenticated_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Прикрепление фотографий (манометр, трубы) к существующему испытанию.
+    """
+    norm_log = normalize_log_no(log_no)
+    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log, PressureTest.is_archived == False).first()
+    if not test:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Test Log_{norm_log} not found.")
+
+    rev = db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id, TestRevision.is_primary == True).first()
+    if not rev:
+        rev = db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id).order_by(TestRevision.created_at.desc()).first()
+    if not rev:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No revision found for test.")
+
+    for photo_f in photos:
+        if not photo_f.filename:
+            continue
+        content = await photo_f.read()
+        file_sha = hashlib.sha256(content).hexdigest()
+        file_size = len(content)
+        rel_p = f"attached_photos/{photo_f.filename}"
+        storage_key = f"logs/{norm_log}/revisions/{rev.revision_id}/{rel_p}"
+
+        storage.store_file(storage_key, io.BytesIO(content))
+
+        cat = category
+        if "gauge" in photo_f.filename.lower() or "photo_1" in photo_f.filename.lower():
+            cat = "gauge"
+        elif "pipe" in photo_f.filename.lower() or "photo_2" in photo_f.filename.lower():
+            cat = "pipe"
+
+        db.add(Artifact(
+            test_revision_id=rev.id,
+            name=photo_f.filename,
+            relative_path=rel_p,
+            file_type="photo",
+            category=cat,
+            size_bytes=file_size,
+            sha256=file_sha,
+            storage_key=storage_key
+        ))
+
+    db.commit()
+    log_audit_event(
+        db,
+        action="photos_attached",
+        entity_type="test_revision",
+        entity_id=str(rev.id),
+        actor_id=str(current_user.id),
+        actor_name=current_user.full_name or current_user.username,
+        details={"log_no": norm_log, "count": len(photos)}
+    )
+
+    return (
+        db.query(PressureTest)
+        .options(joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts))
+        .filter(PressureTest.id == test.id)
+        .first()
+    )

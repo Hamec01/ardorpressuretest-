@@ -42,6 +42,10 @@ export interface TestRevision {
 export interface PressureTest {
   id: string;
   log_no: string;
+  pipecloud_added: boolean;
+  pipecloud_updated_at?: string | null;
+  pipecloud_updated_by_name?: string | null;
+  is_archived?: boolean;
   created_at: string;
   updated_at: string;
   revisions: TestRevision[];
@@ -58,6 +62,32 @@ export interface RecordItem {
   hold_end_bar?: string | null;
   result: 'PASS' | 'FAIL' | 'PENDING';
   notes?: string | null;
+}
+
+export interface RecordLogArtifact {
+  id?: string;
+  artifact_id?: string | null;
+  source: 'log_artifact' | 'ptr_upload' | 'generated_from_csv';
+  category: 'gauge' | 'pipe' | 'installation' | 'measurement_table' | 'other';
+  name: string;
+  storage_key?: string;
+  sha256?: string;
+  position: number;
+  is_included_in_pdf: boolean;
+  created_at?: string;
+}
+
+export interface RecordLog {
+  id?: string;
+  pressure_test_id: string;
+  test_revision_id: string;
+  log_no?: string;
+  position: number;
+  include_measurement_table: boolean;
+  selected_pipe_numbers: string[];
+  metadata_snapshot?: Record<string, any>;
+  artifacts?: RecordLogArtifact[];
+  created_at?: string;
 }
 
 export interface PressureTestRecord {
@@ -85,8 +115,12 @@ export interface PressureTestRecord {
   signature_image_path?: string | null;
   signed_copy_path?: string | null;
   sha256_hash?: string | null;
+  official_pdf_sha256?: string | null;
+  full_pdf_sha256?: string | null;
+  snapshot_json?: Record<string, any>;
 
   created_at: string;
   updated_at: string;
   items: RecordItem[];
+  logs?: RecordLog[];
 }

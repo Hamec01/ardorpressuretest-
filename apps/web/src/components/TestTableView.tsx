@@ -24,6 +24,7 @@ export const TestTableView: React.FC<TestTableViewProps> = ({ tests, onSelectTes
               <th style={{ padding: '0.85rem 1rem' }}>{t('col_min_max')}</th>
               <th style={{ padding: '0.85rem 1rem' }}>{t('col_duration')}</th>
               <th style={{ padding: '0.85rem 1rem' }}>{t('col_pipes')}</th>
+              <th style={{ padding: '0.85rem 1rem' }}>{t('pipecloud_status')}</th>
               <th style={{ padding: '0.85rem 1rem' }}>{t('col_operator')}</th>
               <th style={{ padding: '0.85rem 1rem' }}>{t('col_date')}</th>
               <th style={{ padding: '0.85rem 1rem' }}>{t('col_status')}</th>
@@ -99,6 +100,46 @@ export const TestTableView: React.FC<TestTableViewProps> = ({ tests, onSelectTes
                       </div>
                     ) : (
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>—</span>
+                    )}
+                  </td>
+
+                  {/* PipeCloud Status */}
+                  <td style={{ padding: '0.85rem 1rem' }}>
+                    {test.pipecloud_added ? (
+                      <span
+                        style={{
+                          background: 'rgba(16, 185, 129, 0.15)',
+                          color: '#10b981',
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.2rem'
+                        }}
+                        title={test.pipecloud_updated_by_name ? `Added to PipeCloud by ${test.pipecloud_updated_by_name}` : 'Added to PipeCloud'}
+                      >
+                        ☁ {t('pipecloud_added')}
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.1)',
+                          color: '#f87171',
+                          border: '1px solid rgba(239, 68, 68, 0.25)',
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.2rem'
+                        }}
+                      >
+                        ☁ {t('pipecloud_not_added')}
+                      </span>
                     )}
                   </td>
 

@@ -24,6 +24,18 @@ export const translations = {
     view_table: 'Table',
     btn_refresh: 'Refresh',
 
+    // PipeCloud Workflow
+    pipecloud_status: 'PipeCloud',
+    pipecloud_added: 'ADDED',
+    pipecloud_not_added: 'NOT ADDED',
+    pipecloud_toggle_added: 'Mark as Added to PipeCloud',
+    pipecloud_toggle_removed: 'Mark as Not Added to PipeCloud',
+    pipecloud_filter_all: 'All PipeCloud',
+    pipecloud_filter_added: 'Added to PipeCloud',
+    pipecloud_filter_not_added: 'Not Added to PipeCloud',
+    pipecloud_updated_by: 'Updated by {name} on {date}',
+    pipecloud_manual_hint: 'Manual operational flag indicating whether this test was logged into PipeCloud.',
+
     // Test Cards
     col_log_no: 'Log No.',
     col_system_project: 'System / Project',
@@ -65,12 +77,18 @@ export const translations = {
     // PTR Detail & View
     view_pdf_tab: '📄 Live PDF Document',
     view_data_tab: '📋 Pipe Data Table',
+    view_full_pdf_tab: '📑 Full Composite PDF (All Logs & Tables)',
     btn_open_new_tab: 'Open in New Tab',
-    btn_download_pdf: 'Download PDF',
+    btn_download_pdf: 'Download Official PDF',
+    btn_download_full_pdf: 'Download Full Composite PDF',
     btn_draw_signature: '🔏 Draw Signature',
     btn_seal_record: 'Seal & Verify',
     verified_badge: 'Digitally Verified ARDOR Document',
     signed_by: 'Signed by',
+    sha256_official: 'Official PDF SHA-256',
+    sha256_full: 'Full PDF SHA-256',
+    composite_builder: 'Composite Record Builder',
+    include_full_table: 'Include Complete CSV Measurement Table',
 
     // FAQ Tab
     faq_title: 'ARDOR Pressure Test — User Guide & FAQ',
@@ -100,6 +118,18 @@ export const translations = {
     view_grid: 'Kortit',
     view_table: 'Taulukko',
     btn_refresh: 'Päivitä',
+
+    // PipeCloud Workflow
+    pipecloud_status: 'PipeCloud',
+    pipecloud_added: 'LISÄTTY',
+    pipecloud_not_added: 'EI LISÄTTY',
+    pipecloud_toggle_added: 'Merkitse lisätyksi PipeCloudiin',
+    pipecloud_toggle_removed: 'Poista PipeCloud-merkintä',
+    pipecloud_filter_all: 'Kaikki PipeCloud-tilat',
+    pipecloud_filter_added: 'Lisätty PipeCloudiin',
+    pipecloud_filter_not_added: 'Ei lisätty PipeCloudiin',
+    pipecloud_updated_by: 'Päivittänyt {name} ({date})',
+    pipecloud_manual_hint: 'Manuaalinen käyttäjän merkintä tiedon viemisestä PipeCloud-järjestelmään.',
 
     // Test Cards
     col_log_no: 'Lokin nro',
@@ -142,12 +172,18 @@ export const translations = {
     // PTR Detail & View
     view_pdf_tab: '📄 Virallinen PDF-asiakirja',
     view_data_tab: '📋 Putkitiedot ja taulukko',
+    view_full_pdf_tab: '📑 Täysi koottu PDF (Kaikki lokit ja taulukot)',
     btn_open_new_tab: 'Avaa uuteen välilehteen',
-    btn_download_pdf: 'Lataa PDF',
+    btn_download_pdf: 'Lataa virallinen PDF',
+    btn_download_full_pdf: 'Lataa täysi koottu PDF',
     btn_draw_signature: '🔏 Piirrä allekirjoitus',
     btn_seal_record: 'Vahvista leimalla',
     verified_badge: 'Digitaalisesti vahvistettu ARDOR-asiakirja',
     signed_by: 'Allekirjoittanut',
+    sha256_official: 'Virallisen PDF:n SHA-256',
+    sha256_full: 'Täyden PDF:n SHA-256',
+    composite_builder: 'Yhdistetyn pöytäkirjan rakentaja',
+    include_full_table: 'Sisällytä täysi CSV-mittausdatataulukko',
 
     // FAQ Tab
     faq_title: 'ARDOR Painekoe — Käyttöohjeet & UKK',
@@ -177,6 +213,18 @@ export const translations = {
     view_grid: 'Карточки',
     view_table: 'Таблица',
     btn_refresh: 'Обновить',
+
+    // PipeCloud Workflow
+    pipecloud_status: 'PipeCloud',
+    pipecloud_added: 'ДОБАВЛЕНО',
+    pipecloud_not_added: 'НЕ ДОБАВЛЕНО',
+    pipecloud_toggle_added: 'Отметить: Добавлено в PipeCloud',
+    pipecloud_toggle_removed: 'Снять отметку PipeCloud',
+    pipecloud_filter_all: 'Все статусы PipeCloud',
+    pipecloud_filter_added: 'Добавлено в PipeCloud',
+    pipecloud_filter_not_added: 'Не добавлено в PipeCloud',
+    pipecloud_updated_by: 'Изменил(а): {name} ({date})',
+    pipecloud_manual_hint: 'Ручной производственный флаг, указывающий, внесён ли лог в систему PipeCloud.',
 
     // Test Cards
     col_log_no: 'Log No.',
@@ -219,12 +267,18 @@ export const translations = {
     // PTR Detail & View
     view_pdf_tab: '📄 Официальный PDF бланк',
     view_data_tab: '📋 Данные и трубы',
+    view_full_pdf_tab: '📑 Полный составной PDF (Все логи и замеры)',
     btn_open_new_tab: 'Открыть в новой вкладке',
-    btn_download_pdf: 'Скачать PDF',
+    btn_download_pdf: 'Скачать официальный PDF',
+    btn_download_full_pdf: 'Скачать полный составной PDF',
     btn_draw_signature: '🔏 Нарисовать роспись',
     btn_seal_record: 'Заверить штампом',
     verified_badge: 'Цифровой защитный штамп ARDOR',
     signed_by: 'Подписано',
+    sha256_official: 'SHA-256 официального бланка',
+    sha256_full: 'SHA-256 полного протокола',
+    composite_builder: 'Конструктор составного протокола',
+    include_full_table: 'Включить полную таблицу всех замеров CSV',
 
     // FAQ Tab
     faq_title: 'ARDOR Pressure Test — Руководство и FAQ',

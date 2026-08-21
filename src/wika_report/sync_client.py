@@ -10,7 +10,7 @@ logger = logging.getLogger("wika_report")
 
 
 class SyncClient:
-    """Клиент для синхронизации локальных ревизий с FastAPI бэкендом."""
+    """Клиент для синхронизации локальных ревизий и статусов PipeCloud с FastAPI бэкендом."""
 
     def __init__(self, base_url: str = "http://127.0.0.1:8080", timeout: float = 30.0):
         self.base_url = base_url.rstrip("/")
@@ -29,8 +29,39 @@ class SyncClient:
     def sync_item(self, item: QueueItem, queue: Optional[SyncQueue] = None) -> Dict[str, Any]:
         """Синхронизирует один элемент очереди с сервером."""
         target_queue = queue or sync_queue
-        manifest_path = Path(item.manifest_path)
-        if not manifest_path.exists():
+        target_queue.update_status(item.operation_id, status="uploading")
+
+        # -------------------------------------------------------------
+        # 1. Синхронизация статуса PipeCloud
+        # -------------------------------------------------------------
+        if getattr(item, "operation_type", "revision_upload") == "pipecloud_status_update":
+            try:
+                payload = json.loads(item.payload_json or "{}")
+                with httpx.Client(base_url=self.base_url, timeout=self.timeout) as client:
+                    res = client.patch(
+                        f"/api/v1/tests/{item.log_no}/pipecloud",
+                        json={
+                            "added": bool(payload.get("added", False)),
+                            "idempotency_key": item.operation_id
+                        }
+                    )
+                    res.raise_for_status()
+                    data = res.json()
+                    receipt_id = f"pc_{item.log_no}_{data.get('pipecloud_added')}"
+                    target_queue.update_status(item.operation_id, status="synced", receipt_id=receipt_id)
+                    logger.info(f"Successfully synced PipeCloud status for Log {item.log_no}")
+                    return data
+            except Exception as e:
+                err_str = str(e)
+                logger.error(f"PipeCloud sync failed for operation {item.operation_id}: {err_str}")
+                target_queue.update_status(item.operation_id, status="failed", error=err_str)
+                raise
+
+        # -------------------------------------------------------------
+        # 2. Синхронизация ревизии лога (Revision Upload)
+        # -------------------------------------------------------------
+        manifest_path = Path(item.manifest_path) if item.manifest_path else None
+        if not manifest_path or not manifest_path.exists():
             err = f"Manifest file not found: {manifest_path}"
             target_queue.update_status(item.operation_id, status="failed", error=err)
             raise FileNotFoundError(err)
@@ -40,11 +71,9 @@ class SyncClient:
         with open(manifest_path, "r", encoding="utf-8") as f:
             manifest_data = json.load(f)
 
-        target_queue.update_status(item.operation_id, status="uploading")
-
         try:
             with httpx.Client(base_url=self.base_url, timeout=self.timeout) as client:
-                # 1. Регистрация сессии синхронизации
+                # А. Регистрация сессии синхронизации
                 session_payload = {
                     "idempotency_key": item.operation_id,
                     "manifest": manifest_data
@@ -58,7 +87,7 @@ class SyncClient:
                     target_queue.update_status(item.operation_id, status="synced", receipt_id=receipt_id)
                     return {"status": "synced", "receipt_id": receipt_id}
 
-                # 2. Загрузка недостающих артефактов
+                # Б. Загрузка недостающих артефактов
                 missing_shas = set(session_resp.get("missing_artifacts", []))
                 for art in manifest_data.get("artifacts", []):
                     if art.get("sha256") in missing_shas:
@@ -80,7 +109,7 @@ class SyncClient:
                             )
                             up_res.raise_for_status()
 
-                # 3. Фиксация ревизии (Completion)
+                # В. Фиксация ревизии (Completion)
                 complete_res = client.post(
                     f"/api/v1/sync/sessions/{item.revision_id}/complete",
                     json=session_payload

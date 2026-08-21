@@ -31,6 +31,14 @@ class PressureTest(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     log_no = Column(String(64), unique=True, index=True, nullable=False)
+    
+    # PipeCloud workflow manual status
+    pipecloud_added = Column(Boolean, default=False, nullable=False)
+    pipecloud_updated_at = Column(DateTime(timezone=True), nullable=True)
+    pipecloud_updated_by_user_id = Column(String(36), nullable=True)
+    pipecloud_updated_by_name = Column(String(128), nullable=True)
+
+    is_archived = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
@@ -136,10 +144,58 @@ class PressureTestRecord(Base):
     signed_copy_path = Column(String(255), nullable=True)
     sha256_hash = Column(String(64), nullable=True)
 
+    # Actual PDF SHA-256 digests and metadata snapshot
+    official_pdf_sha256 = Column(String(64), nullable=True)
+    full_pdf_sha256 = Column(String(64), nullable=True)
+    snapshot_json = Column(JSON, default=dict, nullable=False)
+
+    is_archived = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
     items = relationship("PressureTestRecordItem", back_populates="record", cascade="all, delete-orphan")
+    logs = relationship("PressureTestRecordLog", back_populates="record", cascade="all, delete-orphan", order_by="PressureTestRecordLog.position")
+
+
+class PressureTestRecordLog(Base):
+    __tablename__ = "pressure_test_record_logs"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    record_id = Column(String(36), ForeignKey("pressure_test_records.id"), nullable=False, index=True)
+    pressure_test_id = Column(String(36), ForeignKey("pressure_tests.id"), nullable=False, index=True)
+    test_revision_id = Column(String(36), ForeignKey("test_revisions.id"), nullable=False, index=True)
+    position = Column(Integer, default=0, nullable=False)
+    include_measurement_table = Column(Boolean, default=True, nullable=False)
+    selected_pipe_numbers = Column(JSON, default=list, nullable=False)
+    metadata_snapshot = Column(JSON, default=dict, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    record = relationship("PressureTestRecord", back_populates="logs")
+    pressure_test = relationship("PressureTest")
+    revision = relationship("TestRevision")
+    artifacts = relationship("PressureTestRecordLogArtifact", back_populates="record_log", cascade="all, delete-orphan", order_by="PressureTestRecordLogArtifact.position")
+    items = relationship("PressureTestRecordItem", back_populates="record_log")
+
+
+class PressureTestRecordLogArtifact(Base):
+    __tablename__ = "pressure_test_record_log_artifacts"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    record_log_id = Column(String(36), ForeignKey("pressure_test_record_logs.id"), nullable=False, index=True)
+    artifact_id = Column(String(36), ForeignKey("artifacts.id"), nullable=True, index=True)
+    source = Column(String(32), default="log_artifact", nullable=False)  # log_artifact, ptr_upload, generated_from_csv
+    category = Column(String(32), default="other", nullable=False)  # graph, gauge, pipe, installation, measurement_table, other
+    name = Column(String(255), nullable=False)
+    storage_key = Column(String(512), nullable=False)
+    sha256 = Column(String(64), nullable=False)
+    position = Column(Integer, default=0, nullable=False)
+    is_included_in_pdf = Column(Boolean, default=True, nullable=False)
+    created_by_name = Column(String(128), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    record_log = relationship("PressureTestRecordLog", back_populates="artifacts")
+    source_artifact = relationship("Artifact")
 
 
 class PressureTestRecordItem(Base):
@@ -147,6 +203,7 @@ class PressureTestRecordItem(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     record_id = Column(String(36), ForeignKey("pressure_test_records.id"), nullable=False, index=True)
+    record_log_id = Column(String(36), ForeignKey("pressure_test_record_logs.id"), nullable=True, index=True)
     item_no = Column(Integer, nullable=False)
     pipe_number = Column(String(128), nullable=False)
     drawing_no = Column(String(128), nullable=True)
@@ -158,3 +215,4 @@ class PressureTestRecordItem(Base):
     notes = Column(String(255), nullable=True)
 
     record = relationship("PressureTestRecord", back_populates="items")
+    record_log = relationship("PressureTestRecordLog", back_populates="items")

@@ -278,6 +278,21 @@ def process_test_input(
         result.manifest_path = manifest_file
         result.warnings = warnings
         result.success = True
+
+        # 12. Создание mutable workflow sidecar pipecloud_status.txt (не входит в hash-манифест)
+        pipecloud_status_file = log_dir / "pipecloud_status.txt"
+        if not pipecloud_status_file.exists():
+            try:
+                with open(pipecloud_status_file, "w", encoding="utf-8") as pcs:
+                    pcs.write(
+                        f"PIPECLOUD WORKFLOW STATUS\n"
+                        f"Log No.: {normalized_log}\n"
+                        f"Added to PipeCloud: No\n"
+                        f"Updated by: System\n"
+                        f"Updated at: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n"
+                    )
+            except Exception as pc_ex:
+                logger.warning(f"Could not create pipecloud_status.txt: {pc_ex}")
         
         # Автоматическое добавление в локальную очередь синхронизации
         try:

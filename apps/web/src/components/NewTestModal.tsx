@@ -61,7 +61,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
         formData.append('package_file', packageFile);
       }
       for (const f of folderFiles) {
-        formData.append('files', f);
+        formData.append('files', f, (f as any).webkitRelativePath || f.name);
       }
 
       const res = await fetch('/api/v1/process/package', {

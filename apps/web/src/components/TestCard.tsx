@@ -54,9 +54,48 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
               {meta.system || 'Industrial Piping System'}
             </div>
           </div>
-          <span className={`status-badge ${status}`}>
-            {status}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+            <span className={`status-badge ${status}`}>
+              {status}
+            </span>
+            {test.pipecloud_added ? (
+              <span
+                style={{
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  color: '#10b981',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  padding: '0.2rem 0.5rem',
+                  borderRadius: '9999px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.25rem'
+                }}
+                title={test.pipecloud_updated_by_name ? `Added to PipeCloud by ${test.pipecloud_updated_by_name}` : 'Added to PipeCloud'}
+              >
+                ☁ PIPECLOUD: ADDED
+              </span>
+            ) : (
+              <span
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  color: '#f87171',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  padding: '0.2rem 0.5rem',
+                  borderRadius: '9999px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.25rem'
+                }}
+                title="Not yet marked as added in PipeCloud"
+              >
+                ☁ NOT ADDED
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="metrics-row">

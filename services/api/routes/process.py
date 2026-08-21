@@ -1,7 +1,9 @@
+import hashlib
 import json
 import logging
 import shutil
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -213,8 +215,9 @@ async def upload_package_or_zip(
         for f in files:
             if f.filename:
                 # Keep subfolder structure if provided in filename
-                rel_parts = Path(f.filename).parts
-                clean_rel = Path(*rel_parts[1:]) if len(rel_parts) > 1 else Path(f.filename)
+                raw_name = f.filename.replace("\\", "/")
+                rel_parts = Path(raw_name).parts
+                clean_rel = Path(*rel_parts[1:]) if len(rel_parts) > 1 else Path(raw_name)
                 target = extracted_dir / clean_rel
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with open(target, "wb") as out_f:
@@ -223,12 +226,23 @@ async def upload_package_or_zip(
         # 2. Поиск манифестов
         manifests = list(extracted_dir.rglob("manifest.json"))
         if manifests:
+            # Sort to prefer revisions or root manifest with most artifacts
+            manifest_candidates = []
             for mf_path in manifests:
-                with open(mf_path, "r", encoding="utf-8") as mf_f:
-                    manifest_data = json.load(mf_f)
+                try:
+                    with open(mf_path, "r", encoding="utf-8") as mf_f:
+                        m_data = json.load(mf_f)
+                        manifest_candidates.append((mf_path, m_data, len(m_data.get("artifacts", []))))
+                except Exception:
+                    continue
 
+            # Sort by number of artifacts descending so most complete revision is used
+            manifest_candidates.sort(key=lambda x: x[2], reverse=True)
+
+            if manifest_candidates:
+                mf_path, manifest_data, _ = manifest_candidates[0]
                 log_no = manifest_data.get("log_no") or normalize_log_no("", fallback_name=mf_path.parent.name)
-                revision_id = manifest_data.get("revision_id") or datetime.now().strftime("%Y%m%d_%H%M%S")
+                revision_id = manifest_data.get("revision_id") or datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
                 rev_dir = mf_path.parent
 
                 # Сохраняем в базу данных
@@ -250,23 +264,94 @@ async def upload_package_or_zip(
                 db.add(rev)
                 db.flush()
 
+                imported_relative_paths = set()
+
+                # Process artifacts listed in manifest
                 for art in manifest_data.get("artifacts", []):
-                    art_file = rev_dir / art["relative_path"]
-                    storage_key = f"logs/{log_no}/revisions/{revision_id}/{art['relative_path']}"
-                    if art_file.exists():
+                    rel_p = art["relative_path"]
+                    imported_relative_paths.add(rel_p)
+                    imported_relative_paths.add(art["name"])
+
+                    # Locate file across possible locations
+                    possible_paths = [
+                        rev_dir / rel_p,
+                        extracted_dir / rel_p,
+                        extracted_dir / art["name"],
+                    ]
+                    art_file = next((p for p in possible_paths if p.exists()), None)
+                    if not art_file:
+                        art_file = next(extracted_dir.rglob(art["name"]), None)
+
+                    storage_key = f"logs/{log_no}/revisions/{revision_id}/{rel_p}"
+                    if art_file and art_file.exists():
                         with open(art_file, "rb") as af:
                             storage.store_file(storage_key, af)
 
                     db.add(Artifact(
                         test_revision_id=rev.id,
                         name=art["name"],
-                        relative_path=art["relative_path"],
+                        relative_path=rel_p,
                         file_type=art["file_type"],
                         category=art.get("category"),
                         size_bytes=art["size_bytes"],
                         sha256=art["sha256"],
                         storage_key=storage_key
                     ))
+
+                # Auto-discover any extra photos or PDF files in folder not listed in manifest
+                for extra_file in extracted_dir.rglob("*"):
+                    if not extra_file.is_file() or extra_file.name == "manifest.json":
+                        continue
+                    if extra_file.name in imported_relative_paths:
+                        continue
+
+                    ext = extra_file.suffix.lower()
+                    if ext in [".jpg", ".jpeg", ".png", ".pdf", ".xlsx", ".txt", ".csv"]:
+                        calc_sha = hashlib.sha256(extra_file.read_bytes()).hexdigest()
+                        calc_size = extra_file.stat().st_size
+
+                        if ext in [".jpg", ".jpeg"]:
+                            f_type = "photo"
+                            cat = "gauge" if "gauge" in extra_file.name.lower() or "photo_1" in extra_file.name.lower() else ("pipe" if "pipe" in extra_file.name.lower() or "photo_2" in extra_file.name.lower() else "other")
+                            rel_p = f"attached_photos/{extra_file.name}"
+                        elif ext == ".png" and not extra_file.name.endswith(".png"):
+                            f_type = "photo"
+                            cat = "other"
+                            rel_p = f"attached_photos/{extra_file.name}"
+                        elif ext == ".pdf":
+                            f_type = "report_pdf"
+                            cat = None
+                            rel_p = extra_file.name
+                        elif ext == ".xlsx":
+                            f_type = "excel_xlsx"
+                            cat = None
+                            rel_p = extra_file.name
+                        elif ext == ".txt":
+                            f_type = "text_txt"
+                            cat = None
+                            rel_p = extra_file.name
+                        elif ext == ".csv":
+                            f_type = "source_csv"
+                            cat = None
+                            rel_p = f"source/{extra_file.name}"
+                        else:
+                            continue
+
+                        storage_key = f"logs/{log_no}/revisions/{revision_id}/{rel_p}"
+                        with open(extra_file, "rb") as af:
+                            storage.store_file(storage_key, af)
+
+                        db.add(Artifact(
+                            test_revision_id=rev.id,
+                            name=extra_file.name,
+                            relative_path=rel_p,
+                            file_type=f_type,
+                            category=cat,
+                            size_bytes=calc_size,
+                            sha256=calc_sha,
+                            storage_key=storage_key
+                        ))
+                        imported_relative_paths.add(extra_file.name)
 
                 # Добавляем трубы
                 for p in manifest_data.get("metadata", {}).get("pipe_numbers", []):

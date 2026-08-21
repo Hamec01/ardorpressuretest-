@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PressureTestRecord } from '../types';
-import { getRecordPdfUrl } from '../api';
+import { getRecordPdfUrl, getRecordFullPdfUrl, deleteRecord } from '../api';
 import {
   X,
   Download,
@@ -9,15 +9,14 @@ import {
   ExternalLink,
   Eye,
   Table,
-  Upload,
   FileSpreadsheet,
-  Trash2
+  Trash2,
+  Layers
 } from 'lucide-react';
 import { SignatureModal } from './SignatureModal';
 import { ConfirmRecordModal } from './ConfirmRecordModal';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/LanguageContext';
-import { deleteRecord } from '../api';
 
 interface RecordDetailModalProps {
   record: PressureTestRecord;
@@ -33,10 +32,9 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   const { token } = useAuth();
   const { t } = useI18n();
   const [record, setRecord] = useState<PressureTestRecord>(initialRecord);
-  const [activeView, setActiveView] = useState<'pdf' | 'data'>('pdf');
+  const [activeView, setActiveView] = useState<'official_pdf' | 'full_pdf' | 'data'>('official_pdf');
   const [isSignOpen, setIsSignOpen] = useState<boolean>(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState<boolean>(false);
-  const [isUploadingCopy, setIsUploadingCopy] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const handleDeleteRecord = async () => {
@@ -67,44 +65,14 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
     onUpdate();
   };
 
-  const handleSignedCopyUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setIsUploadingCopy(true);
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const res = await fetch(`/api/v1/records/${record.id}/signed-copy`, {
-        method: 'POST',
-        headers,
-        body: formData
-      });
-
-      if (res.ok) {
-        const updated = await res.json();
-        setRecord(updated);
-        onUpdate();
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsUploadingCopy(false);
-    }
-  };
-
-  const pdfUrl = getRecordPdfUrl(record.id);
+  const officialPdfUrl = getRecordPdfUrl(record.id);
+  const fullPdfUrl = getRecordFullPdfUrl(record.id);
+  const currentActivePdfUrl = activeView === 'full_pdf' ? fullPdfUrl : officialPdfUrl;
 
   return (
     <>
       <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-content" style={{ maxWidth: '980px', width: '94vw' }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-content" style={{ maxWidth: '1020px', width: '95vw' }} onClick={(e) => e.stopPropagation()}>
           {/* Header */}
           <div className="modal-header">
             <div>
@@ -136,7 +104,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               </button>
 
               <a
-                href={pdfUrl}
+                href={currentActivePdfUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="filter-pill"
@@ -148,13 +116,25 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               </a>
 
               <a
-                href={pdfUrl}
+                href={officialPdfUrl}
                 className="btn-primary"
-                download={`${record.record_number}_Record.pdf`}
+                download={`PTR_${record.record_number}_Official.pdf`}
                 style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}
+                title="Download Official Blank PDF"
               >
                 <Download size={15} />
                 <span>{t('btn_download_pdf')}</span>
+              </a>
+
+              <a
+                href={fullPdfUrl}
+                className="btn-primary"
+                download={`PTR_${record.record_number}_Full.pdf`}
+                style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem', background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                title="Download Complete Composite PDF (All Logs & Measurement Tables)"
+              >
+                <Layers size={15} />
+                <span>{t('btn_download_full_pdf')}</span>
               </a>
 
               <button className="modal-close-btn" onClick={onClose}>
@@ -165,16 +145,27 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
 
           {/* View Mode Toggle & Actions Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                className={`filter-pill ${activeView === 'pdf' ? 'active' : ''}`}
-                onClick={() => setActiveView('pdf')}
+                className={`filter-pill ${activeView === 'official_pdf' ? 'active' : ''}`}
+                onClick={() => setActiveView('official_pdf')}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
               >
                 <Eye size={15} />
-                <span>📄 Просмотр PDF бланка (Live PDF)</span>
+                <span>{t('view_pdf_tab')}</span>
               </button>
+
+              <button
+                type="button"
+                className={`filter-pill ${activeView === 'full_pdf' ? 'active' : ''}`}
+                onClick={() => setActiveView('full_pdf')}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', borderColor: activeView === 'full_pdf' ? 'var(--accent-emerald)' : undefined }}
+              >
+                <Layers size={15} color="var(--accent-emerald)" />
+                <span>{t('view_full_pdf_tab')}</span>
+              </button>
+
               <button
                 type="button"
                 className={`filter-pill ${activeView === 'data' ? 'active' : ''}`}
@@ -182,7 +173,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
               >
                 <Table size={15} />
-                <span>📋 Данные и трубы ({record.items?.length || 0})</span>
+                <span>{t('view_data_tab')} ({record.items?.length || 0})</span>
               </button>
             </div>
 
@@ -197,7 +188,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                     onClick={() => setIsSignOpen(true)}
                   >
                     <Edit size={14} />
-                    <span>🔏 Нарисовать роспись</span>
+                    <span>{t('btn_draw_signature')}</span>
                   </button>
 
                   <button
@@ -207,7 +198,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                     onClick={() => setIsConfirmOpen(true)}
                   >
                     <ShieldCheck size={15} />
-                    <span>Заверить штампом</span>
+                    <span>{t('btn_seal_record')}</span>
                   </button>
                 </>
               )}
@@ -225,17 +216,22 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                   </div>
                   <div>
                     <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span>Digitally Verified ARDOR Document</span>
+                      <span>{t('verified_badge')}</span>
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', background: 'rgba(16, 185, 129, 0.2)', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)' }}>
                         {record.verification_code}
                       </span>
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-                      Подписано: <strong>{record.confirmed_by_name}</strong> ({record.confirmed_by_role || 'Foreman'})
+                      {t('signed_by')}: <strong>{record.confirmed_by_name}</strong> ({record.confirmed_by_role || 'Foreman'})
                     </div>
-                    {record.sha256_hash && (
+                    {record.official_pdf_sha256 && (
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
-                        SHA-256: {record.sha256_hash}
+                        Official PDF SHA-256: {record.official_pdf_sha256}
+                      </div>
+                    )}
+                    {record.full_pdf_sha256 && (
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.1rem' }}>
+                        Full PDF SHA-256: {record.full_pdf_sha256}
                       </div>
                     )}
                   </div>
@@ -247,136 +243,107 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               </div>
             )}
 
-            {/* TAB 1: LIVE PDF VIEWER */}
-            {activeView === 'pdf' ? (
+            {/* TAB 1 & 2: LIVE PDF VIEWER (Official or Full) */}
+            {(activeView === 'official_pdf' || activeView === 'full_pdf') ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div style={{ width: '100%', height: '620px', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-color)', background: '#fff' }}>
                   <iframe
-                    src={`${pdfUrl}#toolbar=1&navpanes=0`}
-                    title="ARDOR Official Pressure Test Record PDF"
+                    src={`${currentActivePdfUrl}#toolbar=1&navpanes=0`}
+                    title={`ARDOR Pressure Test Record ${activeView === 'full_pdf' ? 'Full Composite' : 'Official'}`}
                     style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
                   />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  <span>Официальный бланк ARDOR формируется и сохраняется на сервере в режиме реального времени.</span>
-                  <a href={pdfUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-cyan)', textDecoration: 'none' }}>
-                    Открыть во весь экран ↗
-                  </a>
+                  <span>
+                    {activeView === 'full_pdf' ? 'Rendering Full Composite PDF (Record + All Log Sections + Full CSV Tables)' : 'Rendering Official ARDOR Blank (Official Multi-page compliant layout)'}
+                  </span>
+                  <span>ARDOR Quality & Inspection Procedures</span>
                 </div>
               </div>
             ) : (
-              /* TAB 2: METADATA & TABLE DATA */
-              <>
-                {/* Metadata Grid */}
+              /* TAB 3: DATA & PIPES TABLE */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {/* Meta Summary Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
                   <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TEST PRESSURE / DESIGN</div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.2rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
-                      {record.test_pressure || 'N/A'} {record.design_pressure ? `/ ${record.design_pressure}` : ''}
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>KOEPAINE / TEST PRESSURE</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+                      {record.test_pressure || '—'}
                     </div>
                   </div>
 
                   <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>MEDIUM / DURATION</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>SUUNNITTELUPAINE / DESIGN P.</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.15rem', fontWeight: 700 }}>
+                      {record.design_pressure || '—'}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TESTIAINE / MEDIUM</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                      {record.test_medium || 'Water'}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>KESTO / DURATION</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.1rem', fontWeight: 700 }}>
-                      {record.test_medium} ({record.duration_min})
-                    </div>
-                  </div>
-
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>NUMBER OR MARK</div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.1rem', fontWeight: 700 }}>
-                      {record.ins_no || 'N/A'}
-                    </div>
-                  </div>
-
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TEST DATE</div>
-                    <div style={{ fontSize: '1rem', fontWeight: 600 }}>
-                      {record.test_date || 'N/A'}
+                      {record.duration_min || '60 min'}
                     </div>
                   </div>
                 </div>
 
-                {/* Tested Items Table */}
+                {/* Pipes Table */}
                 <div>
-                  <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
-                    Tested Pipeline Elements ({record.items?.length || 0})
-                  </h3>
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', background: 'rgba(15, 23, 42, 0.4)' }}>
-                          <th style={{ padding: '0.6rem', textAlign: 'center', width: '40px' }}>#</th>
-                          <th style={{ padding: '0.6rem', textAlign: 'left' }}>Piirustus nro (Drawing No)</th>
-                          <th style={{ padding: '0.6rem', textAlign: 'left' }}>Systeemi (System)</th>
-                          <th style={{ padding: '0.6rem', textAlign: 'left' }}>Osa nro (Part No)</th>
-                          <th style={{ padding: '0.6rem', textAlign: 'left' }}>Log No</th>
-                          <th style={{ padding: '0.6rem', textAlign: 'center' }}>Result</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {record.items && record.items.map((it, idx) => (
-                          <tr key={idx} style={{ borderBottom: '1px solid rgba(148, 163, 184, 0.08)' }}>
-                            <td style={{ padding: '0.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>{it.item_no}</td>
-                            <td style={{ padding: '0.5rem', fontWeight: 600, color: 'var(--text-primary)' }}>{it.drawing_no || '-'}</td>
-                            <td style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>{it.spool_no || record.system || '-'}</td>
-                            <td style={{ padding: '0.5rem', fontWeight: 600, color: 'var(--accent-cyan)' }}>{it.pipe_number}</td>
-                            <td style={{ padding: '0.5rem', fontFamily: 'var(--font-mono)' }}>{it.log_no || '-'}</td>
-                            <td style={{ padding: '0.5rem', textAlign: 'center' }}>
-                              <span className={`status-badge ${it.result === 'PASS' ? 'complete' : 'draft'}`}>
-                                {it.result}
-                              </span>
-                            </td>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <h3 style={{ fontSize: '0.95rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
+                      Included Pipes & Results ({record.items?.length || 0} lines)
+                    </h3>
+                  </div>
+
+                  <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(15, 23, 42, 0.6)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                            <th style={{ padding: '0.65rem 0.85rem' }}>#</th>
+                            <th style={{ padding: '0.65rem 0.85rem' }}>Drawing No</th>
+                            <th style={{ padding: '0.65rem 0.85rem' }}>Pipe No</th>
+                            <th style={{ padding: '0.65rem 0.85rem' }}>Log No</th>
+                            <th style={{ padding: '0.65rem 0.85rem' }}>Start Bar</th>
+                            <th style={{ padding: '0.65rem 0.85rem' }}>End Bar</th>
+                            <th style={{ padding: '0.65rem 0.85rem' }}>Result</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Remarks & Signatures */}
-                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Witnessed / Reviewed by: </span>
-                      <strong style={{ color: 'var(--accent-amber)' }}>{record.foreman_name || 'DE LUCA'}</strong>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Project: </span>
-                      <strong>{record.project}</strong>
-                    </div>
-                  </div>
-
-                  {record.notes && (
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Remarks: </span>
-                      {record.notes}
-                    </div>
-                  )}
-                </div>
-
-                {/* Upload Physical Signed Scan */}
-                <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-                  <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>Загрузить скан с физической подписью (Physical Scan)</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                      {record.signed_copy_path ? '✅ Загружен скан подписанной копии' : 'Прикрепите отсканированный подписанный PDF/JPG'}
+                        </thead>
+                        <tbody>
+                          {(record.items || []).map((it) => (
+                            <tr key={it.id || it.item_no} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              <td style={{ padding: '0.65rem 0.85rem', color: 'var(--text-muted)' }}>{it.item_no}</td>
+                              <td style={{ padding: '0.65rem 0.85rem' }}>{it.drawing_no || it.spool_no || '—'}</td>
+                              <td style={{ padding: '0.65rem 0.85rem', fontWeight: 600, color: 'var(--accent-cyan)' }}>{it.pipe_number}</td>
+                              <td style={{ padding: '0.65rem 0.85rem' }}>{it.log_no ? `Log ${it.log_no}` : '—'}</td>
+                              <td style={{ padding: '0.65rem 0.85rem', fontFamily: 'var(--font-mono)' }}>{it.hold_start_bar || '—'}</td>
+                              <td style={{ padding: '0.65rem 0.85rem', fontFamily: 'var(--font-mono)' }}>{it.hold_end_bar || '—'}</td>
+                              <td style={{ padding: '0.65rem 0.85rem' }}>
+                                <span className={`status-badge ${it.result === 'PASS' ? 'complete' : 'pending'}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem' }}>
+                                  {it.result}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-                  <label className="filter-pill" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem' }}>
-                    <Upload size={14} />
-                    <span>{isUploadingCopy ? 'Загрузка...' : 'Выбрать файл'}</span>
-                    <input type="file" accept=".pdf,.png,.jpg,.jpeg" onChange={handleSignedCopyUpload} style={{ display: 'none' }} />
-                  </label>
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Signature & Confirm Modals */}
+      {/* Signature Modal */}
       {isSignOpen && (
         <SignatureModal
           record={record}
@@ -385,6 +352,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
         />
       )}
 
+      {/* Confirmation Modal */}
       {isConfirmOpen && (
         <ConfirmRecordModal
           record={record}

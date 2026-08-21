@@ -2,10 +2,13 @@ import { PressureTest } from './types';
 
 const API_BASE = '/api/v1';
 
-export async function fetchPressureTests(query?: string): Promise<PressureTest[]> {
-  const url = query && query.trim() 
-    ? `${API_BASE}/tests?q=${encodeURIComponent(query.trim())}`
-    : `${API_BASE}/tests`;
+export async function fetchPressureTests(query?: string, pipecloudFilter?: string): Promise<PressureTest[]> {
+  const params = new URLSearchParams();
+  if (query && query.trim()) params.append('q', query.trim());
+  if (pipecloudFilter && pipecloudFilter !== 'all') params.append('pipecloud_filter', pipecloudFilter);
+
+  const qs = params.toString();
+  const url = qs ? `${API_BASE}/tests?${qs}` : `${API_BASE}/tests`;
     
   const res = await fetch(url);
   if (!res.ok) {
@@ -18,6 +21,30 @@ export async function fetchTestByLog(logNo: string): Promise<PressureTest> {
   const res = await fetch(`${API_BASE}/tests/${encodeURIComponent(logNo)}`);
   if (!res.ok) {
     throw new Error(`Failed to load log ${logNo} (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function updatePipeCloudStatus(
+  logNo: string,
+  added: boolean,
+  token?: string | null,
+  idempotencyKey?: string
+): Promise<{ log_no: string; pipecloud_added: boolean; pipecloud_updated_at?: string; pipecloud_updated_by_name?: string }> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE}/tests/${encodeURIComponent(logNo)}/pipecloud`, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ added, idempotency_key: idempotencyKey })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to update PipeCloud status (${res.status})`);
   }
   return res.json();
 }
@@ -44,6 +71,16 @@ export async function fetchRecords(query?: string, status?: string): Promise<any
 
 export function getRecordPdfUrl(recordId: string): string {
   return `${API_BASE}/records/${encodeURIComponent(recordId)}/pdf`;
+}
+
+export function getRecordFullPdfUrl(recordId: string): string {
+  return `${API_BASE}/records/${encodeURIComponent(recordId)}/full-pdf`;
+}
+
+export async function estimateRecordPages(recordId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/records/${encodeURIComponent(recordId)}/estimate-pages`);
+  if (!res.ok) throw new Error(`Failed to estimate record pages (${res.status})`);
+  return res.json();
 }
 
 export async function deleteRecord(recordId: string, token?: string | null): Promise<void> {

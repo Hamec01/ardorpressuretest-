@@ -192,11 +192,16 @@ class WikaAppGUI:
         self.btn_clear_photos = ttk.Button(settings_frame, text="❌ Clear", command=self._clear_photos, state=tk.DISABLED)
         self.btn_clear_photos.grid(row=2, column=3, sticky=tk.W, pady=(5, 0), padx=(5, 0))
 
-        # Row 3: Pipe Logs Text Entry
-        ttk.Label(settings_frame, text="Pipe Logs (one per line):").grid(row=3, column=0, sticky=tk.NW, padx=(0, 5), pady=(5, 0))
+        # Row 3: PipeCloud Workflow checkbox
+        self.pipecloud_added_var = tk.BooleanVar(value=False)
+        pipecloud_chk = ttk.Checkbutton(settings_frame, text="☁ Added to PipeCloud", variable=self.pipecloud_added_var)
+        pipecloud_chk.grid(row=3, column=0, columnspan=2, sticky=tk.W, pady=(5, 0))
+
+        # Row 4: Pipe Logs Text Entry
+        ttk.Label(settings_frame, text="Pipe Logs (one per line):").grid(row=4, column=0, sticky=tk.NW, padx=(0, 5), pady=(5, 0))
         self.pipe_logs_text = tk.Text(settings_frame, font=("Consolas", 9), height=3, width=40)
         self.pipe_logs_text.insert("1.0", self.config.graph.pipe_logs_text)
-        self.pipe_logs_text.grid(row=3, column=1, columnspan=4, sticky=tk.W, pady=(5, 0))
+        self.pipe_logs_text.grid(row=4, column=1, columnspan=4, sticky=tk.W, pady=(5, 0))
         
         self._toggle_pipe_logs_state()
         self._toggle_pdf_photos_state()

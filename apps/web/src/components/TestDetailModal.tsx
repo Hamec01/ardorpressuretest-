@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { PressureTest, TestRevision, Artifact } from '../types';
-import { getRevisionZipUrl, getArtifactFileUrl, deletePressureTest } from '../api';
+import { getRevisionZipUrl, getArtifactFileUrl, deletePressureTest, updatePipeCloudStatus } from '../api';
 import { useI18n } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -16,7 +16,11 @@ import {
   Check,
   Save,
   Maximize2,
-  Trash2
+  Trash2,
+  Cloud,
+  CloudOff,
+  Camera,
+  Plus
 } from 'lucide-react';
 
 interface TestDetailModalProps {
@@ -46,10 +50,80 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isUploadingPhotos, setIsUploadingPhotos] = useState<boolean>(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   const { t } = useI18n();
   const { token } = useAuth();
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isTogglingPipeCloud, setIsTogglingPipeCloud] = useState<boolean>(false);
+
+  const handlePhotosSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    try {
+      setIsUploadingPhotos(true);
+      const formData = new FormData();
+      for (let i = 0; i < e.target.files.length; i++) {
+        formData.append('photos', e.target.files[i]);
+      }
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const res = await fetch(`/api/v1/tests/${currentTest.log_no}/photos`, {
+        method: 'POST',
+        headers,
+        body: formData
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Не удалось прикрепить фотографии');
+      }
+      const updatedTest: PressureTest = await res.json();
+      setCurrentTest(updatedTest);
+      if (onUpdate) {
+        onUpdate(updatedTest);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Ошибка загрузки фото');
+    } finally {
+      setIsUploadingPhotos(false);
+      if (photoInputRef.current) {
+        photoInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleTogglePipeCloud = async () => {
+    const newStatus = !currentTest.pipecloud_added;
+    setIsTogglingPipeCloud(true);
+    // Optimistic UI state
+    const optimistic: PressureTest = {
+      ...currentTest,
+      pipecloud_added: newStatus,
+      pipecloud_updated_at: new Date().toISOString()
+    };
+    setCurrentTest(optimistic);
+
+    try {
+      const res = await updatePipeCloudStatus(currentTest.log_no, newStatus, token);
+      const finalTest: PressureTest = {
+        ...currentTest,
+        pipecloud_added: res.pipecloud_added,
+        pipecloud_updated_at: res.pipecloud_updated_at,
+        pipecloud_updated_by_name: res.pipecloud_updated_by_name
+      };
+      setCurrentTest(finalTest);
+      if (onUpdate) {
+        onUpdate(finalTest);
+      }
+    } catch (err: any) {
+      setCurrentTest(currentTest); // Rollback
+      alert(err.message || 'Failed to update PipeCloud status');
+    } finally {
+      setIsTogglingPipeCloud(false);
+    }
+  };
 
   const handleDeleteTest = async () => {
     const ok = window.confirm(t('delete_test_confirm', { log: currentTest.log_no }));
@@ -224,6 +298,33 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
             >
               <Trash2 size={14} />
               <span>{isDeleting ? t('modal_saving') : t('btn_delete')}</span>
+            </button>
+
+            {/* PipeCloud Manual Toggle */}
+            <button
+              type="button"
+              onClick={handleTogglePipeCloud}
+              disabled={isTogglingPipeCloud}
+              className="filter-pill"
+              style={{
+                background: currentTest.pipecloud_added ? 'rgba(16, 185, 129, 0.18)' : 'rgba(239, 68, 68, 0.12)',
+                color: currentTest.pipecloud_added ? 'var(--accent-emerald)' : '#f87171',
+                border: `1px solid ${currentTest.pipecloud_added ? 'var(--accent-emerald)' : 'rgba(239, 68, 68, 0.4)'}`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                cursor: 'pointer',
+                padding: '0.5rem 0.85rem',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                transition: 'all 0.2s ease'
+              }}
+              title={t('pipecloud_manual_hint')}
+            >
+              {currentTest.pipecloud_added ? <Cloud size={15} /> : <CloudOff size={15} />}
+              <span>
+                {currentTest.pipecloud_added ? `☁ ${t('pipecloud_added')}` : `☁ ${t('pipecloud_not_added')}`}
+              </span>
             </button>
 
             {!isEditing && (
@@ -524,11 +625,52 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               )}
 
               {/* Visual Section: Photos Gallery */}
-              {photoArtifacts.length > 0 && (
-                <div>
-                  <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
-                    Прикреплённые фотографии ({photoArtifacts.length})
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Camera size={16} />
+                    <span>Прикреплённые фотографии ({photoArtifacts.length})</span>
                   </h3>
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={isUploadingPhotos}
+                    style={{
+                      background: 'rgba(56, 189, 248, 0.1)',
+                      border: '1px solid var(--accent-cyan)',
+                      color: 'var(--accent-cyan)',
+                      padding: '0.3rem 0.75rem',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    {isUploadingPhotos ? (
+                      <>
+                        <div className="animate-spin" style={{ width: '12px', height: '12px', border: '2px solid var(--accent-cyan)', borderTopColor: 'transparent', borderRadius: '50%' }} />
+                        <span>Загрузка...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={14} />
+                        <span>Прикрепить фото</span>
+                      </>
+                    )}
+                  </button>
+                  <input
+                    type="file"
+                    ref={photoInputRef}
+                    multiple
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={handlePhotosSelected}
+                  />
+                </div>
+
+                {photoArtifacts.length > 0 ? (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem' }}>
                     {photoArtifacts.map((photo, idx) => {
                       if (!photo.id) return null;
@@ -580,8 +722,28 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                       );
                     })}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div
+                    onClick={() => photoInputRef.current?.click()}
+                    style={{
+                      padding: '1.25rem',
+                      background: 'rgba(15, 23, 42, 0.4)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px dashed var(--border-color)',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      color: 'var(--text-muted)',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    <Camera size={24} style={{ margin: '0 auto 0.4rem', opacity: 0.5 }} />
+                    <div>Фотографии манометра или труб пока не прикреплены.</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', marginTop: '0.2rem' }}>
+                      Нажмите сюда или на кнопку выше, чтобы добавить фото (.jpg, .jpeg, .png)
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Traceability Metadata */}
               <div>
