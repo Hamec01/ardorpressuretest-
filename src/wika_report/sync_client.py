@@ -4,16 +4,31 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 import httpx
 
+import os
 from wika_report.sync_queue import QueueItem, SyncQueue, sync_queue
+from wika_report.config import load_config
 
 logger = logging.getLogger("wika_report")
+
+
+def get_default_server_url() -> str:
+    """Определяет базовый URL сервера с приоритетом: env -> config.json -> default fallback."""
+    if os.environ.get("ARDOR_SERVER_URL"):
+        return os.environ["ARDOR_SERVER_URL"].strip()
+    try:
+        cfg = load_config(Path("config.json"))
+        if cfg.get("server_url"):
+            return str(cfg["server_url"]).strip()
+    except Exception:
+        pass
+    return "http://127.0.0.1:8080"
 
 
 class SyncClient:
     """Клиент для синхронизации локальных ревизий и статусов PipeCloud с FastAPI бэкендом."""
 
-    def __init__(self, base_url: str = "http://127.0.0.1:8080", timeout: float = 30.0):
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: Optional[str] = None, timeout: float = 30.0):
+        self.base_url = (base_url or get_default_server_url()).rstrip("/")
         self.timeout = timeout
 
     def check_health(self) -> bool:

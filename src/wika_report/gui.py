@@ -540,17 +540,18 @@ class WikaAppGUI:
             messagebox.showinfo("Sync", "All test logs are already synced with the server.")
             return
 
-        self._log(f"\n[СИНХРОНИЗАЦИЯ] Начало отправки {pending_count} элементов на сервер...")
+        server_url = self.config.get("server_url") or os.environ.get("ARDOR_SERVER_URL") or "http://127.0.0.1:8080"
+        self._log(f"\n[СИНХРОНИЗАЦИЯ] Начало отправки {pending_count} элементов на сервер ({server_url})...")
         self.btn_sync.configure(state=tk.DISABLED)
 
         def sync_worker():
-            client = SyncClient(base_url="http://127.0.0.1:8080")
+            client = SyncClient(base_url=server_url)
             if not client.check_health():
-                self._log("[СЕРВЕР НЕДОСТУПЕН] Сервер не запущен (http://127.0.0.1:8080). Логи безопасно сохранены в локальной офлайн-очереди.")
+                self._log(f"[СЕРВЕР НЕДОСТУПЕН] Сервер не отвечает ({server_url}). Логи безопасно сохранены в локальной офлайн-очереди.")
                 self.root.after(0, lambda: self.btn_sync.configure(state=tk.NORMAL))
                 self.root.after(0, lambda: messagebox.showwarning(
                     "Server Offline",
-                    "Local backend server is offline (http://127.0.0.1:8080).\n\nPlease start run_local.bat first.\nAll test logs remain safely queued offline in SQLite."
+                    f"Backend server is offline or unreachable ({server_url}).\n\nPlease verify connection and server status.\nAll test logs remain safely queued offline in SQLite."
                 ))
                 return
 
