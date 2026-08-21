@@ -11,24 +11,37 @@ from wika_report.config import load_config
 logger = logging.getLogger("wika_report")
 
 
+def normalize_server_url(url: str) -> str:
+    """Нормализует базовый URL сервера, убирая /api/v1 или trailing slashes."""
+    if not url:
+        return ""
+    clean = url.strip().rstrip("/")
+    if clean.endswith("/api/v1"):
+        clean = clean[:-7]
+    elif clean.endswith("/api"):
+        clean = clean[:-4]
+    return clean.rstrip("/")
+
+
 def get_default_server_url() -> str:
     """Определяет базовый URL сервера с приоритетом: env -> config.json -> default fallback."""
     if os.environ.get("ARDOR_SERVER_URL"):
-        return os.environ["ARDOR_SERVER_URL"].strip()
+        return normalize_server_url(os.environ["ARDOR_SERVER_URL"])
     try:
         cfg = load_config(Path("config.json"))
         if cfg.get("server_url"):
-            return str(cfg["server_url"]).strip()
+            return normalize_server_url(str(cfg["server_url"]))
     except Exception:
         pass
-    return "http://127.0.0.1:8080"
+    return "http://84.247.130.242:8000"
 
 
 class SyncClient:
     """Клиент для синхронизации локальных ревизий и статусов PipeCloud с FastAPI бэкендом."""
 
     def __init__(self, base_url: Optional[str] = None, timeout: float = 30.0):
-        self.base_url = (base_url or get_default_server_url()).rstrip("/")
+        raw_url = base_url or get_default_server_url()
+        self.base_url = normalize_server_url(raw_url)
         self.timeout = timeout
 
     def check_health(self) -> bool:

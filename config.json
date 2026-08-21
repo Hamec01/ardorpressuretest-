@@ -1,5 +1,5 @@
 {
-  "server_url": "http://127.0.0.1:8080",
+  "server_url": "http://84.247.130.242:8000",
   "target_unit": "bar",
   "default_input_unit": null,
   "move_processed_files": false,
