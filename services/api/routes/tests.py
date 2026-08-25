@@ -1,7 +1,7 @@
 import io
 import json
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
@@ -22,6 +22,28 @@ from services.api.audit import log_audit_event
 from wika_report.models import normalize_log_no
 
 router = APIRouter(prefix="/api/v1/tests", tags=["Pressure Tests"])
+
+
+def purge_test_revisions(test: PressureTest, db: Session) -> None:
+    revisions = db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id).all()
+    for revision in revisions:
+        for artifact in revision.artifacts:
+            file_path = storage.get_file_path(artifact.storage_key)
+            if file_path and file_path.exists():
+                file_path.unlink()
+        db.delete(revision)
+    
+def purge_expired_trash(db: Session) -> None:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=14)
+    expired = db.query(PressureTest).filter(
+        PressureTest.is_archived == True,
+        PressureTest.updated_at < cutoff,
+    ).all()
+    for test in expired:
+        purge_test_revisions(test, db)
+        db.delete(test)
+    if expired:
+        db.commit()
 
 
 @router.get("", response_model=List[PressureTestResponse])
@@ -82,6 +104,17 @@ def list_or_search_pressure_tests(
 
     tests = query.order_by(PressureTest.updated_at.desc()).offset(skip).limit(limit).all()
     return tests
+    
+@router.get("/trash", response_model=List[PressureTestResponse])
+def list_trash(db: Session = Depends(get_db)):
+    purge_expired_trash(db)
+    return (
+        db.query(PressureTest)
+        .filter(PressureTest.is_archived == True)
+        .options(joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts))
+        .order_by(PressureTest.updated_at.desc())
+        .all()
+    )
 
 
 @router.get("/{log_no}", response_model=PressureTestResponse)
@@ -190,6 +223,49 @@ def get_artifact_file(artifact_id: str, db: Session = Depends(get_db)):
     )
 
 
+@router.delete("/artifacts/{artifact_id}", response_model=PressureTestResponse)
+def delete_artifact(
+    artifact_id: str,
+    current_user: User = Depends(require_role(["foreman", "admin"])),
+    db: Session = Depends(get_db),
+):
+    artifact = (
+        db.query(Artifact)
+        .join(TestRevision, Artifact.test_revision_id == TestRevision.id)
+        .join(PressureTest, TestRevision.pressure_test_id == PressureTest.id)
+        .filter(Artifact.id == artifact_id, PressureTest.is_archived == False)
+        .first()
+    )
+    if not artifact:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found.")
+
+    file_path = storage.get_file_path(artifact.storage_key)
+    if file_path and file_path.exists():
+        file_path.unlink()
+
+    test = artifact.revision.pressure_test
+    artifact_name = artifact.name
+    db.delete(artifact)
+    db.commit()
+
+    log_audit_event(
+        db,
+        action="artifact_deleted",
+        entity_type="artifact",
+        entity_id=str(artifact_id),
+        actor_id=str(current_user.id),
+        actor_name=current_user.full_name,
+        details={"log_no": test.log_no, "name": artifact_name},
+    )
+
+    return (
+        db.query(PressureTest)
+        .options(joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts))
+        .filter(PressureTest.id == test.id)
+        .first()
+    )
+
+
 @router.get("/{log_no}/revisions/{revision_id}/zip")
 def download_revision_zip(log_no: str, revision_id: str, db: Session = Depends(get_db)):
     """Генерирует и отдаёт ZIP-архив со всеми артефактами указанной ревизии."""
@@ -220,6 +296,7 @@ def download_revision_zip(log_no: str, revision_id: str, db: Session = Depends(g
 
 
 class TestMetadataUpdate(BaseModel):
+    log_no: Optional[str] = None
     operator: Optional[str] = None
     project: Optional[str] = None
     system: Optional[str] = None
@@ -239,7 +316,8 @@ def update_revision_metadata(
     db: Session = Depends(get_db)
 ):
     """
-    Редактирование метаданных испытания (оператор, проект, система, инспекционный номер, трубы):
+    Редактирование метаданных испытания (Log No., оператор, проект, система, инспекционный номер, трубы):
+    - Может переименовать Log No. испытания (с проверкой уникальности);
     - Обновляет поля в TestRevision и metadata_json;
     - Обновляет связанные записи Pipe и Bundle;
     - Логирует изменение в журнале аудита;
@@ -257,6 +335,24 @@ def update_revision_metadata(
     )
     if not rev:
         raise HTTPException(status_code=404, detail="Revision not found.")
+
+    # 0. Rename Log No. if requested (checked for uniqueness against other tests)
+    old_log_no = None
+    if payload.log_no is not None and payload.log_no.strip():
+        new_norm_log = normalize_log_no(payload.log_no)
+        if new_norm_log != test.log_no:
+            conflict = (
+                db.query(PressureTest)
+                .filter(PressureTest.log_no == new_norm_log, PressureTest.id != test.id)
+                .first()
+            )
+            if conflict:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Log No. '{new_norm_log}' уже используется другим испытанием."
+                )
+            old_log_no = test.log_no
+            test.log_no = new_norm_log
 
     # 1. Update metadata json
     meta = dict(rev.metadata_json or {})
@@ -313,10 +409,15 @@ def update_revision_metadata(
 
     log_audit_event(
         db,
-        action="test_metadata_updated",
+        action="test_renamed" if old_log_no else "test_metadata_updated",
         entity_type="test_revision",
         entity_id=str(rev.id),
-        details={"log_no": norm_log, "revision_id": revision_id, "updated_by": rev.operator}
+        details={
+            "log_no": test.log_no,
+            "revision_id": revision_id,
+            "updated_by": rev.operator,
+            **({"old_log_no": old_log_no, "new_log_no": test.log_no} if old_log_no else {})
+        }
     )
 
     db.commit()
@@ -347,11 +448,12 @@ def delete_test(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Test Log_{norm_log} not found.")
 
     test.is_archived = True
+    test.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     log_audit_event(
         db,
-        action="test_archived",
+        action="test_deleted",
         entity_type="pressure_test",
         entity_id=str(test.id),
         actor_id=str(current_user.id),
@@ -359,7 +461,44 @@ def delete_test(
         details={"log_no": norm_log}
     )
 
-    return {"status": "success", "message": f"Test Log_{norm_log} archived successfully."}
+    return {"status": "success", "message": f"Test Log_{norm_log} deleted successfully."}
+
+@router.post("/{log_no}/restore", response_model=PressureTestResponse)
+def restore_test(
+    log_no: str,
+    current_user: User = Depends(require_role(["foreman", "admin"])),
+    db: Session = Depends(get_db),
+):
+    norm_log = normalize_log_no(log_no)
+    test = db.query(PressureTest).filter(
+        PressureTest.log_no == norm_log,
+        PressureTest.is_archived == True,
+    ).first()
+    if not test:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Test Log_{norm_log} not found in trash.")
+    if test.updated_at < datetime.now(timezone.utc) - timedelta(days=14):
+        purge_test_revisions(test, db)
+        db.delete(test)
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Trash retention period has expired.")
+    test.is_archived = False
+    test.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    log_audit_event(
+        db,
+        action="test_restored",
+        entity_type="pressure_test",
+        entity_id=str(test.id),
+        actor_id=str(current_user.id),
+        actor_name=current_user.full_name,
+        details={"log_no": norm_log},
+    )
+    return (
+        db.query(PressureTest)
+        .options(joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts))
+        .filter(PressureTest.id == test.id)
+        .first()
+    )
 
 
 @router.post("/{log_no}/photos", response_model=PressureTestResponse)

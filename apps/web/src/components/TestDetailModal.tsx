@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { PressureTest, TestRevision, Artifact } from '../types';
-import { getRevisionZipUrl, getArtifactFileUrl, deletePressureTest, updatePipeCloudStatus } from '../api';
+import { getRevisionZipUrl, getArtifactFileUrl, deleteArtifact, deletePressureTest, restorePressureTest, updatePipeCloudStatus } from '../api';
+import { copyToClipboard } from '../clipboard';
 import { useI18n } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -20,7 +21,9 @@ import {
   Cloud,
   CloudOff,
   Camera,
-  Plus
+  Plus,
+  RefreshCw,
+  Share2
 } from 'lucide-react';
 
 interface TestDetailModalProps {
@@ -39,6 +42,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
 
   // Edit Mode State
   const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [editLogNo, setEditLogNo] = useState<string>('');
   const [editOperator, setEditOperator] = useState<string>('');
   const [editProject, setEditProject] = useState<string>('');
   const [editSystem, setEditSystem] = useState<string>('');
@@ -57,6 +61,19 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   const { token } = useAuth();
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isTogglingPipeCloud, setIsTogglingPipeCloud] = useState<boolean>(false);
+  const [deletingArtifactId, setDeletingArtifactId] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState<boolean>(false);
+
+  const handleShareLink = async () => {
+    const url = `${window.location.origin}/share/${encodeURIComponent(currentTest.log_no)}`;
+    const ok = await copyToClipboard(url);
+    if (ok) {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } else {
+      window.prompt('Скопируйте ссылку на лог:', url);
+    }
+  };
 
   const handlePhotosSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -143,6 +160,20 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
     }
   };
 
+  const handleRestoreTest = async () => {
+    try {
+      setIsDeleting(true);
+      const restored = await restorePressureTest(currentTest.log_no, token);
+      setCurrentTest(restored);
+      onUpdate?.(restored);
+      onClose();
+    } catch (err: any) {
+      alert(err.message || 'Не удалось восстановить лог');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const revisions = currentTest.revisions || [];
   const currentRev: TestRevision | undefined = revisions[selectedRevIndex] || revisions[0];
 
@@ -159,14 +190,35 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
     (a) => a.file_type === 'photo' || a.category === 'gauge' || a.category === 'pipe' || (a.name.match(/\.(jpg|jpeg|png)$/i) && a !== graphArtifact)
   );
 
-  const handleCopySha = (sha: string, e: React.MouseEvent) => {
+  const handleCopySha = async (sha: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(sha);
-    setCopiedSha(sha);
-    setTimeout(() => setCopiedSha(null), 2000);
+    const ok = await copyToClipboard(sha);
+    if (ok) {
+      setCopiedSha(sha);
+      setTimeout(() => setCopiedSha(null), 2000);
+    } else {
+      window.prompt('Скопируйте SHA-256:', sha);
+    }
+  };
+
+  const handleDeleteArtifact = async (art: Artifact, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!art.id || !window.confirm(`Удалить файл «${art.name}»?`)) return;
+
+    try {
+      setDeletingArtifactId(art.id);
+      const updatedTest = await deleteArtifact(art.id, token);
+      setCurrentTest(updatedTest);
+      onUpdate?.(updatedTest);
+    } catch (err: any) {
+      alert(err.message || 'Не удалось удалить файл');
+    } finally {
+      setDeletingArtifactId(null);
+    }
   };
 
   const handleStartEdit = () => {
+    setEditLogNo(currentTest.log_no || '');
     setEditOperator(currentRev?.operator || '');
     setEditProject(meta.project || '');
     setEditSystem(meta.system || '');
@@ -183,6 +235,10 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentRev) return;
+    if (!editLogNo.trim()) {
+      setErrorMsg('Log No. не может быть пустым.');
+      return;
+    }
 
     try {
       setIsSaving(true);
@@ -200,6 +256,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
       const bundleList = Array.from(new Set(extractedBundles));
 
       const payload = {
+        log_no: editLogNo.trim(),
         operator: editOperator.trim(),
         project: editProject.trim(),
         system: editSystem.trim(),
@@ -288,16 +345,16 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <button
-              type="button"
-              onClick={handleDeleteTest}
-              disabled={isDeleting}
+              <button
+                type="button"
+                onClick={currentTest.is_archived ? handleRestoreTest : handleDeleteTest}
+                disabled={isDeleting}
               className="filter-pill"
-              style={{ background: 'rgba(244, 63, 94, 0.12)', color: 'var(--accent-rose)', border: '1px solid var(--accent-rose)', display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', padding: '0.5rem 0.8rem', fontSize: '0.85rem' }}
-              title={t('btn_delete_test')}
+                style={{ background: currentTest.is_archived ? 'rgba(16, 185, 129, 0.14)' : 'rgba(244, 63, 94, 0.12)', color: currentTest.is_archived ? 'var(--accent-emerald)' : 'var(--accent-rose)', border: `1px solid ${currentTest.is_archived ? 'var(--accent-emerald)' : 'var(--accent-rose)'}`, display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', padding: '0.5rem 0.8rem', fontSize: '0.85rem' }}
+                title={currentTest.is_archived ? 'Восстановить из корзины' : t('btn_delete_test')}
             >
-              <Trash2 size={14} />
-              <span>{isDeleting ? t('modal_saving') : t('btn_delete')}</span>
+                {currentTest.is_archived ? <RefreshCw size={14} /> : <Trash2 size={14} />}
+                <span>{isDeleting ? t('modal_saving') : currentTest.is_archived ? 'Восстановить' : t('btn_delete')}</span>
             </button>
 
             {/* PipeCloud Manual Toggle */}
@@ -339,6 +396,23 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               </button>
             )}
 
+            <button
+              type="button"
+              onClick={handleShareLink}
+              className="filter-pill"
+              style={{
+                background: linkCopied ? 'rgba(16, 185, 129, 0.18)' : 'rgba(56, 189, 248, 0.12)',
+                color: linkCopied ? 'var(--accent-emerald)' : 'var(--accent-cyan)',
+                border: `1px solid ${linkCopied ? 'var(--accent-emerald)' : 'var(--accent-cyan)'}`,
+                display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer',
+                padding: '0.5rem 0.85rem', fontSize: '0.85rem', fontWeight: 600
+              }}
+              title="Скопировать ссылку на этот лог для отправки в чат"
+            >
+              {linkCopied ? <Check size={15} /> : <Share2 size={15} />}
+              <span>{linkCopied ? 'Скопировано!' : 'Ссылка на лог'}</span>
+            </button>
+
             {currentRev && (
               <a
                 href={getRevisionZipUrl(currentTest.log_no, currentRev.revision_id)}
@@ -359,14 +433,14 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
         <div className="modal-body">
           {/* Error Banner */}
           {errorMsg && (
-            <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid var(--accent-rose)', color: '#FECDD3', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', fontSize: '0.9rem' }}>
+            <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid var(--accent-rose)', color: 'var(--error-text)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', fontSize: '0.9rem' }}>
               {errorMsg}
             </div>
           )}
 
           {/* Revision Switcher if multiple */}
           {revisions.length > 1 && (
-            <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <div style={{ background: 'var(--bg-inset-40)', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem', fontWeight: 600 }}>
                 REVISION HISTORY ({revisions.length} revisions):
               </div>
@@ -389,7 +463,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
 
           {/* EDIT FORM MODE */}
           {isEditing ? (
-            <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(15, 23, 42, 0.6)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--accent-cyan)' }}>
+            <form onSubmit={handleSaveEdit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'var(--bg-inset-60)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--accent-cyan)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
                 <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--accent-cyan)' }}>
                   ✏️ Редактирование информации испытания (Log {currentTest.log_no})
@@ -400,6 +474,21 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                    Log No. *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="search-input"
+                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--accent-cyan)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem', fontSize: '0.9rem', fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)', fontWeight: 700 }}
+                    placeholder="e.g. 027FED"
+                    value={editLogNo}
+                    onChange={(e) => setEditLogNo(e.target.value)}
+                  />
+                </div>
+
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
                     Имя оператора (Operator)
@@ -554,28 +643,28 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                   Inspection & Pressure Metrics
                 </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TEST PRESSURE</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.2rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
                       {meta.test_pressure || 'N/A'}
                     </div>
                   </div>
 
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>MIN / MAX RECORDED</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.1rem', fontWeight: 700 }}>
                       {metrics.min_pressure_bar != null ? `${metrics.min_pressure_bar.toFixed(1)} / ${metrics.max_pressure_bar?.toFixed(1)} bar` : 'N/A'}
                     </div>
                   </div>
 
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TEST DURATION</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.1rem', fontWeight: 700 }}>
                       {metrics.duration_formatted || '00:00:00'}
                     </div>
                   </div>
 
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>EVALUATION PROPOSAL</div>
                     <div style={{ fontWeight: 700, color: metrics.evaluation_status === 'PASS' ? 'var(--accent-emerald)' : 'var(--text-primary)' }}>
                       {metrics.evaluation_status || 'Not Evaluated'}
@@ -605,7 +694,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                   <div
                     onClick={() => setPreviewImage({ url: getArtifactFileUrl(graphArtifact.id!), title: graphArtifact.name })}
                     style={{
-                      background: 'rgba(15, 23, 42, 0.8)',
+                      background: 'var(--bg-inset-80)',
                       borderRadius: 'var(--radius-md)',
                       border: '1px solid var(--border-color)',
                       overflow: 'hidden',
@@ -685,7 +774,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                           onClick={() => setPreviewImage({ url: photoUrl, title: photo.name })}
                           style={{
                             position: 'relative',
-                            background: 'rgba(15, 23, 42, 0.8)',
+                            background: 'var(--bg-inset-80)',
                             borderRadius: 'var(--radius-md)',
                             border: '1px solid var(--border-color)',
                             overflow: 'hidden',
@@ -706,7 +795,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                               bottom: '0',
                               left: '0',
                               right: '0',
-                              background: 'rgba(15, 23, 42, 0.85)',
+                              background: 'var(--bg-inset-85)',
                               padding: '4px 6px',
                               display: 'flex',
                               justifyContent: 'space-between',
@@ -727,7 +816,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                     onClick={() => photoInputRef.current?.click()}
                     style={{
                       padding: '1.25rem',
-                      background: 'rgba(15, 23, 42, 0.4)',
+                      background: 'var(--bg-inset-40)',
                       borderRadius: 'var(--radius-md)',
                       border: '1px dashed var(--border-color)',
                       textAlign: 'center',
@@ -750,7 +839,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                 <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
                   Traceability & Pipe Identifiers
                 </h3>
-                <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                <div style={{ background: 'var(--bg-inset-60)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
                     <div>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Operator: </span>
@@ -848,6 +937,14 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                       >
                         {copiedSha === art.sha256 ? <CheckCircle2 size={15} /> : <Copy size={15} />}
                       </button>
+                        <button
+                          onClick={(e) => handleDeleteArtifact(art, e)}
+                          disabled={deletingArtifactId === art.id}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--accent-rose)', cursor: deletingArtifactId === art.id ? 'wait' : 'pointer', padding: '0.2rem', display: 'flex', alignItems: 'center' }}
+                          title={`Удалить ${art.name}`}
+                        >
+                          <Trash2 size={15} />
+                        </button>
                     </div>
                   </div>
                 );

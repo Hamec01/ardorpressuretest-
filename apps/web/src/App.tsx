@@ -11,14 +11,14 @@ import { RecordsTab } from './components/RecordsTab';
 import { NewRecordModal } from './components/NewRecordModal';
 import { RecordDetailModal } from './components/RecordDetailModal';
 import { FaqTab } from './components/FaqTab';
-import { fetchPressureTests } from './api';
+import { fetchPressureTests, fetchTrash } from './api';
 import { PressureTest, PressureTestRecord } from './types';
 import { useI18n } from './context/LanguageContext';
-import { RefreshCw, Inbox, AlertCircle, Layers, FileSpreadsheet, HelpCircle } from 'lucide-react';
+import { RefreshCw, Inbox, AlertCircle, Layers, FileSpreadsheet, HelpCircle, Trash2 } from 'lucide-react';
 
 export const App: React.FC = () => {
   const { t } = useI18n();
-  const [activeTab, setActiveTab] = useState<'tests' | 'records' | 'faq'>('tests');
+  const [activeTab, setActiveTab] = useState<'tests' | 'trash' | 'records' | 'faq'>('tests');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   const [tests, setTests] = useState<PressureTest[]>([]);
@@ -40,7 +40,7 @@ export const App: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await fetchPressureTests(query);
+      const data = activeTab === 'trash' ? await fetchTrash() : await fetchPressureTests(query);
       setTests(data);
     } catch (err: any) {
       setError(err.message || 'Failed to load test data from local server.');
@@ -50,7 +50,7 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (activeTab === 'tests') {
+    if (activeTab === 'tests' || activeTab === 'trash') {
       const timer = setTimeout(() => {
         loadData(searchQuery);
       }, 200);
@@ -88,7 +88,7 @@ export const App: React.FC = () => {
       <main className="main-content">
         {/* Navigation Tabs (3 Tabs: Tests, PTR, FAQ) */}
         <div style={{ display: 'flex', gap: '0.75rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-          <button
+            <button
             onClick={() => setActiveTab('tests')}
             style={{
               background: 'transparent',
@@ -147,6 +147,26 @@ export const App: React.FC = () => {
             <HelpCircle size={16} color={activeTab === 'faq' ? 'var(--accent-emerald)' : 'inherit'} />
             <span>{t('tab_faq')}</span>
           </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('trash')}
+              aria-label="Открыть корзину"
+              title="Корзина, хранение 14 дней"
+              style={{
+                background: activeTab === 'trash' ? 'rgba(244, 63, 94, 0.12)' : 'transparent',
+                border: 'none',
+                borderBottom: activeTab === 'trash' ? '2px solid var(--accent-rose)' : '2px solid transparent',
+                color: activeTab === 'trash' ? 'var(--accent-rose)' : 'var(--text-muted)',
+                padding: '0.6rem 0.75rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <Trash2 size={17} />
+            </button>
         </div>
 
         {error && (
@@ -156,16 +176,9 @@ export const App: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'tests' ? (
+          {activeTab === 'tests' || activeTab === 'trash' ? (
           <>
-            <SearchFilters
-              query={searchQuery}
-              onQueryChange={setSearchQuery}
-              activeFilter={activeFilter}
-              onFilterSelect={setActiveFilter}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-            />
+              {activeTab === 'tests' && <SearchFilters query={searchQuery} onQueryChange={setSearchQuery} activeFilter={activeFilter} onFilterSelect={setActiveFilter} viewMode={viewMode} onViewModeChange={setViewMode} />}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', marginTop: '-0.5rem' }}>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>

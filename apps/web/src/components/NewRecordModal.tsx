@@ -52,6 +52,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
   const [availableTests, setAvailableTests] = useState<PressureTest[]>([]);
   const [logSearch, setLogSearch] = useState<string>('');
   const [isLoadingTests, setIsLoadingTests] = useState<boolean>(false);
+  const [selectedPickerLogs, setSelectedPickerLogs] = useState<string[]>([]);
 
   // Form submission state
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -142,14 +143,14 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       spool_no: 'SP-01',
       pipe_number: pipe,
       log_no: test.log_no,
-      hold_start_bar: testPressure,
-      hold_end_bar: testPressure,
+      hold_start_bar: rev.metrics_json?.min_pressure_bar != null ? `${rev.metrics_json.min_pressure_bar} bar` : (rev.metadata_json?.test_pressure || testPressure),
+      hold_end_bar: rev.metrics_json?.max_pressure_bar != null ? `${rev.metrics_json.max_pressure_bar} bar` : (rev.metadata_json?.test_pressure || testPressure),
       result: (rev.metrics_json?.evaluation_status === 'FAIL' ? 'FAIL' : 'PASS') as any,
       notes: durationMin
     }));
 
     setItems([...items, ...newItems]);
-    setIsLogPickerOpen(false);
+    setSelectedPickerLogs((selected) => [...selected, `${test.id}:${rev.id}`]);
   };
 
   // Reorder attached logs
@@ -379,7 +380,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
             )}
 
             {/* SECTION 1: Document Metadata */}
-            <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <div style={{ background: 'var(--bg-inset-40)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-amber)', marginBottom: '1rem', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <FileText size={16} />
                 <span>1. Основные реквизиты протокола (Official ARDOR Header)</span>
@@ -511,7 +512,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
             </div>
 
             {/* SECTION 2: Composite Attached Logs */}
-            <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <div style={{ background: 'var(--bg-inset-40)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                 <div>
                   <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -619,7 +620,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
 
                         {/* Controls & Toggles */}
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem', alignItems: 'center' }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'rgba(15, 23, 42, 0.5)', padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', background: 'var(--bg-inset-50)', padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
                             <input
                               type="checkbox"
                               checked={log.include_measurement_table}
@@ -657,7 +658,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                                       display: 'flex',
                                       alignItems: 'center',
                                       gap: '0.4rem',
-                                      background: isIncluded ? 'rgba(56, 189, 248, 0.1)' : 'rgba(15, 23, 42, 0.4)',
+                                      background: isIncluded ? 'rgba(56, 189, 248, 0.1)' : 'var(--bg-inset-40)',
                                       border: isIncluded ? '1px solid var(--accent-cyan)' : '1px solid var(--border-color)',
                                       borderRadius: 'var(--radius-sm)',
                                       padding: '0.3rem 0.6rem',
@@ -690,7 +691,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
             </div>
 
             {/* SECTION 3: Pipes Specification Table */}
-            <div style={{ background: 'rgba(15, 23, 42, 0.4)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <div style={{ background: 'var(--bg-inset-40)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                 <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--accent-emerald)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <Table size={16} />
@@ -918,17 +919,17 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                         background: 'var(--bg-surface)',
                         border: '1px solid var(--border-color)',
                         borderRadius: 'var(--radius-md)',
-                        padding: '0.9rem 1.1rem',
+                          padding: '0.55rem 0.75rem',
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center',
+                          alignItems: 'center',
                         gap: '1rem',
                         transition: 'border-color 0.15s ease'
                       }}
                     >
                       <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.3rem' }}>
-                          <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--accent-cyan)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.2rem' }}>
+                            <span style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--accent-cyan)' }}>
                             Log {tItem.log_no}
                           </span>
                           <span className={`status-badge ${primaryRev?.metrics_json?.evaluation_status === 'FAIL' ? 'failed' : 'complete'}`}>
@@ -939,7 +940,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                           </span>
                         </div>
 
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                          <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                           <span>Давление: <b>{primaryRev?.metadata_json?.test_pressure || 'N/A'}</b></span>
                           <span>Оператор: <b>{primaryRev?.operator || 'N/A'}</b></span>
                           <span>Продолжительность: <b>{primaryRev?.metrics_json?.duration_formatted || '60 min'}</b></span>
@@ -955,7 +956,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                       </div>
 
                       {graphArt && (
-                        <div style={{ width: '80px', height: '50px', background: 'rgba(15, 23, 42, 0.8)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border-color)', flexShrink: 0 }}>
+                          <div style={{ width: '56px', height: '36px', background: 'var(--bg-inset-80)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '1px solid var(--border-color)', flexShrink: 0 }}>
                           <img
                             src={getArtifactFileUrl(graphArt.id!)}
                             alt="Graph"
@@ -966,18 +967,22 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
 
                       <button
                         type="button"
-                        onClick={() => handleSelectTest(tItem, primaryRev)}
+                          onClick={() => handleSelectTest(tItem, primaryRev)}
                         className="btn-primary"
-                        style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem', flexShrink: 0 }}
+                          style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem', flexShrink: 0 }}
                       >
                         <Plus size={14} />
-                        <span>Выбрать этот лог</span>
+                          <span>{selectedPickerLogs.includes(`${tItem.id}:${primaryRev?.id}`) ? 'Добавлен' : 'Добавить'}</span>
                       </button>
                     </div>
                   );
                 })
               )}
             </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', padding: '0.75rem 1rem', borderTop: '1px solid var(--border-color)' }}>
+                <span style={{ marginRight: 'auto', alignSelf: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>Выбрано: {selectedPickerLogs.length}</span>
+                <button type="button" onClick={() => { setSelectedPickerLogs([]); setIsLogPickerOpen(false); }} className="btn-primary" disabled={selectedPickerLogs.length === 0} style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}>Добавить выбранные</button>
+              </div>
           </div>
         </div>
       )}

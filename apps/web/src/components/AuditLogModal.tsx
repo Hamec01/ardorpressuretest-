@@ -73,7 +73,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ onClose }) => {
 
         <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
           {error && (
-            <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid var(--accent-rose)', color: '#FECDD3', padding: '0.75rem', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>
+            <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid var(--accent-rose)', color: 'var(--error-text)', padding: '0.75rem', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>
               {error}
             </div>
           )}
@@ -87,7 +87,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ onClose }) => {
               {events.map((ev) => (
                 <div
                   key={ev.id}
-                  style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.75rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}
+                  style={{ background: 'var(--bg-inset-60)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.75rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}
                 >
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

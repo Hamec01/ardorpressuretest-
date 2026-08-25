@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PressureTest, TestRevision } from '../types';
 import { getArtifactFileUrl } from '../api';
-import { Calendar, User, Gauge, Pipette, Image as ImageIcon } from 'lucide-react';
+import { copyToClipboard } from '../clipboard';
+import { Calendar, User, Gauge, Pipette, Image as ImageIcon, Share2, Check } from 'lucide-react';
 
 interface TestCardProps {
   test: PressureTest;
@@ -9,6 +10,20 @@ interface TestCardProps {
 }
 
 export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/share/${encodeURIComponent(test.log_no)}`;
+    const ok = await copyToClipboard(url);
+    if (ok) {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } else {
+      window.prompt('Скопируйте ссылку на лог:', url);
+    }
+  };
+
   // Get primary or most recent revision
   const primaryRev: TestRevision | undefined = 
     test.revisions.find(r => r.is_primary) || test.revisions[0];
@@ -128,7 +143,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
                   borderRadius: 'var(--radius-sm)',
                   overflow: 'hidden',
                   border: '1px solid var(--border-color)',
-                  background: 'rgba(15, 23, 42, 0.8)',
+                  background: 'var(--bg-inset-80)',
                   flexShrink: 0
                 }}
                 title={label}
@@ -145,7 +160,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
                     bottom: '0',
                     left: '0',
                     right: '0',
-                    background: 'rgba(15, 23, 42, 0.85)',
+                    background: 'var(--bg-inset-85)',
                     color: 'var(--accent-cyan)',
                     fontSize: '8.5px',
                     fontWeight: 600,
@@ -194,9 +209,33 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
           <User size={14} />
           <span>{primaryRev?.operator || 'Operator'}</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <Calendar size={14} />
-          <span>{createdDate}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <Calendar size={14} />
+            <span>{createdDate}</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleShare}
+            title="Скопировать ссылку на этот лог (для отправки в чат)"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.25rem',
+              background: linkCopied ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+              border: `1px solid ${linkCopied ? 'var(--accent-emerald)' : 'var(--border-color)'}`,
+              color: linkCopied ? 'var(--accent-emerald)' : 'var(--text-muted)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '0.2rem 0.45rem',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            {linkCopied ? <Check size={12} /> : <Share2 size={12} />}
+            <span>{linkCopied ? 'Скопировано' : 'Ссылка'}</span>
+          </button>
         </div>
       </div>
     </div>

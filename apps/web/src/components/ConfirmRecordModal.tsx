@@ -65,14 +65,14 @@ export const ConfirmRecordModal: React.FC<ConfirmRecordModalProps> = ({ record, 
 
         <div className="modal-body" style={{ gap: '1.25rem' }}>
           {errorMsg && (
-            <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid var(--accent-rose)', color: '#FECDD3', padding: '0.75rem', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+            <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid var(--accent-rose)', color: 'var(--error-text)', padding: '0.75rem', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
               <AlertTriangle size={16} color="var(--accent-rose)" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {/* Document Summary */}
-          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+          <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
               <span style={{ color: 'var(--text-muted)' }}>Document Number:</span>
               <strong style={{ color: 'var(--accent-amber)' }}>{record.record_number}</strong>
@@ -92,7 +92,7 @@ export const ConfirmRecordModal: React.FC<ConfirmRecordModalProps> = ({ record, 
           </div>
 
           {/* Security Notice */}
-          <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', padding: '0.85rem', borderRadius: 'var(--radius-md)', fontSize: '0.8rem', color: '#D1FAE5', lineHeight: 1.5 }}>
+          <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', padding: '0.85rem', borderRadius: 'var(--radius-md)', fontSize: '0.8rem', color: 'var(--success-text)', lineHeight: 1.5 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, marginBottom: '0.3rem', color: 'var(--accent-emerald)' }}>
               <Lock size={14} />
               <span>Digital Verification Certificate</span>

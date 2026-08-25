@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
+from PIL import Image
 
 
 CYRILLIC_TO_LATIN = {
@@ -698,8 +699,21 @@ def generate_full_composite_ptr_pdf(
                 p_name = str(p_item.get("name") or "Photo")
                 try:
                     pdf.rect(start_x, current_photo_y, page_w, 115)
-                    pdf.image(str(p_item["file_path"]), x=start_x + 10, y=current_photo_y + 4, w=page_w - 20, h=95)
-                    
+
+                    # Fit the photo inside the box while preserving its aspect ratio
+                    # (avoids stretching/distorting the image, e.g. gauge photos turning oval)
+                    box_x, box_y = start_x + 10, current_photo_y + 4
+                    box_w, box_h = page_w - 20, 95
+                    draw_w, draw_h = box_w, box_h
+                    with Image.open(p_item["file_path"]) as img:
+                        img_w, img_h = img.size
+                    if img_w > 0 and img_h > 0:
+                        scale = min(box_w / img_w, box_h / img_h)
+                        draw_w, draw_h = img_w * scale, img_h * scale
+                    draw_x = box_x + (box_w - draw_w) / 2
+                    draw_y = box_y + (box_h - draw_h) / 2
+                    pdf.image(str(p_item["file_path"]), x=draw_x, y=draw_y, w=draw_w, h=draw_h)
+
                     pdf.set_font("Helvetica", "B", 8)
                     pdf.set_text_color(15, 23, 42)
                     pdf.text(start_x + 4, current_photo_y + 107, f"Category: {p_cat} - {p_name}")

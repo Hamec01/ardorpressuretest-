@@ -17,7 +17,7 @@ export const TestTableView: React.FC<TestTableViewProps> = ({ tests, onSelectTes
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
           <thead>
-            <tr style={{ background: 'rgba(15, 23, 42, 0.6)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <tr style={{ background: 'var(--bg-inset-60)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               <th style={{ padding: '0.85rem 1rem' }}>{t('col_log_no')}</th>
               <th style={{ padding: '0.85rem 1rem' }}>{t('col_system_project')}</th>
               <th style={{ padding: '0.85rem 1rem' }}>{t('col_target_p')}</th>

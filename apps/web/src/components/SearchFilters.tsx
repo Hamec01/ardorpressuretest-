@@ -78,7 +78,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
 
         {/* View Mode Toggle: Grid vs Table */}
         {onViewModeChange && (
-          <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.6)', padding: '3px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', background: 'var(--bg-inset-60)', padding: '3px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
             <button
               type="button"
               onClick={() => onViewModeChange('grid')}

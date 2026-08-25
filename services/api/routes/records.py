@@ -698,6 +698,58 @@ def confirm_record(
     )
 
 
+@router.post("/{id}/unconfirm", response_model=RecordResponse)
+def unconfirm_record(
+    id: str,
+    current_user: User = Depends(require_role(["foreman", "admin"])),
+    db: Session = Depends(get_db),
+):
+    record = db.query(PressureTestRecord).filter(
+        PressureTestRecord.id == id,
+        PressureTestRecord.is_archived == False,
+    ).first()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found.")
+    if record.status not in ("confirmed", "signed"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Record is not confirmed.")
+
+    old_stamp = {
+        "verification_code": record.verification_code,
+        "confirmed_at": record.confirmed_at.isoformat() if record.confirmed_at else None,
+        "confirmed_by_name": record.confirmed_by_name,
+        "official_pdf_sha256": record.official_pdf_sha256,
+        "full_pdf_sha256": record.full_pdf_sha256,
+    }
+    record.status = "draft"
+    record.verification_code = None
+    record.confirmed_by_user_id = None
+    record.confirmed_by_name = None
+    record.confirmed_by_role = None
+    record.confirmed_at = None
+    record.signature_image_path = None
+    record.signed_copy_path = None
+    record.sha256_hash = None
+    record.official_pdf_sha256 = None
+    record.full_pdf_sha256 = None
+    record.snapshot_json = {}
+    db.commit()
+    log_audit_event(
+        db,
+        entity_type="pressure_test_record",
+        entity_id=record.id,
+        action="record_confirmation_revoked",
+        actor_id=str(current_user.id),
+        actor_name=current_user.full_name,
+        details={"record_number": record.record_number, "previous_stamp": old_stamp},
+    )
+    return (
+        db.query(PressureTestRecord)
+        .options(joinedload(PressureTestRecord.items), joinedload(PressureTestRecord.logs).joinedload(PressureTestRecordLog.artifacts))
+        .filter(PressureTestRecord.id == id)
+        .first()
+    )
+
+
 @router.post("/{id}/signature", response_model=RecordResponse)
 def upload_signature(
     id: str,

@@ -595,7 +595,7 @@ export const FaqTab: React.FC = () => {
             <div
               key={item.id}
               style={{
-                background: 'rgba(15, 23, 42, 0.65)',
+                background: 'var(--bg-inset-65)',
                 border: isOpen ? '1px solid var(--accent-cyan)' : '1px solid var(--border-color)',
                 borderRadius: 'var(--radius-md)',
                 overflow: 'hidden',

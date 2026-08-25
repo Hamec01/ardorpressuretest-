@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Upload, Check, AlertCircle, FolderArchive, FileSpreadsheet, FolderUp } from 'lucide-react';
+import { X, Upload, Check, AlertCircle, FolderArchive, FileSpreadsheet, FolderUp, PenSquare } from 'lucide-react';
 import { PressureTest } from '../types';
 
 interface NewTestModalProps {
@@ -97,12 +97,10 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
     }
   };
 
+  const isDraftMode = !csvFile;
+
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!csvFile) {
-      setErrorMsg('Пожалуйста, выберите CSV-файл с измерениями.');
-      return;
-    }
     if (!logNo.trim()) {
       setErrorMsg('Log Number обязателен для заполнения.');
       return;
@@ -113,7 +111,9 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
       setErrorMsg(null);
 
       const formData = new FormData();
-      formData.append('csv_file', csvFile);
+      if (csvFile) {
+        formData.append('csv_file', csvFile);
+      }
       formData.append('log_no', logNo.trim());
       formData.append('test_pressure', testPressure.trim());
       formData.append('system', system.trim());
@@ -161,13 +161,46 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
     }
   };
 
+  const showDraftFrame = uploadMode === 'form' && isDraftMode;
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" style={{ maxWidth: '800px' }} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-content"
+        style={{
+          maxWidth: '800px',
+          borderColor: showDraftFrame ? 'var(--text-muted)' : undefined,
+          opacity: showDraftFrame ? 0.94 : 1,
+          transition: 'border-color 0.2s ease, opacity 0.2s ease'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <div className="brand-logo-icon" style={{ width: '32px', height: '32px', fontSize: '1rem' }}>+</div>
             <span style={{ fontSize: '1.25rem', fontWeight: 700 }}>Upload & Process Test Log (Загрузка лога)</span>
+            {showDraftFrame && (
+              <span
+                style={{
+                  background: 'rgba(148, 163, 184, 0.14)',
+                  color: 'var(--text-muted)',
+                  border: '1px solid var(--text-muted)',
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem'
+                }}
+                title="CSV пока не выбран — испытание будет сохранено как черновик"
+              >
+                <PenSquare size={12} />
+                DRAFT
+              </span>
+            )}
           </div>
           <button className="modal-close-btn" onClick={onClose} disabled={isSubmitting}>
             <X size={20} />
@@ -175,7 +208,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
         </div>
 
         {/* Mode Selector Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', padding: '0 1.5rem', background: 'rgba(15, 23, 42, 0.4)' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', padding: '0 1.5rem', background: 'var(--bg-inset-40)' }}>
           <button
             type="button"
             onClick={() => setUploadMode('package')}
@@ -221,7 +254,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
 
         {/* Error message */}
         {errorMsg && (
-          <div style={{ margin: '1rem 1.5rem 0', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid var(--accent-rose)', color: '#FECDD3', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
+          <div style={{ margin: '1rem 1.5rem 0', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid var(--accent-rose)', color: 'var(--error-text)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem' }}>
             <AlertCircle size={18} color="var(--accent-rose)" />
             <span>{errorMsg}</span>
           </div>
@@ -230,7 +263,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
         {/* Mode 1: Package / ZIP / Folder Upload */}
         {uploadMode === 'package' ? (
           <form onSubmit={handlePackageSubmit} className="modal-body" style={{ gap: '1.25rem' }}>
-            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-color)', textAlign: 'center' }}>
+            <div style={{ background: 'var(--bg-inset-60)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-color)', textAlign: 'center' }}>
               <FolderUp size={44} color="var(--accent-cyan)" style={{ marginBottom: '0.75rem', opacity: 0.8 }} />
               <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '0.4rem' }}>
                 Загрузите ZIP-архив с логом или выберите целую папку
@@ -298,24 +331,32 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
           /* Mode 2: Standard CSV Form */
           <form onSubmit={handleFormSubmit} className="modal-body" style={{ gap: '1.25rem' }}>
             {/* Section 1: CSV Upload */}
-            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <div
+              style={{
+                background: 'var(--bg-inset-60)',
+                padding: '1rem',
+                borderRadius: 'var(--radius-md)',
+                border: `1px ${isDraftMode ? 'dashed' : 'solid'} ${isDraftMode ? 'var(--text-muted)' : 'var(--border-color)'}`,
+                transition: 'border-color 0.2s ease'
+              }}
+            >
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--accent-cyan)' }}>
-                1. WIKA CPG1500 CSV File *
+                1. WIKA CPG1500 CSV File (необязательно для черновика)
               </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                 <label className="btn-primary" style={{ cursor: 'pointer', fontSize: '0.85rem', padding: '0.5rem 1rem' }}>
                   <Upload size={16} />
                   <span>Choose CSV File...</span>
                   <input type="file" accept=".csv" onChange={handleCsvChange} style={{ display: 'none' }} />
                 </label>
                 <span style={{ fontSize: '0.85rem', color: csvFile ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                  {csvFile ? `Selected: ${csvFile.name} (${(csvFile.size / 1024).toFixed(1)} KB)` : 'No file selected yet'}
+                  {csvFile ? `Selected: ${csvFile.name} (${(csvFile.size / 1024).toFixed(1)} KB)` : 'CSV не выбран — можно сохранить как черновик и добавить его позже'}
                 </span>
               </div>
             </div>
 
             {/* Section 2: Metadata */}
-            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <div style={{ background: 'var(--bg-inset-60)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--accent-cyan)' }}>
                 2. Test Metadata
               </div>
@@ -419,7 +460,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
             </div>
 
             {/* Section 3: Pipe Logs & Bundles */}
-            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <div style={{ background: 'var(--bg-inset-60)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                 <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-cyan)' }}>
                   3. Pipe Logs (Номера связок и труб)
@@ -441,7 +482,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
             </div>
 
             {/* Section 4: Photo Attachments */}
-            <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <div style={{ background: 'var(--bg-inset-60)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--accent-cyan)' }}>
                 4. Evidence Photos
               </div>
@@ -488,11 +529,17 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
                 type="submit"
                 className="btn-primary"
                 disabled={isSubmitting}
+                style={isDraftMode ? { background: 'var(--text-muted)', color: '#0F172A' } : undefined}
               >
                 {isSubmitting ? (
                   <>
                     <div className="animate-spin" style={{ width: '16px', height: '16px', border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                    <span>Processing CSV & Generating Artifacts...</span>
+                    <span>{isDraftMode ? 'Сохранение черновика...' : 'Processing CSV & Generating Artifacts...'}</span>
+                  </>
+                ) : isDraftMode ? (
+                  <>
+                    <PenSquare size={16} />
+                    <span>Сохранить как черновик (без CSV)</span>
                   </>
                 ) : (
                   <>

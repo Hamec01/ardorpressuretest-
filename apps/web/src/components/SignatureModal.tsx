@@ -145,7 +145,7 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({ record, onClose,
 
         <div className="modal-body" style={{ gap: '1rem' }}>
           {errorMsg && (
-            <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid var(--accent-rose)', color: '#FECDD3', padding: '0.75rem', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+            <div style={{ background: 'rgba(244, 63, 94, 0.15)', border: '1px solid var(--accent-rose)', color: 'var(--error-text)', padding: '0.75rem', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
               <AlertCircle size={16} color="var(--accent-rose)" />
               <span>{errorMsg}</span>
             </div>

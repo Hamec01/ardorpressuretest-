@@ -1,4 +1,5 @@
 import hashlib
+import io
 import json
 import logging
 import shutil
@@ -20,9 +21,124 @@ logger = logging.getLogger("ardor_api")
 router = APIRouter(prefix="/api/v1/process", tags=["Processing"])
 
 
+def purge_archived_test_revisions(test: PressureTest, db: Session) -> None:
+    revisions = db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id).all()
+    for revision in revisions:
+        for artifact in revision.artifacts:
+            file_path = storage.get_file_path(artifact.storage_key)
+            if file_path and file_path.exists():
+                file_path.unlink()
+        db.delete(revision)
+
+
+async def _save_photo_artifacts(
+    db: Session,
+    rev: TestRevision,
+    norm_log: str,
+    revision_id: str,
+    files: List[UploadFile],
+    category: str,
+) -> None:
+    """Сохраняет фотографии как артефакты ревизии напрямую, без конвейера обработки CSV (используется черновиками)."""
+    for pf in files:
+        if not pf.filename:
+            continue
+        content = await pf.read()
+        if not content:
+            continue
+        rel_p = f"attached_photos/{pf.filename}"
+        storage_key = f"logs/{norm_log}/revisions/{revision_id}/{rel_p}"
+        storage.store_file(storage_key, io.BytesIO(content))
+        db.add(Artifact(
+            test_revision_id=rev.id,
+            name=pf.filename,
+            relative_path=rel_p,
+            file_type="photo",
+            category=category,
+            size_bytes=len(content),
+            sha256=hashlib.sha256(content).hexdigest(),
+            storage_key=storage_key
+        ))
+
+
+async def _create_draft_revision(
+    db: Session,
+    norm_log: str,
+    test_pressure: str,
+    system: str,
+    ins_no: str,
+    project: str,
+    note: str,
+    wika_nr: str,
+    operator: str,
+    pipe_numbers: List[str],
+    bundle_numbers: List[str],
+    pipe_photos: List[UploadFile],
+    gauge_photos: List[UploadFile],
+    other_photos: List[UploadFile],
+) -> PressureTest:
+    """
+    Создаёт черновик испытания (Log No. + метаданные) без CSV-файла измерений.
+    Ревизия получает status="draft", пустые metrics_json (замеры ещё не загружены)
+    и не проходит через конвейер обработки WIKA CPG1500. CSV можно будет загрузить позже —
+    повторная отправка формы с тем же Log No. и файлом создаст полноценную ревизию поверх черновика.
+    """
+    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+    if not test:
+        test = PressureTest(log_no=norm_log)
+        db.add(test)
+        db.flush()
+    elif test.is_archived:
+        purge_archived_test_revisions(test, db)
+        test.is_archived = False
+
+    revision_id = f"draft_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+
+    db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id).update({"is_primary": False})
+
+    rev = TestRevision(
+        pressure_test_id=test.id,
+        revision_id=revision_id,
+        status="draft",
+        is_primary=True,
+        operator=operator or "operator",
+        metadata_json={
+            "test_pressure": test_pressure,
+            "system": system,
+            "ins_no": ins_no,
+            "project": project,
+            "note": note,
+            "wika_nr": wika_nr,
+            "pipe_numbers": pipe_numbers,
+            "bundle_numbers": bundle_numbers,
+        },
+        metrics_json={}
+    )
+    db.add(rev)
+    db.flush()
+
+    await _save_photo_artifacts(db, rev, norm_log, revision_id, pipe_photos, "pipe")
+    await _save_photo_artifacts(db, rev, norm_log, revision_id, gauge_photos, "gauge")
+    await _save_photo_artifacts(db, rev, norm_log, revision_id, other_photos, "other")
+
+    for p in pipe_numbers:
+        db.add(Pipe(test_revision_id=rev.id, pipe_number=p))
+    for b in bundle_numbers:
+        db.add(Bundle(test_revision_id=rev.id, bundle_number=b))
+
+    db.commit()
+
+    return (
+        db.query(PressureTest)
+        .options(joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts))
+        .filter(PressureTest.id == test.id)
+        .first()
+    )
+
+
 @router.post("", response_model=PressureTestResponse)
 async def process_csv_web(
-    csv_file: UploadFile = File(..., description="CSV-файл манометра WIKA CPG1500"),
+    csv_file: Optional[UploadFile] = File(None, description="CSV-файл манометра WIKA CPG1500 (необязателен для черновика)"),
     log_no: str = Form(..., description="Log No. (например 014FED)"),
     test_pressure: str = Form("", description="Испытательное давление"),
     system: str = Form("", description="Система трубопровода"),
@@ -45,8 +161,12 @@ async def process_csv_web(
     2. Прогоняет полный конвейер (read -> detect -> clean -> analyze -> artifacts -> manifest);
     3. Сохраняет ревизию в PostgreSQL и хранилище файлов;
     4. Возвращает созданную карточку испытания.
+
+    Если csv_file не передан, CSV считается ещё не готовым: сохраняется черновик
+    (Log No. + введённые метаданные + фото) со статусом ревизии "draft", без запуска
+    конвейера обработки и без графика/метрик давления.
     """
-    norm_log = normalize_log_no(log_no, fallback_name=Path(csv_file.filename or "report").stem)
+    norm_log = normalize_log_no(log_no, fallback_name=Path(csv_file.filename or "report").stem if csv_file and csv_file.filename else log_no)
 
     # Парсинг списков труб и бандлов
     pipe_numbers = [p.strip() for p in pipe_numbers_raw.replace(",", "\n").splitlines() if p.strip()]
@@ -55,6 +175,24 @@ async def process_csv_web(
 
     bundle_numbers = [b.strip() for b in bundle_numbers_raw.replace(",", "\n").splitlines() if b.strip()]
     bundle_numbers = list(dict.fromkeys(bundle_numbers))
+
+    if csv_file is None or not csv_file.filename:
+        return await _create_draft_revision(
+            db=db,
+            norm_log=norm_log,
+            test_pressure=test_pressure,
+            system=system,
+            ins_no=ins_no,
+            project=project,
+            note=note,
+            wika_nr=wika_nr,
+            operator=operator,
+            pipe_numbers=pipe_numbers,
+            bundle_numbers=bundle_numbers,
+            pipe_photos=pipe_photos,
+            gauge_photos=gauge_photos,
+            other_photos=other_photos,
+        )
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
@@ -251,6 +389,10 @@ async def upload_package_or_zip(
                     test = PressureTest(log_no=log_no)
                     db.add(test)
                     db.flush()
+                else:
+                    if test.is_archived:
+                        purge_archived_test_revisions(test, db)
+                    test.is_archived = False
 
                 db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id).update({"is_primary": False})
                 rev = TestRevision(
@@ -393,6 +535,10 @@ async def upload_package_or_zip(
                         test = PressureTest(log_no=norm_log)
                         db.add(test)
                         db.flush()
+                    else:
+                        if test.is_archived:
+                            purge_archived_test_revisions(test, db)
+                        test.is_archived = False
 
                     db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id).update({"is_primary": False})
                     rev = TestRevision(

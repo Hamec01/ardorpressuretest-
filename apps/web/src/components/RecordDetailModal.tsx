@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PressureTestRecord } from '../types';
-import { getRecordPdfUrl, getRecordFullPdfUrl, deleteRecord } from '../api';
+import { getRecordPdfUrl, getRecordFullPdfUrl, deleteRecord, updateRecord, unconfirmRecord } from '../api';
 import {
   X,
   Download,
@@ -11,7 +11,9 @@ import {
   Table,
   FileSpreadsheet,
   Trash2,
-  Layers
+  Layers,
+  Check,
+  Plus
 } from 'lucide-react';
 import { SignatureModal } from './SignatureModal';
 import { ConfirmRecordModal } from './ConfirmRecordModal';
@@ -36,6 +38,19 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   const [isSignOpen, setIsSignOpen] = useState<boolean>(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState<boolean>(false);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [draft, setDraft] = useState(() => ({
+    project: initialRecord.project,
+    system: initialRecord.system,
+    ins_no: initialRecord.ins_no || '',
+    test_medium: initialRecord.test_medium,
+    design_pressure: initialRecord.design_pressure || '',
+    test_pressure: initialRecord.test_pressure || '',
+    duration_min: initialRecord.duration_min,
+    foreman_name: initialRecord.foreman_name || '',
+    notes: initialRecord.notes || '',
+  }));
 
   const handleDeleteRecord = async () => {
     const confirmed = window.confirm(t('delete_record_confirm', { record: record.record_number }));
@@ -51,6 +66,46 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      const updated = await updateRecord(record.id, { ...draft, items: record.items }, token);
+      setRecord(updated);
+      setIsEditing(false);
+      onUpdate();
+    } catch (err: any) {
+      alert(err.message || 'Не удалось сохранить изменения');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUnconfirm = async () => {
+    if (!window.confirm('Снять подтверждение? Текущий штамп и код будут отозваны, а рапорт вернётся в черновик.')) return;
+    try {
+      setIsSaving(true);
+      const updated = await unconfirmRecord(record.id, token);
+      setRecord(updated);
+      onUpdate();
+    } catch (err: any) {
+      alert(err.message || 'Не удалось снять подтверждение');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const updateItem = (index: number, field: string, value: string) => {
+    setRecord((current) => ({ ...current, items: current.items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item) }));
+  };
+
+  const addItem = () => {
+    setRecord((current) => ({ ...current, items: [...current.items, { item_no: current.items.length + 1, pipe_number: '', drawing_no: '', spool_no: '', log_no: '', hold_start_bar: '', hold_end_bar: '', result: 'PENDING', notes: '' }] }));
+  };
+
+  const removeItem = (index: number) => {
+    setRecord((current) => ({ ...current, items: current.items.filter((_, itemIndex) => itemIndex !== index).map((item, itemIndex) => ({ ...item, item_no: itemIndex + 1 })) }));
   };
 
   const handleSignatureSuccess = (updated: PressureTestRecord) => {
@@ -91,6 +146,37 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                {(record.status === 'confirmed' || record.status === 'signed') && (
+                  <button
+                    type="button"
+                    onClick={() => void handleUnconfirm()}
+                    disabled={isSaving}
+                    className="filter-pill"
+                    style={{ background: 'rgba(245, 158, 11, 0.14)', color: 'var(--accent-amber)', border: '1px solid var(--accent-amber)', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
+                    title="Снять подтверждение и вернуть рапорт в черновик"
+                  >
+                    <Edit size={14} />
+                    <span>Снять подтверждение</span>
+                  </button>
+                )}
+                {record.status !== 'confirmed' && record.status !== 'signed' && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing((value) => !value)}
+                    className="filter-pill"
+                    style={{ background: isEditing ? 'rgba(245, 158, 11, 0.14)' : 'rgba(56, 189, 248, 0.12)', color: isEditing ? 'var(--accent-amber)' : 'var(--accent-cyan)', border: `1px solid ${isEditing ? 'var(--accent-amber)' : 'var(--accent-cyan)'}`, display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
+                  title="Редактировать рапорт"
+                >
+                  <Edit size={14} />
+                  <span>{isEditing ? 'Отмена' : 'Редактировать'}</span>
+                </button>
+                )}
+                {isEditing && (
+                  <button type="button" onClick={() => void handleSave()} disabled={isSaving} className="btn-primary" style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}>
+                    <Check size={14} />
+                    <span>{isSaving ? 'Сохраняем...' : 'Сохранить'}</span>
+                  </button>
+                )}
               <button
                 type="button"
                 onClick={handleDeleteRecord}
@@ -263,30 +349,47 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
             ) : (
               /* TAB 3: DATA & PIPES TABLE */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {isEditing && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', padding: '0.9rem', border: '1px solid var(--accent-cyan)', borderRadius: 'var(--radius-md)', background: 'rgba(56, 189, 248, 0.06)' }}>
+                      {([
+                        ['project', 'Проект'], ['system', 'Система'], ['ins_no', 'Inspection No'], ['test_medium', 'Среда'],
+                        ['design_pressure', 'Design pressure'], ['test_pressure', 'Test pressure'], ['duration_min', 'Длительность'], ['foreman_name', 'Прораб'],
+                      ] as const).map(([field, label]) => (
+                        <label key={field} style={{ display: 'grid', gap: '0.25rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          {label}
+                          <input value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '0.45rem 0.55rem' }} />
+                        </label>
+                      ))}
+                      <label style={{ display: 'grid', gap: '0.25rem', gridColumn: '1 / -1', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        Примечания
+                        <textarea value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} rows={2} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '0.45rem 0.55rem', resize: 'vertical' }} />
+                      </label>
+                    </div>
+                  )}
                 {/* Meta Summary Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>KOEPAINE / TEST PRESSURE</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
                       {record.test_pressure || '—'}
                     </div>
                   </div>
 
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>SUUNNITTELUPAINE / DESIGN P.</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.15rem', fontWeight: 700 }}>
                       {record.design_pressure || '—'}
                     </div>
                   </div>
 
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TESTIAINE / MEDIUM</div>
                     <div style={{ fontSize: '1.1rem', fontWeight: 700 }}>
                       {record.test_medium || 'Water'}
                     </div>
                   </div>
 
-                  <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>KESTO / DURATION</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.1rem', fontWeight: 700 }}>
                       {record.duration_min || '60 min'}
@@ -297,16 +400,17 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 {/* Pipes Table */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <h3 style={{ fontSize: '0.95rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
+                      <h3 style={{ fontSize: '0.95rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
                       Included Pipes & Results ({record.items?.length || 0} lines)
                     </h3>
+                      {isEditing && <button type="button" onClick={addItem} className="filter-pill" style={{ color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)', background: 'transparent', padding: '0.35rem 0.65rem', cursor: 'pointer' }}><Plus size={14} /> Добавить строку</button>}
                   </div>
 
                   <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
                         <thead>
-                          <tr style={{ background: 'rgba(15, 23, 42, 0.6)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                          <tr style={{ background: 'var(--bg-inset-60)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
                             <th style={{ padding: '0.65rem 0.85rem' }}>#</th>
                             <th style={{ padding: '0.65rem 0.85rem' }}>Drawing No</th>
                             <th style={{ padding: '0.65rem 0.85rem' }}>Pipe No</th>
@@ -317,19 +421,20 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                           </tr>
                         </thead>
                         <tbody>
-                          {(record.items || []).map((it) => (
+                            {(record.items || []).map((it, itemIndex) => (
                             <tr key={it.id || it.item_no} style={{ borderBottom: '1px solid var(--border-color)' }}>
                               <td style={{ padding: '0.65rem 0.85rem', color: 'var(--text-muted)' }}>{it.item_no}</td>
-                              <td style={{ padding: '0.65rem 0.85rem' }}>{it.drawing_no || it.spool_no || '—'}</td>
-                              <td style={{ padding: '0.65rem 0.85rem', fontWeight: 600, color: 'var(--accent-cyan)' }}>{it.pipe_number}</td>
-                              <td style={{ padding: '0.65rem 0.85rem' }}>{it.log_no ? `Log ${it.log_no}` : '—'}</td>
-                              <td style={{ padding: '0.65rem 0.85rem', fontFamily: 'var(--font-mono)' }}>{it.hold_start_bar || '—'}</td>
-                              <td style={{ padding: '0.65rem 0.85rem', fontFamily: 'var(--font-mono)' }}>{it.hold_end_bar || '—'}</td>
+                                <td style={{ padding: '0.65rem 0.85rem' }}>{isEditing ? <input value={it.drawing_no || ''} onChange={(event) => updateItem(itemIndex, 'drawing_no', event.target.value)} /> : (it.drawing_no || it.spool_no || '—')}</td>
+                                <td style={{ padding: '0.65rem 0.85rem', fontWeight: 600, color: 'var(--accent-cyan)' }}>{isEditing ? <input value={it.pipe_number} onChange={(event) => updateItem(itemIndex, 'pipe_number', event.target.value)} /> : it.pipe_number}</td>
+                                <td style={{ padding: '0.65rem 0.85rem' }}>{it.log_no ? `Log ${it.log_no}` : '—'}</td>
+                                <td style={{ padding: '0.65rem 0.85rem', fontFamily: 'var(--font-mono)' }}>{isEditing ? <input value={it.hold_start_bar || ''} onChange={(event) => updateItem(itemIndex, 'hold_start_bar', event.target.value)} /> : (it.hold_start_bar || '—')}</td>
+                                <td style={{ padding: '0.65rem 0.85rem', fontFamily: 'var(--font-mono)' }}>{isEditing ? <input value={it.hold_end_bar || ''} onChange={(event) => updateItem(itemIndex, 'hold_end_bar', event.target.value)} /> : (it.hold_end_bar || '—')}</td>
                               <td style={{ padding: '0.65rem 0.85rem' }}>
                                 <span className={`status-badge ${it.result === 'PASS' ? 'complete' : 'pending'}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem' }}>
                                   {it.result}
                                 </span>
                               </td>
+                                {isEditing && <td><button type="button" onClick={() => removeItem(itemIndex)} title="Удалить строку" style={{ color: 'var(--accent-rose)', background: 'transparent', border: 'none', cursor: 'pointer' }}><Trash2 size={15} /></button></td>}
                             </tr>
                           ))}
                         </tbody>
