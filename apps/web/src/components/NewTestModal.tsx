@@ -5,10 +5,24 @@ import { PressureTest } from '../types';
 interface NewTestModalProps {
   onClose: () => void;
   onSuccess: (createdTest: PressureTest) => void;
+  /** When set, the modal opens directly in "attach CSV to an existing draft" mode: Log No. and
+   * metadata are pre-filled from the draft's current revision (read-only Log No.), the package/
+   * ZIP tab is hidden, and the CSV file becomes required. Photos already attached to the draft
+   * are carried forward automatically by the backend — nothing to re-upload here. */
+  existingTest?: PressureTest;
 }
 
-export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }) => {
-  const [uploadMode, setUploadMode] = useState<'package' | 'form'>('package');
+function draftMetadataFor(test?: PressureTest) {
+  const revisions = test?.revisions || [];
+  const rev = revisions.find((r) => r.is_primary) || revisions[0];
+  return { rev, meta: rev?.metadata_json || {} };
+}
+
+export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, existingTest }) => {
+  const isAttachMode = Boolean(existingTest);
+  const { rev: draftRev, meta: draftMeta } = draftMetadataFor(existingTest);
+
+  const [uploadMode, setUploadMode] = useState<'package' | 'form'>(isAttachMode ? 'form' : 'package');
 
   // Package Mode State
   const [packageFile, setPackageFile] = useState<File | null>(null);
@@ -16,18 +30,18 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
 
   // Form Mode State
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [logNo, setLogNo] = useState<string>('');
-  const [testPressure, setTestPressure] = useState<string>('15 bar');
-  const [system, setSystem] = useState<string>('');
-  const [insNo, setInsNo] = useState<string>('');
-  const [project, setProject] = useState<string>('ARDOR');
-  const [operator, setOperator] = useState<string>('');
-  const [wikaNr, setWikaNr] = useState<string>('BG516-GDTZ-13-D');
-  const [note, setNote] = useState<string>('');
-  const [pipeRaw, setPipeRaw] = useState<string>('');
+  const [logNo, setLogNo] = useState<string>(existingTest?.log_no || '');
+  const [testPressure, setTestPressure] = useState<string>(draftMeta.test_pressure || '15 bar');
+  const [system, setSystem] = useState<string>(draftMeta.system || '');
+  const [insNo, setInsNo] = useState<string>(draftMeta.ins_no || '');
+  const [project, setProject] = useState<string>(draftMeta.project || 'ARDOR');
+  const [operator, setOperator] = useState<string>(draftRev?.operator || '');
+  const [wikaNr, setWikaNr] = useState<string>(draftMeta.wika_nr || 'BG516-GDTZ-13-D');
+  const [note, setNote] = useState<string>(draftMeta.note || '');
+  const [pipeRaw, setPipeRaw] = useState<string>((draftMeta.pipe_numbers || []).join('\n'));
   const [pipePhotos, setPipePhotos] = useState<File[]>([]);
   const [gaugePhotos, setGaugePhotos] = useState<File[]>([]);
-  
+
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -97,12 +111,16 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
     }
   };
 
-  const isDraftMode = !csvFile;
+  const isDraftMode = !csvFile && !isAttachMode;
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!logNo.trim()) {
       setErrorMsg('Log Number обязателен для заполнения.');
+      return;
+    }
+    if (isAttachMode && !csvFile) {
+      setErrorMsg('Выберите CSV-файл, чтобы завершить черновик. Метаданные и фото уже сохранены и никуда не денутся.');
       return;
     }
 
@@ -178,7 +196,9 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <div className="brand-logo-icon" style={{ width: '32px', height: '32px', fontSize: '1rem' }}>+</div>
-            <span style={{ fontSize: '1.25rem', fontWeight: 700 }}>Upload & Process Test Log (Загрузка лога)</span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+              {isAttachMode ? `Прикрепить CSV к черновику (Log ${existingTest?.log_no})` : 'Upload & Process Test Log (Загрузка лога)'}
+            </span>
             {showDraftFrame && (
               <span
                 style={{
@@ -207,7 +227,8 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
           </button>
         </div>
 
-        {/* Mode Selector Tabs */}
+        {/* Mode Selector Tabs — hidden in attach-CSV-to-draft mode, only the metadata form applies */}
+        {!isAttachMode && (
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', padding: '0 1.5rem', background: 'var(--bg-inset-40)' }}>
           <button
             type="button"
@@ -251,6 +272,13 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
             <span>📄 Single CSV + Metadata Form</span>
           </button>
         </div>
+        )}
+
+        {isAttachMode && (
+          <div style={{ margin: '1rem 1.5rem 0', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent-cyan)', color: 'var(--text-secondary)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>
+            Метаданные и уже прикреплённые фото подтянуты из черновика — можно поправить при необходимости. Осталось выбрать CSV-файл измерений.
+          </div>
+        )}
 
         {/* Error message */}
         {errorMsg && (
@@ -261,7 +289,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
         )}
 
         {/* Mode 1: Package / ZIP / Folder Upload */}
-        {uploadMode === 'package' ? (
+        {uploadMode === 'package' && !isAttachMode ? (
           <form onSubmit={handlePackageSubmit} className="modal-body" style={{ gap: '1.25rem' }}>
             <div style={{ background: 'var(--bg-inset-60)', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-color)', textAlign: 'center' }}>
               <FolderUp size={44} color="var(--accent-cyan)" style={{ marginBottom: '0.75rem', opacity: 0.8 }} />
@@ -341,16 +369,20 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
               }}
             >
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--accent-cyan)' }}>
-                1. WIKA CPG1500 CSV File (необязательно для черновика)
+                1. WIKA CPG1500 CSV File {isAttachMode ? '(обязательно, чтобы завершить черновик)' : '(необязательно для черновика)'}
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                 <label className="btn-primary" style={{ cursor: 'pointer', fontSize: '0.85rem', padding: '0.5rem 1rem' }}>
                   <Upload size={16} />
                   <span>Choose CSV File...</span>
-                  <input type="file" accept=".csv" onChange={handleCsvChange} style={{ display: 'none' }} />
+                  <input type="file" accept=".csv" onChange={handleCsvChange} required={isAttachMode} style={{ display: 'none' }} />
                 </label>
                 <span style={{ fontSize: '0.85rem', color: csvFile ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                  {csvFile ? `Selected: ${csvFile.name} (${(csvFile.size / 1024).toFixed(1)} KB)` : 'CSV не выбран — можно сохранить как черновик и добавить его позже'}
+                  {csvFile
+                    ? `Selected: ${csvFile.name} (${(csvFile.size / 1024).toFixed(1)} KB)`
+                    : isAttachMode
+                      ? 'Выберите CSV-файл измерений для этого лога'
+                      : 'CSV не выбран — можно сохранить как черновик и добавить его позже'}
                 </span>
               </div>
             </div>
@@ -366,10 +398,12 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
                   <input
                     type="text"
                     className="search-input"
-                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.9rem' }}
+                    style={{ background: isAttachMode ? 'var(--bg-inset-40)' : 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.4rem 0.6rem', fontSize: '0.9rem', cursor: isAttachMode ? 'not-allowed' : 'text' }}
                     placeholder="e.g. 014FED"
                     value={logNo}
-                    onChange={(e) => setLogNo(e.target.value)}
+                    readOnly={isAttachMode}
+                    title={isAttachMode ? 'Log No. нельзя менять при прикреплении CSV к существующему черновику' : undefined}
+                    onChange={(e) => !isAttachMode && setLogNo(e.target.value)}
                     required
                   />
                 </div>
@@ -484,7 +518,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
             {/* Section 4: Photo Attachments */}
             <div style={{ background: 'var(--bg-inset-60)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--accent-cyan)' }}>
-                4. Evidence Photos
+                4. Evidence Photos {isAttachMode ? '(необязательно — фото из черновика уже сохранены)' : ''}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
@@ -534,12 +568,17 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess }
                 {isSubmitting ? (
                   <>
                     <div className="animate-spin" style={{ width: '16px', height: '16px', border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                    <span>{isDraftMode ? 'Сохранение черновика...' : 'Processing CSV & Generating Artifacts...'}</span>
+                    <span>{isDraftMode ? 'Сохранение черновика...' : isAttachMode ? 'Прикрепление CSV и обработка...' : 'Processing CSV & Generating Artifacts...'}</span>
                   </>
                 ) : isDraftMode ? (
                   <>
                     <PenSquare size={16} />
                     <span>Сохранить как черновик (без CSV)</span>
+                  </>
+                ) : isAttachMode ? (
+                  <>
+                    <Check size={16} />
+                    <span>Прикрепить CSV и завершить</span>
                   </>
                 ) : (
                   <>

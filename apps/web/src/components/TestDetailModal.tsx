@@ -30,9 +30,12 @@ interface TestDetailModalProps {
   test: PressureTest;
   onClose: () => void;
   onUpdate?: (updatedTest: PressureTest) => void;
+  /** Opens the "attach CSV" flow (NewTestModal in attach mode) for this test — only ever called
+   * for a draft's primary revision, see the button below. */
+  onAttachCsv?: (test: PressureTest) => void;
 }
 
-export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose, onUpdate }) => {
+export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose, onUpdate, onAttachCsv }) => {
   const [currentTest, setCurrentTest] = useState<PressureTest>(test);
   const [selectedRevIndex, setSelectedRevIndex] = useState<number>(0);
   const [copiedSha, setCopiedSha] = useState<string | null>(null);
@@ -393,6 +396,19 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               >
                 <Edit3 size={15} />
                 <span>Редактировать данные</span>
+              </button>
+            )}
+
+            {!isEditing && currentRev?.status === 'draft' && onAttachCsv && (
+              <button
+                type="button"
+                onClick={() => onAttachCsv(currentTest)}
+                className="filter-pill"
+                style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-emerald)', border: '1px solid var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', padding: '0.5rem 0.9rem', fontSize: '0.85rem', fontWeight: 600 }}
+                title="Загрузить CSV-файл измерений и завершить этот черновик"
+              >
+                <FileSpreadsheet size={15} />
+                <span>Прикрепить CSV</span>
               </button>
             )}
 

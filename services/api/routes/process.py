@@ -13,6 +13,7 @@ from services.api.database import get_db
 from services.api.models import Artifact, Bundle, Pipe, PressureTest, TestRevision
 from services.api.schemas import PressureTestResponse
 from services.api.storage import storage
+from services.api.audit import log_audit_event
 from wika_report.config import AppConfig
 from wika_report.file_processor import process_test_input
 from wika_report.models import PhotoAttachment, TestInput, normalize_log_no
@@ -194,6 +195,26 @@ async def process_csv_web(
             other_photos=other_photos,
         )
 
+    # Attach-CSV-to-draft support: look up any existing draft revision BEFORE building the
+    # TestInput DTO below, so a carried-forward pipe/bundle list (when the caller didn't
+    # resupply one) is already baked into the core pipeline's own manifest/metadata_json —
+    # not just into the Pipe/Bundle DB rows added afterwards. Explicit input still always wins.
+    existing_test_for_log = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+    prior_primary_rev = None
+    if existing_test_for_log:
+        prior_primary_rev = (
+            db.query(TestRevision)
+            .filter(TestRevision.pressure_test_id == existing_test_for_log.id, TestRevision.is_primary == True)
+            .first()
+        )
+    was_draft = bool(prior_primary_rev and prior_primary_rev.status == "draft")
+    prior_photo_artifacts = list(prior_primary_rev.artifacts) if was_draft else []
+    prior_pipe_numbers = [p.pipe_number for p in prior_primary_rev.pipes] if was_draft else []
+    prior_bundle_numbers = [b.bundle_number for b in prior_primary_rev.bundles] if was_draft else []
+
+    effective_pipe_numbers = pipe_numbers or prior_pipe_numbers
+    effective_bundle_numbers = bundle_numbers or prior_bundle_numbers
+
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
         temp_input_dir = tmp_path / "input"
@@ -232,8 +253,8 @@ async def process_csv_web(
             note=note,
             wika_nr=wika_nr,
             operator=operator,
-            bundle_numbers=bundle_numbers,
-            pipe_numbers=pipe_numbers,
+            bundle_numbers=effective_bundle_numbers,
+            pipe_numbers=effective_pipe_numbers,
             create_pdf=create_pdf,
             photos=photos
         )
@@ -260,12 +281,17 @@ async def process_csv_web(
                     storage.store_file(storage_key, af)
 
         # 6. Сохранение в базу данных
-        test = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+        test = existing_test_for_log
         if not test:
             test = PressureTest(log_no=norm_log)
             db.add(test)
             db.flush()
 
+        # prior_primary_rev / was_draft / prior_photo_artifacts / prior_pipe_numbers /
+        # prior_bundle_numbers / effective_pipe_numbers / effective_bundle_numbers were all
+        # already resolved above (before building TestInput), so the core pipeline's own
+        # manifest/metadata_json and the Pipe/Bundle rows below agree on the same carried-
+        # forward values.
         db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id).update({"is_primary": False})
 
         rev = TestRevision(
@@ -294,13 +320,54 @@ async def process_csv_web(
             )
             db.add(db_art)
 
-        for p in pipe_numbers:
+        for p in effective_pipe_numbers:
             db.add(Pipe(test_revision_id=rev.id, pipe_number=p))
 
-        for b in bundle_numbers:
+        for b in effective_bundle_numbers:
             db.add(Bundle(test_revision_id=rev.id, bundle_number=b))
 
+        # Carry forward the draft's photo artifacts (physical copy into this revision's own
+        # storage location, new Artifact row) — new photos submitted in this same request are
+        # unaffected and simply added alongside them.
+        carried_photo_count = 0
+        if was_draft:
+            for old_art in prior_photo_artifacts:
+                old_path = storage.get_file_path(old_art.storage_key)
+                if not old_path or not old_path.exists():
+                    continue
+                new_storage_key = f"logs/{norm_log}/revisions/{core_result.revision_id}/{old_art.relative_path}"
+                with open(old_path, "rb") as old_f:
+                    storage.store_file(new_storage_key, old_f)
+                db.add(Artifact(
+                    test_revision_id=rev.id,
+                    name=old_art.name,
+                    relative_path=old_art.relative_path,
+                    file_type=old_art.file_type,
+                    category=old_art.category,
+                    size_bytes=old_art.size_bytes,
+                    sha256=old_art.sha256,
+                    storage_key=new_storage_key,
+                ))
+                carried_photo_count += 1
+
         db.commit()
+
+        if was_draft:
+            log_audit_event(
+                db,
+                action="csv_attached_to_draft",
+                entity_type="test_revision",
+                entity_id=rev.id,
+                details={
+                    "log_no": norm_log,
+                    "draft_revision_id": prior_primary_rev.revision_id,
+                    "new_revision_id": rev.revision_id,
+                    "carried_forward_photos": carried_photo_count,
+                    "carried_forward_pipe_numbers": bool(not pipe_numbers and prior_pipe_numbers),
+                    "carried_forward_bundle_numbers": bool(not bundle_numbers and prior_bundle_numbers),
+                    "source": "web",
+                },
+            )
 
         # Возвращаем созданный тест с ревизиями
         return (

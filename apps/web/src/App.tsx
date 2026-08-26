@@ -28,6 +28,7 @@ export const App: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [selectedTest, setSelectedTest] = useState<PressureTest | null>(null);
   const [isNewTestOpen, setIsNewTestOpen] = useState<boolean>(false);
+  const [attachCsvTarget, setAttachCsvTarget] = useState<PressureTest | null>(null);
   const [isLoginOpen, setIsLoginOpen] = useState<boolean>(false);
   const [isAuditOpen, setIsAuditOpen] = useState<boolean>(false);
 
@@ -242,6 +243,10 @@ export const App: React.FC = () => {
             setSelectedTest(updated);
             loadData(searchQuery);
           }}
+          onAttachCsv={(t) => {
+            setAttachCsvTarget(t);
+            setSelectedTest(null);
+          }}
         />
       )}
 
@@ -249,6 +254,18 @@ export const App: React.FC = () => {
         <NewTestModal
           onClose={() => setIsNewTestOpen(false)}
           onSuccess={handleTestCreated}
+        />
+      )}
+
+      {attachCsvTarget && (
+        <NewTestModal
+          existingTest={attachCsvTarget}
+          onClose={() => setAttachCsvTarget(null)}
+          onSuccess={(created) => {
+            setAttachCsvTarget(null);
+            loadData(searchQuery);
+            setSelectedTest(created);
+          }}
         />
       )}
 
