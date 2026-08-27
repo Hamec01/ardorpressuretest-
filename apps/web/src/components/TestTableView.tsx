@@ -1,16 +1,112 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { PressureTest, TestRevision } from '../types';
 import { getRevisionZipUrl } from '../api';
 import { useI18n } from '../context/LanguageContext';
-import { Download, ExternalLink, User, Calendar } from 'lucide-react';
+import { Download, ExternalLink, User, Calendar, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 
 interface TestTableViewProps {
   tests: PressureTest[];
   onSelectTest: (test: PressureTest) => void;
 }
 
+type SortKey = 'log_no' | 'system' | 'pressure' | 'min_max' | 'duration' | 'pipes' | 'pipecloud' | 'operator' | 'date' | 'status';
+type SortDir = 'asc' | 'desc';
+
+// Natural/numeric-aware compare so "Log 2" sorts before "Log 10" instead of after it. `dir` only
+// flips the ordering between two real values — missing values always sort last, in both
+// directions, so reversing the sort doesn't surface "no data" rows at the top.
+function compareValues(a: string | number | null, b: string | number | null, dir: SortDir = 'asc'): number {
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  const sign = dir === 'asc' ? 1 : -1;
+  if (typeof a === 'number' && typeof b === 'number') return sign * (a - b);
+  return sign * String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+// "HH:MM:SS" / "MM:SS" -> total seconds, for a real numeric sort instead of a string compare.
+function parseDurationSeconds(formatted: string | undefined): number | null {
+  if (!formatted) return null;
+  const parts = formatted.split(':').map((p) => Number(p));
+  if (parts.some((p) => Number.isNaN(p))) return null;
+  return parts.reduce((total, p) => total * 60 + p, 0);
+}
+
+function sortValueFor(row: ReturnType<typeof buildRow>, key: SortKey): string | number | null {
+  switch (key) {
+    case 'log_no':
+      return row.test.log_no || null;
+    case 'system':
+      return row.meta.system || row.meta.project || null;
+    case 'pressure':
+      return row.meta.test_pressure || null;
+    case 'min_max':
+      return row.metrics.min_pressure_bar ?? null;
+    case 'duration':
+      return parseDurationSeconds(row.metrics.duration_formatted);
+    case 'pipes':
+      return row.pipes.length > 0 ? row.pipes.slice().sort((a, b) => compareValues(a, b))[0] : null;
+    case 'pipecloud':
+      return row.test.pipecloud_added ? 1 : 0;
+    case 'operator':
+      return row.primaryRev?.operator || null;
+    case 'date':
+      return row.createdAtMs;
+    case 'status':
+      return row.status;
+    default:
+      return null;
+  }
+}
+
+function buildRow(test: PressureTest) {
+  const primaryRev: TestRevision | undefined = test.revisions.find((r) => r.is_primary) || test.revisions[0];
+  const meta = primaryRev?.metadata_json || {};
+  const metrics = primaryRev?.metrics_json || {};
+  const pipes = meta.pipe_numbers || [];
+  const status = primaryRev?.status || 'complete';
+  const createdAtSource = primaryRev?.created_at || test.created_at;
+  const createdAtMs = new Date(createdAtSource).getTime();
+  const createdDate = new Date(createdAtSource).toLocaleDateString();
+  return { test, primaryRev, meta, metrics, pipes, status, createdAtMs, createdDate };
+}
+
 export const TestTableView: React.FC<TestTableViewProps> = ({ tests, onSelectTest }) => {
   const { t } = useI18n();
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  };
+
+  const rows = useMemo(() => {
+    const built = tests.map(buildRow);
+    if (!sortKey) return built;
+    return built.slice().sort((a, b) => compareValues(sortValueFor(a, sortKey), sortValueFor(b, sortKey), sortDir));
+  }, [tests, sortKey, sortDir]);
+
+  const SortableTh: React.FC<{ sortKeyName: SortKey; label: string; align?: 'left' | 'right' }> = ({ sortKeyName, label, align }) => {
+    const active = sortKey === sortKeyName;
+    const Icon = active ? (sortDir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+    return (
+      <th
+        onClick={() => handleSort(sortKeyName)}
+        style={{ padding: '0.85rem 1rem', cursor: 'pointer', userSelect: 'none', textAlign: align || 'left', color: active ? 'var(--text-primary)' : undefined }}
+        title={`Sort by ${label}`}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', justifyContent: align === 'right' ? 'flex-end' : 'flex-start' }}>
+          {label}
+          <Icon size={12} style={{ opacity: active ? 1 : 0.4 }} />
+        </span>
+      </th>
+    );
+  };
 
   return (
     <div style={{ background: 'var(--bg-surface)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
@@ -18,31 +114,21 @@ export const TestTableView: React.FC<TestTableViewProps> = ({ tests, onSelectTes
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
           <thead>
             <tr style={{ background: 'var(--bg-inset-60)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              <th style={{ padding: '0.85rem 1rem' }}>{t('col_log_no')}</th>
-              <th style={{ padding: '0.85rem 1rem' }}>{t('col_system_project')}</th>
-              <th style={{ padding: '0.85rem 1rem' }}>{t('col_target_p')}</th>
-              <th style={{ padding: '0.85rem 1rem' }}>{t('col_min_max')}</th>
-              <th style={{ padding: '0.85rem 1rem' }}>{t('col_duration')}</th>
-              <th style={{ padding: '0.85rem 1rem' }}>{t('col_pipes')}</th>
-              <th style={{ padding: '0.85rem 1rem' }}>{t('pipecloud_status')}</th>
-              <th style={{ padding: '0.85rem 1rem' }}>{t('col_operator')}</th>
-              <th style={{ padding: '0.85rem 1rem' }}>{t('col_date')}</th>
-              <th style={{ padding: '0.85rem 1rem' }}>{t('col_status')}</th>
+              <SortableTh sortKeyName="log_no" label={t('col_log_no')} />
+              <SortableTh sortKeyName="system" label={t('col_system_project')} />
+              <SortableTh sortKeyName="pressure" label={t('col_target_p')} />
+              <SortableTh sortKeyName="min_max" label={t('col_min_max')} />
+              <SortableTh sortKeyName="duration" label={t('col_duration')} />
+              <SortableTh sortKeyName="pipes" label={t('col_pipes')} />
+              <SortableTh sortKeyName="pipecloud" label={t('pipecloud_status')} />
+              <SortableTh sortKeyName="operator" label={t('col_operator')} />
+              <SortableTh sortKeyName="date" label={t('col_date')} />
+              <SortableTh sortKeyName="status" label={t('col_status')} />
               <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>{t('col_actions')}</th>
             </tr>
           </thead>
           <tbody>
-            {tests.map((test) => {
-              const primaryRev: TestRevision | undefined =
-                test.revisions.find((r) => r.is_primary) || test.revisions[0];
-              const meta = primaryRev?.metadata_json || {};
-              const metrics = primaryRev?.metrics_json || {};
-              const pipes = meta.pipe_numbers || [];
-              const status = primaryRev?.status || 'complete';
-              const createdDate = primaryRev?.created_at
-                ? new Date(primaryRev.created_at).toLocaleDateString()
-                : new Date(test.created_at).toLocaleDateString();
-
+            {rows.map(({ test, primaryRev, meta, metrics, pipes, status, createdDate }) => {
               return (
                 <tr
                   key={test.id}
