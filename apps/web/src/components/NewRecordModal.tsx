@@ -49,10 +49,69 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
 
   // Log Picker Modal State
   const [isLogPickerOpen, setIsLogPickerOpen] = useState<boolean>(false);
+  const [isPipePickerOpen, setIsPipePickerOpen] = useState<boolean>(false);
   const [availableTests, setAvailableTests] = useState<PressureTest[]>([]);
   const [logSearch, setLogSearch] = useState<string>('');
+  const [pipeInput, setPipeInput] = useState<string>('');
   const [isLoadingTests, setIsLoadingTests] = useState<boolean>(false);
   const [selectedPickerLogs, setSelectedPickerLogs] = useState<string[]>([]);
+
+  const availablePipeNumbers = Array.from(new Set(
+    attachedLogs.flatMap((log) => log.selected_pipe_numbers || [])
+      .concat(items.map((it) => it.pipe_number).filter(Boolean))
+  )).filter(Boolean);
+
+  const normalizePipeList = (raw: string) => {
+    return Array.from(new Set(
+      raw
+        .split(/[\n,;]+/)
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .map((part) => part.replace(/^bundle[:\s-]+/i, '').replace(/\s+/g, ''))
+        .filter((part) => part.length > 0)
+    ));
+  };
+
+  const addPipesFromInput = (raw: string) => {
+    const pipeList = normalizePipeList(raw);
+    if (pipeList.length === 0) {
+      return;
+    }
+
+    const existingNumbers = new Set(items.map((it) => it.pipe_number.trim()));
+    const nextItems: RecordItem[] = [];
+
+    pipeList.forEach((pipeNumber) => {
+      const trimmed = pipeNumber.trim();
+      if (!trimmed || existingNumbers.has(trimmed)) {
+        return;
+      }
+
+      const connectedLog = attachedLogs.find((log) => (log.selected_pipe_numbers || []).includes(trimmed));
+      const newItem: RecordItem = {
+        item_no: items.length + nextItems.length + 1,
+        drawing_no: 'DWG-001',
+        spool_no: 'SP-01',
+        pipe_number: trimmed,
+        log_no: connectedLog?.log_no || attachedLogs[0]?.log_no || 'AUTO',
+        hold_start_bar: testPressure,
+        hold_end_bar: testPressure,
+        result: 'PASS',
+        notes: durationMin
+      };
+
+      nextItems.push(newItem);
+      existingNumbers.add(trimmed);
+    });
+
+    if (nextItems.length === 0) {
+      return;
+    }
+
+    setItems((prev) => [...prev, ...nextItems]);
+    setPipeInput('');
+    setIsPipePickerOpen(false);
+  };
 
   // Form submission state
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -346,7 +405,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
 
   return (
     <>
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal-content" style={{ maxWidth: '1080px', width: '95vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
           
           {/* Modal Header */}
@@ -524,15 +583,27 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setIsLogPickerOpen(true)}
-                  className="btn-primary"
-                  style={{ background: 'var(--accent-cyan)', color: '#0F172A', fontWeight: 700, padding: '0.45rem 1rem', fontSize: '0.85rem' }}
-                >
-                  <Plus size={16} />
-                  <span>Добавить лог испытания</span>
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsLogPickerOpen(true)}
+                    className="btn-primary"
+                    style={{ background: 'var(--accent-cyan)', color: '#0F172A', fontWeight: 700, padding: '0.45rem 1rem', fontSize: '0.85rem' }}
+                  >
+                    <Plus size={16} />
+                    <span>{t('btn_add_log')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsPipePickerOpen(true)}
+                    className="btn-primary"
+                    style={{ background: 'var(--accent-amber)', color: '#0F172A', fontWeight: 700, padding: '0.45rem 1rem', fontSize: '0.85rem' }}
+                  >
+                    <Plus size={16} />
+                    <span>{t('btn_add_pipes')}</span>
+                  </button>
+                </div>
               </div>
 
               {attachedLogs.length === 0 ? (
@@ -704,7 +775,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                   style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.35rem 0.8rem', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                 >
                   <Plus size={14} />
-                  <span>Добавить строку</span>
+                  <span>{t('pipe_add_row')}</span>
                 </button>
               </div>
 
@@ -871,8 +942,74 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       </div>
 
       {/* LOG SEARCH & PICKER MODAL */}
+      {isPipePickerOpen && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content" style={{ maxWidth: '760px', width: '88vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Table size={18} color="var(--accent-amber)" />
+                <span style={{ fontWeight: 800, fontSize: '1.1rem' }}>{t('pipe_modal_title')}</span>
+              </div>
+              <button type="button" onClick={() => setIsPipePickerOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                <span>{t('pipe_input_label')}</span>
+                <textarea
+                  value={pipeInput}
+                  onChange={(e) => setPipeInput(e.target.value)}
+                  rows={5}
+                  placeholder={t('pipe_input_placeholder')}
+                  style={{ width: '100%', minHeight: '110px', resize: 'vertical', background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '0.7rem 0.8rem' }}
+                />
+              </label>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{t('pipe_modal_hint')}</div>
+                <button
+                  type="button"
+                  onClick={() => addPipesFromInput(pipeInput)}
+                  className="btn-primary"
+                  style={{ background: 'var(--accent-amber)', color: '#0F172A', fontWeight: 700, padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
+                >
+                  <Plus size={14} />
+                  <span>{t('btn_add_bundle')}</span>
+                </button>
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.9rem' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {t('pipe_list_title')}
+                </div>
+
+                {availablePipeNumbers.length === 0 ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{t('pipe_no_match')}</div>
+                ) : (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                    {availablePipeNumbers.map((pipeNumber) => (
+                      <button
+                        key={pipeNumber}
+                        type="button"
+                        onClick={() => setPipeInput((prev) => prev ? `${prev}\n${pipeNumber}` : pipeNumber)}
+                        className="tag-pipe"
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {pipeNumber}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isLogPickerOpen && (
-        <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={() => setIsLogPickerOpen(false)}>
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
           <div className="modal-content" style={{ maxWidth: '820px', width: '90vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
