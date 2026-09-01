@@ -24,6 +24,91 @@ from wika_report.models import normalize_log_no
 router = APIRouter(prefix="/api/v1/tests", tags=["Pressure Tests"])
 
 
+class PtrSourceResolveRequest(BaseModel):
+    identifiers: List[str]
+
+
+def _normalize_ptr_identifier(value: str) -> str:
+    return "".join(value.strip().split()).casefold()
+
+
+@router.post("/resolve-ptr-sources")
+def resolve_ptr_sources(payload: PtrSourceResolveRequest, db: Session = Depends(get_db)):
+    """Find log revisions by an exact pipe or bundle number without changing source data."""
+    requested = {
+        _normalize_ptr_identifier(identifier)
+        for identifier in payload.identifiers
+        if isinstance(identifier, str) and identifier.strip()
+    }
+    if not requested:
+        return {"matches": [], "unmatched_identifiers": []}
+
+    revisions = (
+        db.query(TestRevision)
+        .join(PressureTest)
+        .options(
+            joinedload(TestRevision.pressure_test),
+            joinedload(TestRevision.artifacts),
+            joinedload(TestRevision.pipes),
+            joinedload(TestRevision.bundles),
+        )
+        .filter(PressureTest.is_archived == False)
+        .all()
+    )
+
+    matched_identifiers = set()
+    matches = []
+    for revision in revisions:
+        pipe_numbers = [pipe.pipe_number for pipe in revision.pipes]
+        bundle_numbers = [bundle.bundle_number for bundle in revision.bundles]
+        matched_pipes = [
+            pipe_number for pipe_number in pipe_numbers
+            if _normalize_ptr_identifier(pipe_number) in requested
+        ]
+        matched_bundles = [
+            bundle_number for bundle_number in bundle_numbers
+            if _normalize_ptr_identifier(bundle_number) in requested
+        ]
+        if not matched_pipes and not matched_bundles:
+            continue
+
+        matched_identifiers.update(_normalize_ptr_identifier(value) for value in matched_pipes + matched_bundles)
+        selected_pipes = pipe_numbers if matched_bundles else matched_pipes
+        matches.append({
+            "pressure_test_id": revision.pressure_test_id,
+            "test_revision_id": revision.id,
+            "log_no": revision.pressure_test.log_no,
+            "revision_id": revision.revision_id,
+            "operator": revision.operator,
+            "metadata": revision.metadata_json,
+            "metrics": revision.metrics_json,
+            "pipecloud_added": revision.pressure_test.pipecloud_added,
+            "selected_pipe_numbers": selected_pipes,
+            "matched_bundles": matched_bundles,
+            "artifacts": [
+                {
+                    "artifact_id": artifact.id,
+                    "source": "log_artifact",
+                    "category": artifact.category or "other",
+                    "name": artifact.name,
+                    "storage_key": artifact.relative_path,
+                    "sha256": artifact.sha256,
+                    "position": position,
+                    "is_included_in_pdf": True,
+                }
+                for position, artifact in enumerate(revision.artifacts)
+            ],
+        })
+
+    return {
+        "matches": matches,
+        "unmatched_identifiers": [
+            identifier for identifier in payload.identifiers
+            if _normalize_ptr_identifier(identifier) not in matched_identifiers
+        ],
+    }
+
+
 def purge_test_revisions(test: PressureTest, db: Session) -> None:
     revisions = db.query(TestRevision).filter(TestRevision.pressure_test_id == test.id).all()
     for revision in revisions:

@@ -16,7 +16,7 @@ import {
   FileText
 } from 'lucide-react';
 import { PressureTest, PressureTestRecord, RecordItem, RecordLog, RecordLogArtifact, TestRevision } from '../types';
-import { fetchPressureTests, getArtifactFileUrl } from '../api';
+import { fetchPressureTests, getArtifactFileUrl, resolvePtrSources } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/LanguageContext';
 
@@ -53,6 +53,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
   const [availableTests, setAvailableTests] = useState<PressureTest[]>([]);
   const [logSearch, setLogSearch] = useState<string>('');
   const [pipeInput, setPipeInput] = useState<string>('');
+  const [isResolvingPipes, setIsResolvingPipes] = useState<boolean>(false);
   const [isLoadingTests, setIsLoadingTests] = useState<boolean>(false);
   const [selectedPickerLogs, setSelectedPickerLogs] = useState<string[]>([]);
 
@@ -72,45 +73,79 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
     ));
   };
 
-  const addPipesFromInput = (raw: string) => {
+  const addPipesFromInput = async (raw: string) => {
     const pipeList = normalizePipeList(raw);
     if (pipeList.length === 0) {
       return;
     }
 
-    const existingNumbers = new Set(items.map((it) => it.pipe_number.trim()));
-    const nextItems: RecordItem[] = [];
+    try {
+      setIsResolvingPipes(true);
+      setErrorMsg(null);
+      const resolution = await resolvePtrSources(pipeList);
+      const sourceByPipe = new Map<string, typeof resolution.matches[number]>();
+      resolution.matches.forEach((source) => {
+        source.selected_pipe_numbers.forEach((pipeNumber) => sourceByPipe.set(pipeNumber.trim(), source));
+      });
 
-    pipeList.forEach((pipeNumber) => {
-      const trimmed = pipeNumber.trim();
-      if (!trimmed || existingNumbers.has(trimmed)) {
-        return;
+      setAttachedLogs((previousLogs) => {
+        const existingKeys = new Set(previousLogs.map((log) => `${log.pressure_test_id}:${log.test_revision_id}`));
+        const additions = resolution.matches
+          .filter((source) => !existingKeys.has(`${source.pressure_test_id}:${source.test_revision_id}`))
+          .map((source, index): RecordLog => ({
+            pressure_test_id: source.pressure_test_id,
+            test_revision_id: source.test_revision_id,
+            log_no: source.log_no,
+            position: previousLogs.length + index,
+            include_measurement_table: true,
+            selected_pipe_numbers: source.selected_pipe_numbers,
+            metadata_snapshot: {
+              log_no: source.log_no,
+              revision_id: source.revision_id,
+              operator: source.operator,
+              ...source.metadata,
+              ...source.metrics,
+              pipecloud_added: source.pipecloud_added,
+            },
+            artifacts: source.artifacts,
+          }));
+        return [...previousLogs, ...additions];
+      });
+
+      setItems((previousItems) => {
+        const existingNumbers = new Set(previousItems.map((item) => item.pipe_number.trim()));
+        const additions: RecordItem[] = [];
+        sourceByPipe.forEach((source, pipeNumber) => {
+          if (existingNumbers.has(pipeNumber)) return;
+          additions.push({
+            item_no: previousItems.length + additions.length + 1,
+            drawing_no: `DWG-${source.log_no}`,
+            spool_no: 'SP-01',
+            pipe_number: pipeNumber,
+            log_no: source.log_no,
+            hold_start_bar: source.metrics.min_pressure_bar != null ? `${source.metrics.min_pressure_bar} bar` : (source.metadata.test_pressure || testPressure),
+            hold_end_bar: source.metrics.max_pressure_bar != null ? `${source.metrics.max_pressure_bar} bar` : (source.metadata.test_pressure || testPressure),
+            result: source.metrics.evaluation_status === 'FAIL' ? 'FAIL' : 'PASS',
+            notes: durationMin,
+          });
+          existingNumbers.add(pipeNumber);
+        });
+        return [...previousItems, ...additions];
+      });
+
+      if (resolution.unmatched_identifiers.length > 0) {
+        setErrorMsg(`${t('pipe_not_found')}: ${resolution.unmatched_identifiers.join(', ')}`);
       }
-
-      const connectedLog = attachedLogs.find((log) => (log.selected_pipe_numbers || []).includes(trimmed));
-      const newItem: RecordItem = {
-        item_no: items.length + nextItems.length + 1,
-        drawing_no: 'DWG-001',
-        spool_no: 'SP-01',
-        pipe_number: trimmed,
-        log_no: connectedLog?.log_no || attachedLogs[0]?.log_no || 'AUTO',
-        hold_start_bar: testPressure,
-        hold_end_bar: testPressure,
-        result: 'PASS',
-        notes: durationMin
-      };
-
-      nextItems.push(newItem);
-      existingNumbers.add(trimmed);
-    });
-
-    if (nextItems.length === 0) {
-      return;
+      if (resolution.matches.length > 0) {
+        setPipeInput('');
+        setIsPipePickerOpen(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(t('pipe_resolve_error'));
+    } finally {
+      setIsResolvingPipes(false);
     }
-
-    setItems((prev) => [...prev, ...nextItems]);
-    setPipeInput('');
-    setIsPipePickerOpen(false);
   };
 
   // Form submission state
@@ -972,11 +1007,12 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                 <button
                   type="button"
                   onClick={() => addPipesFromInput(pipeInput)}
+                  disabled={isResolvingPipes}
                   className="btn-primary"
                   style={{ background: 'var(--accent-amber)', color: '#0F172A', fontWeight: 700, padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
                 >
                   <Plus size={14} />
-                  <span>{t('btn_add_bundle')}</span>
+                  <span>{isResolvingPipes ? t('pipe_resolving') : t('btn_add_bundle')}</span>
                 </button>
               </div>
 

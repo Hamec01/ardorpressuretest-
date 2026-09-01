@@ -25,6 +25,9 @@ export const translations = {
     pipe_list_title: 'Known pipes in current logs',
     pipe_add_row: 'Add row',
     pipe_no_match: 'No available pipes found in the current session',
+    pipe_resolving: 'Finding logs...',
+    pipe_not_found: 'No matching pipe or bundle found',
+    pipe_resolve_error: 'Could not find pipe sources. Please try again.',
 
     // Search & Filter
     search_placeholder: 'Search by Log No (e.g. 014FED), Pipe/Bundle (122153/41), Project or Operator...',
@@ -131,6 +134,9 @@ export const translations = {
     pipe_list_title: 'Tunnetut putket nykyisissä logeissa',
     pipe_add_row: 'Lisää rivi',
     pipe_no_match: 'Yhtään putkea ei löytynyt nykyisestä istunnosta',
+    pipe_resolving: 'Haetaan lokeja...',
+    pipe_not_found: 'Vastaavaa putkea tai pakettia ei löytynyt',
+    pipe_resolve_error: 'Putkilähteitä ei voitu hakea. Yritä uudelleen.',
 
     // Search & Filter
     search_placeholder: 'Hae lokinumerolla (esim. 014FED), putkella (122153/41), projektilla tai testaajalla...',
@@ -237,6 +243,9 @@ export const translations = {
     pipe_list_title: 'Известные трубы в текущих логах',
     pipe_add_row: 'Добавить строку',
     pipe_no_match: 'В текущей сессии трубы не найдены',
+    pipe_resolving: 'Ищем логи...',
+    pipe_not_found: 'Труба или bundle не найдены',
+    pipe_resolve_error: 'Не удалось найти источники труб. Повторите попытку.',
 
     // Search & Filter
     search_placeholder: 'Поиск по номеру лога (014FED), трубе/связке (122153/41), проекту или оператору...',

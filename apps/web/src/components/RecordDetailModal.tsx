@@ -126,7 +126,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
 
   return (
     <>
-      <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-overlay">
         <div className="modal-content" style={{ maxWidth: '1020px', width: '95vw' }} onClick={(e) => e.stopPropagation()}>
           {/* Header */}
           <div className="modal-header">

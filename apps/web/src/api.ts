@@ -1,6 +1,29 @@
-import { PressureTest, PressureTestRecord } from './types';
+import { PressureTest, PressureTestRecord, RecordLogArtifact, TestRevision } from './types';
 
 const API_BASE = '/api/v1';
+
+export interface ResolvedPtrSource {
+  pressure_test_id: string;
+  test_revision_id: string;
+  log_no: string;
+  revision_id: string;
+  operator: string;
+  metadata: TestRevision['metadata_json'];
+  metrics: TestRevision['metrics_json'];
+  pipecloud_added: boolean;
+  selected_pipe_numbers: string[];
+  artifacts: RecordLogArtifact[];
+}
+
+export async function resolvePtrSources(identifiers: string[]): Promise<{ matches: ResolvedPtrSource[]; unmatched_identifiers: string[] }> {
+  const res = await fetch(`${API_BASE}/tests/resolve-ptr-sources`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifiers }),
+  });
+  if (!res.ok) throw new Error(`Failed to resolve PTR sources (${res.status})`);
+  return res.json();
+}
 
 export async function fetchPressureTests(query?: string, pipecloudFilter?: string): Promise<PressureTest[]> {
   const params = new URLSearchParams();

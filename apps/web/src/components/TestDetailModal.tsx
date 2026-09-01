@@ -326,7 +326,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div className="modal-content" style={{ maxWidth: '960px', width: '92vw' }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="modal-header">
