@@ -52,7 +52,10 @@ def resolve_ptr_sources(payload: PtrSourceResolveRequest, db: Session = Depends(
             joinedload(TestRevision.pipes),
             joinedload(TestRevision.bundles),
         )
-        .filter(PressureTest.is_archived == False)
+        .filter(
+            PressureTest.is_archived == False,
+            TestRevision.is_primary == True,
+        )
         .all()
     )
 
