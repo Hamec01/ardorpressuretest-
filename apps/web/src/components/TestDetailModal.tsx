@@ -327,7 +327,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content" style={{ maxWidth: '960px', width: '92vw' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" style={{ maxWidth: '960px', width: '92vw', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="modal-header">
           <div>
@@ -439,11 +439,19 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                 <span>ZIP Package</span>
               </a>
             )}
-            <button className="modal-close-btn" onClick={onClose}>
-              <X size={22} />
-            </button>
           </div>
         </div>
+
+        <button
+          type="button"
+          className="modal-close-btn"
+          onClick={onClose}
+          title={t('modal_close')}
+          aria-label={t('modal_close')}
+          style={{ position: 'absolute', top: '0.8rem', right: '0.8rem', zIndex: 2 }}
+        >
+          <X size={22} />
+        </button>
 
         {/* Body */}
         <div className="modal-body">
