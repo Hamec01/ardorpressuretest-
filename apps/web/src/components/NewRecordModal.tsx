@@ -56,6 +56,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
   const [isResolvingPipes, setIsResolvingPipes] = useState<boolean>(false);
   const [availablePipeNumbers, setAvailablePipeNumbers] = useState<string[]>([]);
   const [availableBundleNumbers, setAvailableBundleNumbers] = useState<string[]>([]);
+  const [selectedSourceIdentifiers, setSelectedSourceIdentifiers] = useState<string[]>([]);
   const [isLoadingTests, setIsLoadingTests] = useState<boolean>(false);
   const [selectedPickerLogs, setSelectedPickerLogs] = useState<string[]>([]);
 
@@ -67,6 +68,14 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
         .filter(Boolean)
         .map((part) => part.replace(/^bundle[:\s-]+/i, '').replace(/\s+/g, ''))
         .filter((part) => part.length > 0)
+    ));
+  };
+
+  const toggleSourceIdentifier = (identifier: string) => {
+    setSelectedSourceIdentifiers((selected) => (
+      selected.includes(identifier)
+        ? selected.filter((value) => value !== identifier)
+        : [...selected, identifier]
     ));
   };
 
@@ -135,6 +144,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       }
       if (resolution.matches.length > 0) {
         setPipeInput('');
+        setSelectedSourceIdentifiers([]);
         setIsPipePickerOpen(false);
       }
     } catch (err) {
@@ -1016,13 +1026,13 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{t('pipe_modal_hint')}</div>
                 <button
                   type="button"
-                  onClick={() => addPipesFromInput(pipeInput)}
+                  onClick={() => addPipesFromInput([pipeInput, ...selectedSourceIdentifiers].filter(Boolean).join('\n'))}
                   disabled={isResolvingPipes}
                   className="btn-primary"
                   style={{ background: 'var(--accent-amber)', color: '#0F172A', fontWeight: 700, padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
                 >
                   <Plus size={14} />
-                  <span>{isResolvingPipes ? t('pipe_resolving') : t('btn_add_bundle')}</span>
+                  <span>{isResolvingPipes ? t('pipe_resolving') : t('btn_add_selected')}</span>
                 </button>
               </div>
 
@@ -1035,28 +1045,46 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                   <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{t('pipe_no_match')}</div>
                 ) : (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                    {availablePipeNumbers.map((pipeNumber) => (
-                      <button
-                        key={pipeNumber}
-                        type="button"
-                        onClick={() => setPipeInput((prev) => prev ? `${prev}\n${pipeNumber}` : pipeNumber)}
-                        className="tag-pipe"
-                        style={{ cursor: 'pointer' }}
-                      >
-                        {pipeNumber}
-                      </button>
-                    ))}
-                    {availableBundleNumbers.map((bundleNumber) => (
-                      <button
-                        key={`bundle-${bundleNumber}`}
-                        type="button"
-                        onClick={() => setPipeInput((prev) => prev ? `${prev}\n${bundleNumber}` : bundleNumber)}
-                        className="tag-pipe"
-                        style={{ cursor: 'pointer', borderColor: 'var(--accent-violet)', color: 'var(--accent-violet)' }}
-                      >
-                        Bundle {bundleNumber}
-                      </button>
-                    ))}
+                    {availablePipeNumbers.map((pipeNumber) => {
+                      const isSelected = selectedSourceIdentifiers.includes(pipeNumber);
+                      return (
+                        <button
+                          key={pipeNumber}
+                          type="button"
+                          onClick={() => toggleSourceIdentifier(pipeNumber)}
+                          className="tag-pipe"
+                          aria-pressed={isSelected}
+                          style={{
+                            cursor: 'pointer',
+                            background: isSelected ? 'rgba(16, 185, 129, 0.16)' : undefined,
+                            borderColor: isSelected ? 'var(--accent-emerald)' : undefined,
+                            color: isSelected ? 'var(--accent-emerald)' : undefined,
+                          }}
+                        >
+                          {pipeNumber}
+                        </button>
+                      );
+                    })}
+                    {availableBundleNumbers.map((bundleNumber) => {
+                      const isSelected = selectedSourceIdentifiers.includes(bundleNumber);
+                      return (
+                        <button
+                          key={`bundle-${bundleNumber}`}
+                          type="button"
+                          onClick={() => toggleSourceIdentifier(bundleNumber)}
+                          className="tag-pipe"
+                          aria-pressed={isSelected}
+                          style={{
+                            cursor: 'pointer',
+                            background: isSelected ? 'rgba(16, 185, 129, 0.16)' : undefined,
+                            borderColor: isSelected ? 'var(--accent-emerald)' : 'var(--accent-violet)',
+                            color: isSelected ? 'var(--accent-emerald)' : 'var(--accent-violet)',
+                          }}
+                        >
+                          Bundle {bundleNumber}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
