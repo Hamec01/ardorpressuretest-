@@ -32,6 +32,44 @@ def _normalize_ptr_identifier(value: str) -> str:
     return "".join(value.strip().split()).casefold()
 
 
+@router.get("/ptr-source-identifiers")
+def list_ptr_source_identifiers(
+    q: str = "",
+    limit: int = 50,
+    db: Session = Depends(get_db),
+):
+    """List pipe and bundle identifiers available for a PTR from active primary revisions."""
+    search = f"%{q.strip()}%"
+    base_filters = (
+        PressureTest.is_archived == False,
+        TestRevision.is_primary == True,
+    )
+    pipes = (
+        db.query(Pipe.pipe_number)
+        .join(TestRevision, Pipe.test_revision_id == TestRevision.id)
+        .join(PressureTest, TestRevision.pressure_test_id == PressureTest.id)
+        .filter(*base_filters, Pipe.pipe_number.ilike(search))
+        .distinct()
+        .order_by(Pipe.pipe_number)
+        .limit(limit)
+        .all()
+    )
+    bundles = (
+        db.query(Bundle.bundle_number)
+        .join(TestRevision, Bundle.test_revision_id == TestRevision.id)
+        .join(PressureTest, TestRevision.pressure_test_id == PressureTest.id)
+        .filter(*base_filters, Bundle.bundle_number.ilike(search))
+        .distinct()
+        .order_by(Bundle.bundle_number)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "pipes": [pipe_number for (pipe_number,) in pipes],
+        "bundles": [bundle_number for (bundle_number,) in bundles],
+    }
+
+
 @router.post("/resolve-ptr-sources")
 def resolve_ptr_sources(payload: PtrSourceResolveRequest, db: Session = Depends(get_db)):
     """Find log revisions by an exact pipe or bundle number without changing source data."""

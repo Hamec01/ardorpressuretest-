@@ -25,6 +25,12 @@ export async function resolvePtrSources(identifiers: string[]): Promise<{ matche
   return res.json();
 }
 
+export async function fetchPtrSourceIdentifiers(query = ''): Promise<{ pipes: string[]; bundles: string[] }> {
+  const res = await fetch(`${API_BASE}/tests/ptr-source-identifiers?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error(`Failed to load PTR source identifiers (${res.status})`);
+  return res.json();
+}
+
 export async function fetchPressureTests(query?: string, pipecloudFilter?: string): Promise<PressureTest[]> {
   const params = new URLSearchParams();
   if (query && query.trim()) params.append('q', query.trim());

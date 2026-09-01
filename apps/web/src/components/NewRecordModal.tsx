@@ -16,7 +16,7 @@ import {
   FileText
 } from 'lucide-react';
 import { PressureTest, PressureTestRecord, RecordItem, RecordLog, RecordLogArtifact, TestRevision } from '../types';
-import { fetchPressureTests, getArtifactFileUrl, resolvePtrSources } from '../api';
+import { fetchPressureTests, fetchPtrSourceIdentifiers, getArtifactFileUrl, resolvePtrSources } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/LanguageContext';
 
@@ -54,13 +54,10 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
   const [logSearch, setLogSearch] = useState<string>('');
   const [pipeInput, setPipeInput] = useState<string>('');
   const [isResolvingPipes, setIsResolvingPipes] = useState<boolean>(false);
+  const [availablePipeNumbers, setAvailablePipeNumbers] = useState<string[]>([]);
+  const [availableBundleNumbers, setAvailableBundleNumbers] = useState<string[]>([]);
   const [isLoadingTests, setIsLoadingTests] = useState<boolean>(false);
   const [selectedPickerLogs, setSelectedPickerLogs] = useState<string[]>([]);
-
-  const availablePipeNumbers = Array.from(new Set(
-    attachedLogs.flatMap((log) => log.selected_pipe_numbers || [])
-      .concat(items.map((it) => it.pipe_number).filter(Boolean))
-  )).filter(Boolean);
 
   const normalizePipeList = (raw: string) => {
     return Array.from(new Set(
@@ -173,6 +170,19 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       return () => clearTimeout(timer);
     }
   }, [isLogPickerOpen, logSearch]);
+
+  useEffect(() => {
+    if (!isPipePickerOpen) return;
+    const timer = setTimeout(() => {
+      fetchPtrSourceIdentifiers(pipeInput.trim())
+        .then((sources) => {
+          setAvailablePipeNumbers(sources.pipes);
+          setAvailableBundleNumbers(sources.bundles);
+        })
+        .catch((err) => console.error(err));
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [isPipePickerOpen, pipeInput]);
 
   // Handle adding a log from picker into PTR
   const handleSelectTest = (test: PressureTest, selectedRev?: TestRevision) => {
@@ -1021,7 +1031,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                   {t('pipe_list_title')}
                 </div>
 
-                {availablePipeNumbers.length === 0 ? (
+                {availablePipeNumbers.length === 0 && availableBundleNumbers.length === 0 ? (
                   <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{t('pipe_no_match')}</div>
                 ) : (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
@@ -1034,6 +1044,17 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                         style={{ cursor: 'pointer' }}
                       >
                         {pipeNumber}
+                      </button>
+                    ))}
+                    {availableBundleNumbers.map((bundleNumber) => (
+                      <button
+                        key={`bundle-${bundleNumber}`}
+                        type="button"
+                        onClick={() => setPipeInput((prev) => prev ? `${prev}\n${bundleNumber}` : bundleNumber)}
+                        className="tag-pipe"
+                        style={{ cursor: 'pointer', borderColor: 'var(--accent-violet)', color: 'var(--accent-violet)' }}
+                      >
+                        Bundle {bundleNumber}
                       </button>
                     ))}
                   </div>
