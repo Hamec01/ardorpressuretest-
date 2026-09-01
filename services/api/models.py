@@ -133,6 +133,7 @@ class PressureTestRecord(Base):
     qc_inspector = Column(String(128), nullable=True)
     client_surveyor = Column(String(128), nullable=True)
     notes = Column(Text, nullable=True)
+    custom_fields = Column(JSON, default=list, nullable=False)
     
     # Электронная верификация и подписи
     verification_code = Column(String(64), unique=True, index=True, nullable=True)

@@ -28,6 +28,14 @@ export const translations = {
     pipe_resolving: 'Finding logs...',
     pipe_not_found: 'No matching pipe or bundle found',
     pipe_resolve_error: 'Could not find pipe sources. Please try again.',
+    custom_fields_title: 'Additional customer fields',
+    custom_fields_hint: 'Optional fields are included in the PDF report.',
+    custom_fields_add: 'Add field',
+    custom_fields_label: 'Field name',
+    custom_fields_value: 'Value',
+    custom_fields_label_placeholder: 'e.g. Contract No.',
+    custom_fields_value_placeholder: 'Enter value',
+    custom_fields_remove: 'Remove field',
 
     // Search & Filter
     search_placeholder: 'Search by Log No (e.g. 014FED), Pipe/Bundle (122153/41), Project or Operator...',
@@ -137,6 +145,14 @@ export const translations = {
     pipe_resolving: 'Haetaan lokeja...',
     pipe_not_found: 'Vastaavaa putkea tai pakettia ei löytynyt',
     pipe_resolve_error: 'Putkilähteitä ei voitu hakea. Yritä uudelleen.',
+    custom_fields_title: 'Asiakkaan lisäkentät',
+    custom_fields_hint: 'Valinnaiset kentät lisätään PDF-raporttiin.',
+    custom_fields_add: 'Lisää kenttä',
+    custom_fields_label: 'Kentän nimi',
+    custom_fields_value: 'Arvo',
+    custom_fields_label_placeholder: 'esim. Sopimusnumero',
+    custom_fields_value_placeholder: 'Anna arvo',
+    custom_fields_remove: 'Poista kenttä',
 
     // Search & Filter
     search_placeholder: 'Hae lokinumerolla (esim. 014FED), putkella (122153/41), projektilla tai testaajalla...',
@@ -246,6 +262,14 @@ export const translations = {
     pipe_resolving: 'Ищем логи...',
     pipe_not_found: 'Труба или bundle не найдены',
     pipe_resolve_error: 'Не удалось найти источники труб. Повторите попытку.',
+    custom_fields_title: 'Дополнительные поля заказчика',
+    custom_fields_hint: 'Необязательные поля будут добавлены в PDF-рапорт.',
+    custom_fields_add: 'Добавить поле',
+    custom_fields_label: 'Название поля',
+    custom_fields_value: 'Значение',
+    custom_fields_label_placeholder: 'например: № договора',
+    custom_fields_value_placeholder: 'Введите значение',
+    custom_fields_remove: 'Удалить поле',
 
     // Search & Filter
     search_placeholder: 'Поиск по номеру лога (014FED), трубе/связке (122153/41), проекту или оператору...',

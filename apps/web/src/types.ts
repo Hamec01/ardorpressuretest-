@@ -77,6 +77,11 @@ export interface RecordLogArtifact {
   created_at?: string;
 }
 
+export interface RecordCustomField {
+  label: string;
+  value: string;
+}
+
 export interface RecordLog {
   id?: string;
   pressure_test_id: string;
@@ -106,6 +111,7 @@ export interface PressureTestRecord {
   qc_inspector?: string | null;
   client_surveyor?: string | null;
   notes?: string | null;
+  custom_fields?: RecordCustomField[];
   
   // Verification & Signatures
   verification_code?: string | null;

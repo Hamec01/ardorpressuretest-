@@ -15,7 +15,7 @@ import {
   Camera,
   FileText
 } from 'lucide-react';
-import { PressureTest, PressureTestRecord, RecordItem, RecordLog, RecordLogArtifact, TestRevision } from '../types';
+import { PressureTest, PressureTestRecord, RecordCustomField, RecordItem, RecordLog, RecordLogArtifact, TestRevision } from '../types';
 import { fetchPressureTests, fetchPtrSourceIdentifiers, getArtifactFileUrl, resolvePtrSources } from '../api';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/LanguageContext';
@@ -40,6 +40,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
   const [durationMin] = useState<string>('60 min');
   const [foremanName, setForemanName] = useState<string>('Foreman');
   const [notes, setNotes] = useState<string>('Hold test completed according to ARDOR quality procedures. No pressure drop detected.');
+  const [customFields, setCustomFields] = useState<RecordCustomField[]>([]);
 
   // Attached Logs (Composite PTR logs)
   const [attachedLogs, setAttachedLogs] = useState<RecordLog[]>([]);
@@ -350,6 +351,20 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
     setItems(updated);
   };
 
+  const addCustomField = () => {
+    setCustomFields((fields) => [...fields, { label: '', value: '' }]);
+  };
+
+  const updateCustomField = (index: number, field: keyof RecordCustomField, value: string) => {
+    setCustomFields((fields) => fields.map((customField, currentIndex) => (
+      currentIndex === index ? { ...customField, [field]: value } : customField
+    )));
+  };
+
+  const removeCustomField = (index: number) => {
+    setCustomFields((fields) => fields.filter((_, currentIndex) => currentIndex !== index));
+  };
+
   // Page count estimation calculation
   const officialPages = 1 + Math.ceil(Math.max(0, items.length - 7) / 14);
   let compositePages = officialPages;
@@ -401,6 +416,9 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
         qc_inspector: 'Quality Inspector',
         client_surveyor: 'Witnessed / Reviewed',
         notes: notes,
+        custom_fields: customFields
+          .map((field) => ({ label: field.label.trim(), value: field.value.trim() }))
+          .filter((field) => field.label || field.value),
         items: items.map(it => ({
           item_no: it.item_no,
           pipe_number: it.pipe_number,
@@ -622,6 +640,53 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                   onChange={(e) => setNotes(e.target.value)}
                   style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem' }}
                 />
+              </div>
+
+              <div style={{ marginTop: '1rem', paddingTop: '0.9rem', borderTop: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: customFields.length > 0 ? '0.7rem' : 0 }}>
+                  <div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 700 }}>{t('custom_fields_title')}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{t('custom_fields_hint')}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addCustomField}
+                    style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.35rem 0.7rem', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', flexShrink: 0 }}
+                  >
+                    <Plus size={14} />
+                    <span>{t('custom_fields_add')}</span>
+                  </button>
+                </div>
+
+                {customFields.map((field, index) => (
+                  <div key={index} style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 1fr) minmax(200px, 2fr) 32px', gap: '0.55rem', alignItems: 'end', marginTop: '0.55rem' }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      {t('custom_fields_label')}
+                      <input
+                        type="text"
+                        value={field.label}
+                        onChange={(event) => updateCustomField(index, 'label', event.target.value)}
+                        placeholder={t('custom_fields_label_placeholder')}
+                        className="search-input"
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem' }}
+                      />
+                    </label>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      {t('custom_fields_value')}
+                      <input
+                        type="text"
+                        value={field.value}
+                        onChange={(event) => updateCustomField(index, 'value', event.target.value)}
+                        placeholder={t('custom_fields_value_placeholder')}
+                        className="search-input"
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem' }}
+                      />
+                    </label>
+                    <button type="button" onClick={() => removeCustomField(index)} title={t('custom_fields_remove')} style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--accent-rose)', padding: '0.45rem', borderRadius: 'var(--radius-sm)', cursor: 'pointer', height: '34px' }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
 

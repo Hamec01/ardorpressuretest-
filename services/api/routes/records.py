@@ -110,6 +110,11 @@ class RecordLogResponse(BaseModel):
     artifacts: List[RecordLogArtifactResponse] = []
 
 
+class RecordCustomField(BaseModel):
+    label: str
+    value: str
+
+
 class RecordCreateRequest(BaseModel):
     record_number: str
     project: str = "ARDOR Project"
@@ -124,6 +129,7 @@ class RecordCreateRequest(BaseModel):
     qc_inspector: Optional[str] = None
     client_surveyor: Optional[str] = None
     notes: Optional[str] = None
+    custom_fields: List[RecordCustomField] = []
     items: List[RecordItemCreate] = []
     logs: List[RecordLogCreate] = []
 
@@ -142,6 +148,7 @@ class RecordUpdateRequest(BaseModel):
     qc_inspector: Optional[str] = None
     client_surveyor: Optional[str] = None
     notes: Optional[str] = None
+    custom_fields: Optional[List[RecordCustomField]] = None
     items: Optional[List[RecordItemCreate]] = None
     logs: Optional[List[RecordLogCreate]] = None
 
@@ -168,6 +175,7 @@ class RecordResponse(BaseModel):
     qc_inspector: Optional[str] = None
     client_surveyor: Optional[str] = None
     notes: Optional[str] = None
+    custom_fields: List[RecordCustomField] = []
     
     # Verification & Signature Fields
     verification_code: Optional[str] = None
@@ -262,7 +270,8 @@ def create_record(
         foreman_name=req.foreman_name or current_user.full_name,
         qc_inspector=req.qc_inspector,
         client_surveyor=req.client_surveyor,
-        notes=req.notes
+        notes=req.notes,
+        custom_fields=[field.model_dump() for field in req.custom_fields],
     )
     db.add(record)
     db.flush()
@@ -520,6 +529,7 @@ def _build_ptr_data_payloads(record: PressureTestRecord, db: Session) -> Tuple[D
         "qc_inspector": record.qc_inspector,
         "client_surveyor": record.client_surveyor,
         "notes": record.notes,
+        "custom_fields": record.custom_fields or [],
         "verification_code": record.verification_code,
         "confirmed_by_name": record.confirmed_by_name,
         "confirmed_by_role": record.confirmed_by_role,

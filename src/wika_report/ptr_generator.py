@@ -261,6 +261,33 @@ class OfficialARDORRecordPDF(FPDF):
 
         return current_y
 
+    def draw_custom_fields_page(
+        self,
+        custom_fields: List[Dict[str, Any]],
+        start_x: float,
+        start_y: float,
+        page_w: float,
+    ) -> None:
+        """Draw a supplementary page for customer-specific record fields."""
+        self.set_draw_color(203, 213, 225)
+        self.set_fill_color(248, 250, 252)
+        self.rect(start_x, start_y, page_w, 12, style="DF")
+        self.set_font("Helvetica", "B", 10)
+        self.set_text_color(15, 23, 42)
+        self.text(start_x + 4, start_y + 7.5, "ADDITIONAL CUSTOMER DETAILS / LISATIEDOT")
+
+        row_y = start_y + 16
+        for field in custom_fields:
+            self.rect(start_x, row_y, 60, 14)
+            self.rect(start_x + 60, row_y, page_w - 60, 14)
+            self.set_font("Helvetica", "B", 7.5)
+            self.set_text_color(71, 85, 105)
+            self.text(start_x + 3, row_y + 5, str(field.get("label") or "-")[:38])
+            self.set_font("Helvetica", "", 8.5)
+            self.set_text_color(15, 23, 42)
+            self.text(start_x + 63, row_y + 9, str(field.get("value") or "-")[:82])
+            row_y += 14
+
     def draw_footer_and_signatures(
         self,
         start_x: float,
@@ -382,10 +409,11 @@ def generate_ptr_pdf(
 
     items = list(items_data) if items_data else [{}]
     total_items = len(items)
+    custom_fields = [field for field in record_data.get("custom_fields", []) if field.get("label") or field.get("value")]
 
     # 1. Расчёт количества страниц
     if total_items <= 7:
-        total_pages = 1
+        record_page_count = 1
         page_chunks = [items]
     else:
         # Страница 1: 7 строк
@@ -397,7 +425,10 @@ def generate_ptr_pdf(
             chunk_size = 14
             page_chunks.append(rem[:chunk_size])
             rem = rem[chunk_size:]
-        total_pages = len(page_chunks)
+        record_page_count = len(page_chunks)
+
+    custom_field_chunks = [custom_fields[index:index + 12] for index in range(0, len(custom_fields), 12)]
+    total_pages = record_page_count + len(custom_field_chunks)
 
     # 2. Отрисовка страниц
     for page_idx, chunk in enumerate(page_chunks, 1):
@@ -414,7 +445,7 @@ def generate_ptr_pdf(
         rows_y, col_w, col_x = pdf.draw_items_table_header(start_x, tbl_top_y)
         
         # Количество строк на текущей странице
-        target_rows = max(7, len(chunk)) if page_idx == total_pages and total_pages == 1 else len(chunk)
+        target_rows = max(7, len(chunk)) if page_idx == record_page_count and record_page_count == 1 else len(chunk)
         if page_idx < total_pages:
             target_rows = max(7 if page_idx == 1 else 14, len(chunk))
 
@@ -429,13 +460,25 @@ def generate_ptr_pdf(
         )
 
         # Подвал и подписи отрисовываются на последней странице
-        if page_idx == total_pages:
+        if page_idx == record_page_count:
             pdf.draw_footer_and_signatures(
                 start_x=start_x,
                 start_y=end_table_y,
                 page_w=page_w,
                 record_data=record_data
             )
+
+    for custom_page_index, chunk in enumerate(custom_field_chunks, 1):
+        pdf.add_page()
+        fields_y = pdf.draw_official_header(
+            record_data=record_data,
+            page_num=record_page_count + custom_page_index,
+            total_pages=total_pages,
+            start_x=start_x,
+            start_y=start_y,
+            page_w=page_w,
+        )
+        pdf.draw_custom_fields_page(chunk, start_x, fields_y + 6, page_w)
 
     if output_path:
         out_p = Path(output_path)
@@ -524,9 +567,10 @@ def generate_full_composite_ptr_pdf(
     # =========================================================================
     items = list(items_data) if items_data else [{}]
     total_items = len(items)
+    custom_fields = [field for field in record_data.get("custom_fields", []) if field.get("label") or field.get("value")]
 
     if total_items <= 7:
-        official_total_pages = 1
+        record_page_count = 1
         page_chunks = [items]
     else:
         chunk_1 = items[:7]
@@ -535,7 +579,10 @@ def generate_full_composite_ptr_pdf(
         while rem:
             page_chunks.append(rem[:14])
             rem = rem[14:]
-        official_total_pages = len(page_chunks)
+        record_page_count = len(page_chunks)
+
+    custom_field_chunks = [custom_fields[index:index + 12] for index in range(0, len(custom_fields), 12)]
+    official_total_pages = record_page_count + len(custom_field_chunks)
 
     for page_idx, chunk in enumerate(page_chunks, 1):
         pdf.add_page()
@@ -549,7 +596,7 @@ def generate_full_composite_ptr_pdf(
         )
 
         rows_y, col_w, col_x = pdf.draw_items_table_header(start_x, tbl_top_y)
-        target_rows = max(7, len(chunk)) if page_idx == official_total_pages and official_total_pages == 1 else len(chunk)
+        target_rows = max(7, len(chunk)) if page_idx == record_page_count and record_page_count == 1 else len(chunk)
         if page_idx < official_total_pages:
             target_rows = max(7 if page_idx == 1 else 14, len(chunk))
 
@@ -563,13 +610,25 @@ def generate_full_composite_ptr_pdf(
             row_h=8.5
         )
 
-        if page_idx == official_total_pages:
+        if page_idx == record_page_count:
             pdf.draw_footer_and_signatures(
                 start_x=start_x,
                 start_y=end_table_y,
                 page_w=page_w,
                 record_data=record_data
             )
+
+    for custom_page_index, chunk in enumerate(custom_field_chunks, 1):
+        pdf.add_page()
+        fields_y = pdf.draw_official_header(
+            record_data=record_data,
+            page_num=record_page_count + custom_page_index,
+            total_pages=official_total_pages,
+            start_x=start_x,
+            start_y=start_y,
+            page_w=page_w,
+        )
+        pdf.draw_custom_fields_page(chunk, start_x, fields_y + 6, page_w)
 
     # =========================================================================
     # РАЗДЕЛ 2..N: Разделы выбранных логов опрессовки (Log Sections)
