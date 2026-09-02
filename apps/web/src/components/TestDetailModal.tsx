@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PressureTest, TestRevision, Artifact } from '../types';
 import { getRevisionZipUrl, getArtifactFileUrl, deleteArtifact, deletePressureTest, permanentlyDeletePressureTest, restorePressureTest, updatePipeCloudStatus } from '../api';
 import { copyToClipboard } from '../clipboard';
@@ -66,6 +66,14 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   const [isTogglingPipeCloud, setIsTogglingPipeCloud] = useState<boolean>(false);
   const [deletingArtifactId, setDeletingArtifactId] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   const handleShareLink = async () => {
     const url = `${window.location.origin}/share/${encodeURIComponent(currentTest.log_no)}`;
@@ -345,7 +353,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
     <div className="modal-overlay">
       <div className="modal-content" style={{ maxWidth: '960px', width: '92vw', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="modal-header">
+        <div className="modal-header" style={{ paddingRight: '3.75rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <span className="log-number" style={{ fontSize: '1.4rem' }}>Log {currentTest.log_no}</span>
@@ -478,7 +486,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
           onClick={onClose}
           title={t('modal_close')}
           aria-label={t('modal_close')}
-          style={{ position: 'absolute', top: '0.8rem', right: '0.8rem', zIndex: 2 }}
+          style={{ position: 'absolute', top: '0.65rem', right: '0.65rem', zIndex: 11 }}
         >
           <X size={22} />
         </button>
