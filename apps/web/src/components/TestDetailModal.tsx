@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { PressureTest, TestRevision, Artifact } from '../types';
-import { getRevisionZipUrl, getArtifactFileUrl, deleteArtifact, deletePressureTest, restorePressureTest, updatePipeCloudStatus } from '../api';
+import { getRevisionZipUrl, getArtifactFileUrl, deleteArtifact, deletePressureTest, permanentlyDeletePressureTest, restorePressureTest, updatePipeCloudStatus } from '../api';
 import { copyToClipboard } from '../clipboard';
 import { useI18n } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -177,6 +177,22 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
     }
   };
 
+  const handlePermanentDeleteTest = async () => {
+    const ok = window.confirm(t('delete_permanently_confirm', { log: currentTest.log_no }));
+    if (!ok) return;
+
+    try {
+      setIsDeleting(true);
+      await permanentlyDeletePressureTest(currentTest.log_no, token);
+      onUpdate?.(currentTest);
+      onClose();
+    } catch (err: any) {
+      alert(err.message || 'Не удалось удалить лог навсегда');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const revisions = currentTest.revisions || [];
   const currentRev: TestRevision | undefined = revisions[selectedRevIndex] || revisions[0];
 
@@ -347,18 +363,32 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
               <button
                 type="button"
                 onClick={currentTest.is_archived ? handleRestoreTest : handleDeleteTest}
                 disabled={isDeleting}
               className="filter-pill"
                 style={{ background: currentTest.is_archived ? 'rgba(16, 185, 129, 0.14)' : 'rgba(244, 63, 94, 0.12)', color: currentTest.is_archived ? 'var(--accent-emerald)' : 'var(--accent-rose)', border: `1px solid ${currentTest.is_archived ? 'var(--accent-emerald)' : 'var(--accent-rose)'}`, display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', padding: '0.5rem 0.8rem', fontSize: '0.85rem' }}
-                title={currentTest.is_archived ? 'Восстановить из корзины' : t('btn_delete_test')}
+                title={currentTest.is_archived ? t('btn_restore_test') : t('btn_delete_test')}
             >
                 {currentTest.is_archived ? <RefreshCw size={14} /> : <Trash2 size={14} />}
-                <span>{isDeleting ? t('modal_saving') : currentTest.is_archived ? 'Восстановить' : t('btn_delete')}</span>
+                <span>{isDeleting ? t('modal_saving') : currentTest.is_archived ? t('btn_restore_test') : t('btn_delete')}</span>
             </button>
+
+            {currentTest.is_archived && (
+              <button
+                type="button"
+                onClick={handlePermanentDeleteTest}
+                disabled={isDeleting}
+                className="filter-pill"
+                style={{ background: 'var(--accent-rose)', color: '#FFFFFF', border: '1px solid var(--accent-rose)', display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', padding: '0.5rem 0.8rem', fontSize: '0.85rem' }}
+                title={t('btn_delete_permanently')}
+              >
+                <Trash2 size={14} />
+                <span>{isDeleting ? t('modal_saving') : t('btn_delete_permanently')}</span>
+              </button>
+            )}
 
             {/* PipeCloud Manual Toggle */}
             <button

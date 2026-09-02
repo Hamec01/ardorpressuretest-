@@ -84,14 +84,14 @@ async def _create_draft_revision(
     и не проходит через конвейер обработки WIKA CPG1500. CSV можно будет загрузить позже —
     повторная отправка формы с тем же Log No. и файлом создаст полноценную ревизию поверх черновика.
     """
-    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+    test = db.query(PressureTest).filter(
+        PressureTest.log_no == norm_log,
+        PressureTest.is_archived == False,
+    ).first()
     if not test:
         test = PressureTest(log_no=norm_log)
         db.add(test)
         db.flush()
-    elif test.is_archived:
-        purge_archived_test_revisions(test, db)
-        test.is_archived = False
 
     revision_id = f"draft_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
 
@@ -199,7 +199,10 @@ async def process_csv_web(
     # TestInput DTO below, so a carried-forward pipe/bundle list (when the caller didn't
     # resupply one) is already baked into the core pipeline's own manifest/metadata_json —
     # not just into the Pipe/Bundle DB rows added afterwards. Explicit input still always wins.
-    existing_test_for_log = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+    existing_test_for_log = db.query(PressureTest).filter(
+        PressureTest.log_no == norm_log,
+        PressureTest.is_archived == False,
+    ).first()
     prior_primary_rev = None
     if existing_test_for_log:
         prior_primary_rev = (
@@ -451,7 +454,10 @@ async def upload_package_or_zip(
                 rev_dir = mf_path.parent
 
                 # Сохраняем в базу данных
-                test = db.query(PressureTest).filter(PressureTest.log_no == log_no).first()
+                test = db.query(PressureTest).filter(
+                    PressureTest.log_no == log_no,
+                    PressureTest.is_archived == False,
+                ).first()
                 if not test:
                     test = PressureTest(log_no=log_no)
                     db.add(test)
@@ -597,7 +603,10 @@ async def upload_package_or_zip(
                     with open(core_res.manifest_path, "r", encoding="utf-8") as mf_f:
                         manifest_data = json.load(mf_f)
 
-                    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+                    test = db.query(PressureTest).filter(
+                        PressureTest.log_no == norm_log,
+                        PressureTest.is_archived == False,
+                    ).first()
                     if not test:
                         test = PressureTest(log_no=norm_log)
                         db.add(test)

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from services.api.database import get_db
-from services.api.models import Artifact, Bundle, Pipe, PressureTest, TestRevision, User
+from services.api.models import Artifact, Bundle, Pipe, PressureTest, PressureTestRecordLog, TestRevision, User
 from services.api.schemas import (
     PipeCloudUpdateRequest,
     PipeCloudUpdateResponse,
@@ -469,7 +469,11 @@ def update_revision_metadata(
         if new_norm_log != test.log_no:
             conflict = (
                 db.query(PressureTest)
-                .filter(PressureTest.log_no == new_norm_log, PressureTest.id != test.id)
+                .filter(
+                    PressureTest.log_no == new_norm_log,
+                    PressureTest.id != test.id,
+                    PressureTest.is_archived == False,
+                )
                 .first()
             )
             if conflict:
@@ -602,6 +606,15 @@ def restore_test(
     ).first()
     if not test:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Test Log_{norm_log} not found in trash.")
+    active_test = db.query(PressureTest).filter(
+        PressureTest.log_no == norm_log,
+        PressureTest.is_archived == False,
+    ).first()
+    if active_test:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Log No. '{norm_log}' is already used by an active test. Permanently delete the archived copy before restoring it.",
+        )
     if test.updated_at < datetime.now(timezone.utc) - timedelta(days=14):
         purge_test_revisions(test, db)
         db.delete(test)
@@ -625,6 +638,47 @@ def restore_test(
         .filter(PressureTest.id == test.id)
         .first()
     )
+
+
+@router.delete("/{log_no}/permanent")
+def permanently_delete_test(
+    log_no: str,
+    current_user: User = Depends(require_role(["foreman", "admin"])),
+    db: Session = Depends(get_db),
+):
+    """Permanently delete an archived log and its files; active logs cannot use this endpoint."""
+    norm_log = normalize_log_no(log_no)
+    test = db.query(PressureTest).filter(
+        PressureTest.log_no == norm_log,
+        PressureTest.is_archived == True,
+    ).first()
+    if not test:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Test Log_{norm_log} not found in trash.")
+
+    linked_record = db.query(PressureTestRecordLog).filter(
+        PressureTestRecordLog.pressure_test_id == test.id,
+    ).first()
+    if linked_record:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This archived log is included in a PTR and cannot be permanently deleted.",
+        )
+
+    test_id = str(test.id)
+    purge_test_revisions(test, db)
+    db.delete(test)
+    db.commit()
+
+    log_audit_event(
+        db,
+        action="test_permanently_deleted",
+        entity_type="pressure_test",
+        entity_id=test_id,
+        actor_id=str(current_user.id),
+        actor_name=current_user.full_name,
+        details={"log_no": norm_log},
+    )
+    return {"status": "success", "message": f"Test Log_{norm_log} permanently deleted."}
 
 
 @router.post("/{log_no}/photos", response_model=PressureTestResponse)

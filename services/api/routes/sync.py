@@ -20,7 +20,10 @@ def create_sync_session(req: SyncSessionRequest, db: Session = Depends(get_db)):
     manifest = req.manifest
     norm_log = normalize_log_no(manifest.log_no)
 
-    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+    test = db.query(PressureTest).filter(
+        PressureTest.log_no == norm_log,
+        PressureTest.is_archived == False,
+    ).first()
     if not test:
         sync_status = "new_log"
     else:
@@ -88,7 +91,10 @@ def complete_sync_session(
     norm_log = normalize_log_no(manifest.log_no)
 
     # 1. Поиск или создание PressureTest
-    test = db.query(PressureTest).filter(PressureTest.log_no == norm_log).first()
+    test = db.query(PressureTest).filter(
+        PressureTest.log_no == norm_log,
+        PressureTest.is_archived == False,
+    ).first()
     if not test:
         test = PressureTest(log_no=norm_log)
         db.add(test)

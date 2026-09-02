@@ -63,6 +63,16 @@ export async function restorePressureTest(logNo: string, token?: string | null):
   return res.json();
 }
 
+export async function permanentlyDeletePressureTest(logNo: string, token?: string | null): Promise<void> {
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}/tests/${encodeURIComponent(logNo)}/permanent`, { method: 'DELETE', headers });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to permanently delete test (${res.status})`);
+  }
+}
+
 export async function fetchTestByLog(logNo: string): Promise<PressureTest> {
   const res = await fetch(`${API_BASE}/tests/${encodeURIComponent(logNo)}`);
   if (!res.ok) {

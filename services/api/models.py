@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, JSON
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, JSON, text
 from sqlalchemy.orm import relationship
 from services.api.database import Base
 
@@ -28,9 +28,17 @@ class User(Base):
 
 class PressureTest(Base):
     __tablename__ = "pressure_tests"
+    __table_args__ = (
+        Index(
+            "uq_pressure_tests_active_log_no",
+            "log_no",
+            unique=True,
+            postgresql_where=text("is_archived = false"),
+        ),
+    )
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    log_no = Column(String(64), unique=True, index=True, nullable=False)
+    log_no = Column(String(64), index=True, nullable=False)
     
     # PipeCloud workflow manual status
     pipecloud_added = Column(Boolean, default=False, nullable=False)
