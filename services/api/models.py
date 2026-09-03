@@ -136,6 +136,7 @@ class PlannedTestPipe(Base):
     pipe_number = Column(String(128), nullable=False, index=True)
     bundle_number = Column(String(128), nullable=False, index=True)
     pipe_sort_key = Column(String(128), nullable=False)
+    source_data = Column(JSON, default=dict, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 

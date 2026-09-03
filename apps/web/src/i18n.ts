@@ -68,8 +68,8 @@ export const translations = {
     planned_sort_pressure: 'By test pressure',
     planned_sort_log: 'By Log No.',
     planned_add_pipes: 'Pipes to test',
-    planned_pipe_input_placeholder: '122355/1\n122355/2\n123561/12',
-    planned_input_hint: 'One pipe per line; format: bundle/pipe.',
+    planned_pipe_input_placeholder: 'Paste PipeCloud rows here, or enter: 122355/1',
+    planned_input_hint: 'PipeCloud: Fit pipe numbers are added; copied columns are saved for reference. Manual input: one bundle/pipe per line.',
     planned_add: 'Add pipes',
     planned_bundle: 'Bundle',
     planned_completed: 'Completed',
@@ -78,6 +78,8 @@ export const translations = {
     planned_open_log: 'Open Log {log}',
     planned_choose_log: 'This pipe is in several logs: {logs}. Enter Log No.',
     planned_log_not_found: 'The selected log is no longer available.',
+    planned_source_columns: 'PipeCloud columns',
+    planned_source_raw: 'Original copied PipeCloud row',
 
     // Search & Filter
     search_placeholder: 'Search by Log No (e.g. 014FED), Pipe/Bundle (122153/41), Project or Operator...',
@@ -230,8 +232,8 @@ export const translations = {
     planned_sort_pressure: 'Koepaineen mukaan',
     planned_sort_log: 'Lokinumeron mukaan',
     planned_add_pipes: 'Testattavat putket',
-    planned_pipe_input_placeholder: '122355/1\n122355/2\n123561/12',
-    planned_input_hint: 'Yksi putki riville; muoto: paketti/putki.',
+    planned_pipe_input_placeholder: 'Liitä PipeCloud-rivit tähän tai syötä: 122355/1',
+    planned_input_hint: 'PipeCloudista lisätään Fit-putkinumerot; kopioidut sarakkeet tallennetaan viitteeksi. Manuaalisesti: yksi paketti/putki riville.',
     planned_add: 'Lisää putket',
     planned_bundle: 'Paketti',
     planned_completed: 'Valmis',
@@ -240,6 +242,8 @@ export const translations = {
     planned_open_log: 'Avaa loki {log}',
     planned_choose_log: 'Putki löytyy useasta lokista: {logs}. Anna lokinumero.',
     planned_log_not_found: 'Valittu loki ei ole enää käytettävissä.',
+    planned_source_columns: 'PipeCloud-sarakkeet',
+    planned_source_raw: 'Alkuperäinen kopioitu PipeCloud-rivi',
 
     // Search & Filter
     search_placeholder: 'Hae lokinumerolla (esim. 014FED), putkella (122153/41), projektilla tai testaajalla...',
@@ -392,8 +396,8 @@ export const translations = {
     planned_sort_pressure: 'По давлению испытания',
     planned_sort_log: 'По номеру лога',
     planned_add_pipes: 'Трубы для опрессовки',
-    planned_pipe_input_placeholder: '122355/1\n122355/2\n123561/12',
-    planned_input_hint: 'Одна труба в строке; формат: bundle/труба.',
+    planned_pipe_input_placeholder: 'Вставьте сюда строки из PipeCloud или введите: 122355/1',
+    planned_input_hint: 'Из PipeCloud добавляются номера труб после Fit; скопированные колонки сохраняются для справки. Вручную: один bundle/труба в строке.',
     planned_add: 'Добавить трубы',
     planned_bundle: 'Bundle',
     planned_completed: 'Готово',
@@ -402,6 +406,8 @@ export const translations = {
     planned_open_log: 'Открыть Log {log}',
     planned_choose_log: 'Труба встречается в нескольких логах: {logs}. Введите Log No.',
     planned_log_not_found: 'Выбранный лог больше недоступен.',
+    planned_source_columns: 'Колонки PipeCloud',
+    planned_source_raw: 'Исходная скопированная строка PipeCloud',
 
     // Search & Filter
     search_placeholder: 'Поиск по номеру лога (014FED), трубе/связке (122153/41), проекту или оператору...',

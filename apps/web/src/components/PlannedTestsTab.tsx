@@ -225,36 +225,36 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
     const [bundle, suffix = ''] = pipe.pipe_number.split('/', 2);
     const completed = pipe.status === 'completed';
     return (
-      <button
-        key={pipe.id}
-        type="button"
-        onClick={() => handleOpenLog(pipe)}
-        disabled={!completed}
-        title={completed ? t('planned_open_log', { log: pipe.latest_log_no || '' }) : t('planned_pending')}
-        style={{
-          width: '100%', display: 'grid', gridTemplateColumns: 'minmax(150px, 1.25fr) minmax(105px, 0.75fr) minmax(90px, 0.6fr) auto', gap: '0.75rem', alignItems: 'center',
-          padding: '0.7rem 0.8rem', border: `1px solid ${completed ? 'rgba(16, 185, 129, 0.42)' : 'var(--border-color)'}`,
-          borderRadius: 'var(--radius-sm)', background: completed ? 'rgba(16, 185, 129, 0.09)' : 'var(--bg-inset-40)',
-          color: 'var(--text-primary)', cursor: completed ? 'pointer' : 'default', textAlign: 'left', opacity: completed ? 1 : 0.84,
-        }}
-      >
-        <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
-          {completed ? <CheckCircle2 size={17} color="var(--accent-emerald)" /> : <Clock3 size={17} color="var(--text-muted)" />}
-          <span className="log-number" style={{ fontSize: '0.94rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>{bundle}</span><span style={{ color: 'var(--accent-cyan)' }}>/{suffix}</span>
+      <div key={pipe.id} style={{ border: `1px solid ${completed ? 'rgba(16, 185, 129, 0.42)' : 'var(--border-color)'}`, borderRadius: 'var(--radius-sm)', background: completed ? 'rgba(16, 185, 129, 0.09)' : 'var(--bg-inset-40)', opacity: completed ? 1 : 0.84 }}>
+        <button
+          type="button"
+          onClick={() => handleOpenLog(pipe)}
+          disabled={!completed}
+          title={completed ? t('planned_open_log', { log: pipe.latest_log_no || '' }) : t('planned_pending')}
+          style={{ width: '100%', display: 'grid', gridTemplateColumns: 'minmax(150px, 1.25fr) minmax(105px, 0.75fr) minmax(90px, 0.6fr) auto', gap: '0.75rem', alignItems: 'center', padding: '0.7rem 0.8rem', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: completed ? 'pointer' : 'default', textAlign: 'left' }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+            {completed ? <CheckCircle2 size={17} color="var(--accent-emerald)" /> : <Clock3 size={17} color="var(--text-muted)" />}
+            <span className="log-number" style={{ fontSize: '0.94rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>{bundle}</span><span style={{ color: 'var(--accent-cyan)' }}>/{suffix}</span>
+            </span>
           </span>
-        </span>
-        <span style={{ fontSize: '0.78rem', color: completed ? 'var(--accent-emerald)' : 'var(--text-muted)', fontWeight: 700 }}>
-          {completed ? t('planned_completed') : t('planned_pending')}
-        </span>
-        <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-          {completed ? `${pipe.latest_log_no} ${pipe.latest_test_pressure ? `· ${pipe.latest_test_pressure}` : ''}` : '—'}
-        </span>
-        <span style={{ display: 'flex', gap: '0.2rem', justifyContent: 'flex-end' }}>
-          <span role="button" tabIndex={0} onClick={(event) => handleEditPipe(pipe, event as unknown as React.MouseEvent)} title={t('planned_edit_pipe')} style={{ color: 'var(--text-muted)', padding: '0.35rem', display: 'inline-flex' }}><Pencil size={15} /></span>
-          <span role="button" tabIndex={0} onClick={(event) => handleDeletePipe(pipe, event as unknown as React.MouseEvent)} title={t('planned_delete_pipe')} style={{ color: 'var(--accent-rose)', padding: '0.35rem', display: 'inline-flex' }}><Trash2 size={15} /></span>
-        </span>
-      </button>
+          <span style={{ fontSize: '0.78rem', color: completed ? 'var(--accent-emerald)' : 'var(--text-muted)', fontWeight: 700 }}>{completed ? t('planned_completed') : t('planned_pending')}</span>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{completed ? `${pipe.latest_log_no} ${pipe.latest_test_pressure ? `· ${pipe.latest_test_pressure}` : ''}` : '—'}</span>
+          <span style={{ display: 'flex', gap: '0.2rem', justifyContent: 'flex-end' }}>
+            <span role="button" tabIndex={0} onClick={(event) => handleEditPipe(pipe, event as unknown as React.MouseEvent)} title={t('planned_edit_pipe')} style={{ color: 'var(--text-muted)', padding: '0.35rem', display: 'inline-flex' }}><Pencil size={15} /></span>
+            <span role="button" tabIndex={0} onClick={(event) => handleDeletePipe(pipe, event as unknown as React.MouseEvent)} title={t('planned_delete_pipe')} style={{ color: 'var(--accent-rose)', padding: '0.35rem', display: 'inline-flex' }}><Trash2 size={15} /></span>
+          </span>
+        </button>
+        {pipe.source_data?.raw_source && <details style={{ borderTop: '1px solid var(--border-color)', padding: '0.45rem 0.8rem' }}>
+          <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{t('planned_source_columns')}</summary>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.45rem', marginTop: '0.6rem' }}>
+            {['product', 'drawing', 'spool_number', 'order_number', 'revision', 'pipeline', 'pt', 'wp', 'kg', 'class', 'treatment', 'size', 'wt', 'material', 'bundles', 'pdd_start', 'pdd_end', 'status'].map((field) => <div key={field} style={{ minWidth: 0 }}><div style={{ color: 'var(--text-muted)', fontSize: '0.65rem', textTransform: 'uppercase' }}>{field.replace(/_/g, ' ')}</div><div style={{ color: 'var(--text-primary)', fontSize: '0.78rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pipe.source_data[field] || '—'}</div></div>)}
+          </div>
+          <div style={{ marginTop: '0.6rem', color: 'var(--text-muted)', fontSize: '0.7rem' }}>{t('planned_source_raw')}</div>
+          <div style={{ marginTop: '0.15rem', overflowWrap: 'anywhere', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', fontSize: '0.7rem', lineHeight: 1.35 }}>{pipe.source_data.raw_source}</div>
+        </details>}
+      </div>
     );
   };
 

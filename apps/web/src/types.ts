@@ -69,6 +69,7 @@ export interface PlannedTestPipe {
   latest_log_no?: string | null;
   latest_log_at?: string | null;
   latest_test_pressure?: string | null;
+  source_data: Record<string, string>;
   created_at: string;
   updated_at: string;
 }

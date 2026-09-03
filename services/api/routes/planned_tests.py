@@ -33,6 +33,33 @@ class PlannedPipeUpdateRequest(BaseModel):
     pipe_number: str
 
 
+PIPECLOUD_PIPE_PATTERN = re.compile(r"fit\s+(\d+/\d+)", re.IGNORECASE)
+PIPECLOUD_COLLAPSED_ROW_PATTERN = re.compile(
+    r"^fit\s+\d+/\d+"
+    r"(?P<product>[A-Z]{4}\d{6})"
+    r"(?P<drawing>\d{2})"
+    r"(?P<spool_number>\d{6,})"
+    r"(?P<revision>[A-Z])"
+    r"(?P<pipeline>.*?)"
+    r"(?:(?P<pt>[A-Z])(?P<wp>\d+\s*pcs)|(?P<wp_without_pt>\d+\s*pcs))"
+    r"(?P<kg>\d+(?:[.,]\d+)?)"
+    r"(?P<treatment>RAL.*?PS-\d+A)"
+    r"(?P<size>\d{2,3})"
+    r"(?P<wt>\d+(?:[.,]\d+)?)"
+    r"(?P<material>[A-Z]{2})"
+    r"(?P<bundles>\d+)"
+    r"(?P<pdd_start>\d{4}-\d{2}-\d{2})"
+    r"(?P<pdd_end>\d{4}-\d{2}-\d{2})"
+    r"(?P<status>.*)$",
+    re.IGNORECASE,
+)
+PIPECLOUD_COLUMN_NAMES = [
+    "position", "product", "drawing", "spool_number", "order_number", "revision",
+    "pipeline", "pt", "wp", "kg", "class", "treatment", "size", "wt", "material",
+    "bundles", "pdd_start", "pdd_end", "status",
+]
+
+
 def _natural_sort_key(value: str) -> Tuple[Tuple[int, object], ...]:
     return tuple(
         (0, int(part)) if part.isdigit() else (1, part.casefold())
@@ -57,6 +84,48 @@ def normalize_planned_pipe(value: str) -> Tuple[str, str, str]:
     if not bundle_number or not pipe_suffix:
         raise ValueError("Both bundle and pipe number are required.")
     return normalized, bundle_number, _pipe_sort_key(pipe_suffix)
+
+
+def _pipecloud_source_data(raw_row: str) -> Dict[str, str]:
+    """Keep all copied values; map them to named fields only when columns are preserved by clipboard."""
+    raw_source = raw_row.strip()
+    data: Dict[str, str] = {"raw_source": raw_source}
+    cells = [cell.strip() for cell in raw_source.split("\t")]
+    if len(cells) > 1:
+        for index, cell in enumerate(cells[:len(PIPECLOUD_COLUMN_NAMES)]):
+            if cell:
+                data[PIPECLOUD_COLUMN_NAMES[index]] = cell
+        return data
+
+    collapsed_row = PIPECLOUD_COLLAPSED_ROW_PATTERN.match(raw_source)
+    if collapsed_row:
+        inferred = {
+            key: value.strip()
+            for key, value in collapsed_row.groupdict().items()
+            if value and key != "wp_without_pt"
+        }
+        if collapsed_row.group("wp_without_pt"):
+            inferred["wp"] = collapsed_row.group("wp_without_pt").strip()
+        data.update(inferred)
+    return data
+
+
+def parse_planned_pipe_input(input_text: str) -> List[Tuple[str, Dict[str, str]]]:
+    """Extract Fit pipe IDs from PipeCloud rows and preserve each original source row."""
+    matches = list(PIPECLOUD_PIPE_PATTERN.finditer(input_text))
+    if matches:
+        return [
+            (
+                match.group(1),
+                _pipecloud_source_data(input_text[match.start():matches[index + 1].start() if index + 1 < len(matches) else len(input_text)]),
+            )
+            for index, match in enumerate(matches)
+        ]
+    return [
+        (entry.strip(), {"raw_source": entry.strip()})
+        for entry in re.split(r"[\n,;]+", input_text)
+        if entry.strip()
+    ]
 
 
 def _completed_log_map(db: Session, pipe_numbers: List[str]) -> Dict[str, List[dict]]:
@@ -97,6 +166,7 @@ def _pipe_response(pipe: PlannedTestPipe, matching_logs: List[dict]) -> dict:
         "id": pipe.id,
         "pipe_number": pipe.pipe_number,
         "bundle_number": pipe.bundle_number,
+        "source_data": pipe.source_data or {},
         "status": "completed" if matching_logs else "pending",
         "matching_logs": matching_logs,
         "latest_log_no": latest_log["log_no"] if latest_log else None,
@@ -221,14 +291,14 @@ def bulk_create_planned_pipes(
     db: Session = Depends(get_db),
 ):
     planned_list = _get_active_list(list_id, db)
-    entries = [entry.strip() for entry in re.split(r"[\n,;]+", payload.input_text) if entry.strip()]
+    entries = parse_planned_pipe_input(payload.input_text)
     if not entries:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Enter at least one pipe number.")
 
     parsed = []
     errors = []
     seen = set()
-    for line_number, entry in enumerate(entries, start=1):
+    for line_number, (entry, source_data) in enumerate(entries, start=1):
         try:
             pipe_number, bundle_number, pipe_sort_key = normalize_planned_pipe(entry)
         except ValueError as exc:
@@ -238,7 +308,7 @@ def bulk_create_planned_pipes(
             errors.append({"line": line_number, "value": entry, "message": "Duplicate pipe in this input."})
             continue
         seen.add(pipe_number)
-        parsed.append((pipe_number, bundle_number, pipe_sort_key))
+        parsed.append((pipe_number, bundle_number, pipe_sort_key, source_data))
     if errors:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"errors": errors})
 
@@ -254,12 +324,13 @@ def bulk_create_planned_pipes(
             detail={"message": "Some pipes already exist in this plan.", "pipe_numbers": sorted(existing)},
         )
 
-    for pipe_number, bundle_number, pipe_sort_key in parsed:
+    for pipe_number, bundle_number, pipe_sort_key, source_data in parsed:
         db.add(PlannedTestPipe(
             planned_test_list_id=planned_list.id,
             pipe_number=pipe_number,
             bundle_number=bundle_number,
             pipe_sort_key=pipe_sort_key,
+            source_data=source_data,
         ))
     planned_list.updated_at = datetime.now(timezone.utc)
     db.commit()
