@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, JSON, text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, JSON, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 from services.api.database import Base
 
@@ -108,6 +108,38 @@ class Bundle(Base):
     bundle_number = Column(String(128), nullable=False, index=True)
 
     revision = relationship("TestRevision", back_populates="bundles")
+
+
+class PlannedTestList(Base):
+    __tablename__ = "planned_test_lists"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    name = Column(String(128), nullable=False)
+    description = Column(Text, nullable=True)
+    is_archived = Column(Boolean, default=False, nullable=False)
+    created_by_user_id = Column(String(36), nullable=True)
+    created_by_name = Column(String(128), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    pipes = relationship("PlannedTestPipe", back_populates="planned_list", cascade="all, delete-orphan")
+
+
+class PlannedTestPipe(Base):
+    __tablename__ = "planned_test_pipes"
+    __table_args__ = (
+        UniqueConstraint("planned_test_list_id", "pipe_number", name="uq_planned_test_pipes_list_pipe"),
+    )
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    planned_test_list_id = Column(String(36), ForeignKey("planned_test_lists.id", ondelete="CASCADE"), nullable=False, index=True)
+    pipe_number = Column(String(128), nullable=False, index=True)
+    bundle_number = Column(String(128), nullable=False, index=True)
+    pipe_sort_key = Column(String(128), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    planned_list = relationship("PlannedTestList", back_populates="pipes")
 
 
 class AuditEvent(Base):

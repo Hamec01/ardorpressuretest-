@@ -1,4 +1,4 @@
-import { PressureTest, PressureTestRecord, RecordLogArtifact, TestRevision } from './types';
+import { PlannedTestList, PlannedTestListDetail, PressureTest, PressureTestRecord, RecordLogArtifact, TestRevision } from './types';
 
 const API_BASE = '/api/v1';
 
@@ -70,6 +70,89 @@ export async function permanentlyDeletePressureTest(logNo: string, token?: strin
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Failed to permanently delete test (${res.status})`);
+  }
+}
+
+function authHeaders(token?: string | null): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function fetchPlannedTestLists(query = ''): Promise<PlannedTestList[]> {
+  const res = await fetch(`${API_BASE}/planned-tests/lists?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error(`Failed to load pressure test plans (${res.status})`);
+  return res.json();
+}
+
+export async function createPlannedTestList(name: string, description: string, token?: string | null): Promise<{ id: string }> {
+  const res = await fetch(`${API_BASE}/planned-tests/lists`, {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, description }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to create pressure test plan (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function updatePlannedTestList(listId: string, payload: { name?: string; description?: string }, token?: string | null): Promise<void> {
+  const res = await fetch(`${API_BASE}/planned-tests/lists/${encodeURIComponent(listId)}`, {
+    method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to update pressure test plan (${res.status})`);
+  }
+}
+
+export async function deletePlannedTestList(listId: string, token?: string | null): Promise<void> {
+  const res = await fetch(`${API_BASE}/planned-tests/lists/${encodeURIComponent(listId)}`, { method: 'DELETE', headers: authHeaders(token) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to delete pressure test plan (${res.status})`);
+  }
+}
+
+export async function fetchPlannedTestPipes(listId: string, query = ''): Promise<PlannedTestListDetail> {
+  const res = await fetch(`${API_BASE}/planned-tests/lists/${encodeURIComponent(listId)}/pipes?q=${encodeURIComponent(query)}`);
+  if (!res.ok) throw new Error(`Failed to load planned pipes (${res.status})`);
+  return res.json();
+}
+
+export async function addPlannedTestPipes(listId: string, inputText: string, token?: string | null): Promise<void> {
+  const res = await fetch(`${API_BASE}/planned-tests/lists/${encodeURIComponent(listId)}/pipes/bulk`, {
+    method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ input_text: inputText }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(typeof err.detail === 'string' ? err.detail : err.detail?.message || `Failed to add planned pipes (${res.status})`);
+  }
+}
+
+export async function updatePlannedTestPipe(pipeId: string, pipeNumber: string, token?: string | null): Promise<void> {
+  const res = await fetch(`${API_BASE}/planned-tests/pipes/${encodeURIComponent(pipeId)}`, {
+    method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ pipe_number: pipeNumber }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to update planned pipe (${res.status})`);
+  }
+}
+
+export async function deletePlannedTestPipe(pipeId: string, token?: string | null): Promise<void> {
+  const res = await fetch(`${API_BASE}/planned-tests/pipes/${encodeURIComponent(pipeId)}`, { method: 'DELETE', headers: authHeaders(token) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to delete planned pipe (${res.status})`);
+  }
+}
+
+export async function deletePlannedTestBundle(listId: string, bundleNumber: string, token?: string | null): Promise<void> {
+  const res = await fetch(`${API_BASE}/planned-tests/lists/${encodeURIComponent(listId)}/bundles/${encodeURIComponent(bundleNumber)}`, { method: 'DELETE', headers: authHeaders(token) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to delete planned bundle (${res.status})`);
   }
 }
 

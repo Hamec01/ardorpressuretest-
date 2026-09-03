@@ -11,14 +11,15 @@ import { RecordsTab } from './components/RecordsTab';
 import { NewRecordModal } from './components/NewRecordModal';
 import { RecordDetailModal } from './components/RecordDetailModal';
 import { FaqTab } from './components/FaqTab';
+import { PlannedTestsTab } from './components/PlannedTestsTab';
 import { fetchPressureTests, fetchTrash } from './api';
 import { PressureTest, PressureTestRecord } from './types';
 import { useI18n } from './context/LanguageContext';
-import { RefreshCw, Inbox, AlertCircle, Layers, FileSpreadsheet, HelpCircle, Trash2 } from 'lucide-react';
+import { RefreshCw, Inbox, AlertCircle, ClipboardList, Layers, FileSpreadsheet, HelpCircle, Trash2 } from 'lucide-react';
 
 export const App: React.FC = () => {
   const { t } = useI18n();
-  const [activeTab, setActiveTab] = useState<'tests' | 'trash' | 'records' | 'faq'>('tests');
+  const [activeTab, setActiveTab] = useState<'tests' | 'trash' | 'plans' | 'records' | 'faq'>('tests');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   const [tests, setTests] = useState<PressureTest[]>([]);
@@ -107,6 +108,26 @@ export const App: React.FC = () => {
           >
             <Layers size={16} color={activeTab === 'tests' ? 'var(--accent-cyan)' : 'inherit'} />
             <span>{t('tab_tests')}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('plans')}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              borderBottom: activeTab === 'plans' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+              color: activeTab === 'plans' ? 'var(--text-primary)' : 'var(--text-muted)',
+              padding: '0.6rem 1rem',
+              fontWeight: 600,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <ClipboardList size={16} color={activeTab === 'plans' ? 'var(--accent-cyan)' : 'inherit'} />
+            <span>{t('tab_planned_tests')}</span>
           </button>
 
           <button
@@ -224,6 +245,8 @@ export const App: React.FC = () => {
               </div>
             )}
           </>
+        ) : activeTab === 'plans' ? (
+          <PlannedTestsTab onSelectTest={(test) => setSelectedTest(test)} />
         ) : activeTab === 'records' ? (
           <RecordsTab
             refreshTrigger={recordsRefreshKey}

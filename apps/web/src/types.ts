@@ -51,6 +51,52 @@ export interface PressureTest {
   revisions: TestRevision[];
 }
 
+export interface PlannedTestLogMatch {
+  pressure_test_id: string;
+  log_no: string;
+  revision_id: string;
+  status: 'complete' | 'confirmed';
+  updated_at: string;
+  test_pressure?: string | null;
+}
+
+export interface PlannedTestPipe {
+  id: string;
+  pipe_number: string;
+  bundle_number: string;
+  status: 'pending' | 'completed';
+  matching_logs: PlannedTestLogMatch[];
+  latest_log_no?: string | null;
+  latest_log_at?: string | null;
+  latest_test_pressure?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlannedTestBundle {
+  bundle_number: string;
+  pipes: PlannedTestPipe[];
+  completed_count: number;
+}
+
+export interface PlannedTestList {
+  id: string;
+  name: string;
+  description?: string | null;
+  created_by_name?: string | null;
+  created_at: string;
+  updated_at: string;
+  pipe_count: number;
+  completed_count: number;
+}
+
+export interface PlannedTestListDetail {
+  list: Pick<PlannedTestList, 'id' | 'name' | 'description'>;
+  summary: { total: number; completed: number };
+  bundles: PlannedTestBundle[];
+  pipes: PlannedTestPipe[];
+}
+
 export interface RecordItem {
   id?: string;
   item_no: number;
