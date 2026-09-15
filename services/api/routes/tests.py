@@ -354,6 +354,9 @@ def delete_artifact(
     current_user: User = Depends(require_role(["foreman", "admin"])),
     db: Session = Depends(get_db),
 ):
+    """Physical deletion of artifacts is disabled pending a separate retention policy
+    decision (AGENTS.md / ADR-005). This handler never unlinks files or deletes rows:
+    it only confirms the artifact exists, then refuses the operation."""
     artifact = (
         db.query(Artifact)
         .join(TestRevision, Artifact.test_revision_id == TestRevision.id)
@@ -364,30 +367,9 @@ def delete_artifact(
     if not artifact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found.")
 
-    file_path = storage.get_file_path(artifact.storage_key)
-    if file_path and file_path.exists():
-        file_path.unlink()
-
-    test = artifact.revision.pressure_test
-    artifact_name = artifact.name
-    db.delete(artifact)
-    db.commit()
-
-    log_audit_event(
-        db,
-        action="artifact_deleted",
-        entity_type="artifact",
-        entity_id=str(artifact_id),
-        actor_id=str(current_user.id),
-        actor_name=current_user.full_name,
-        details={"log_no": test.log_no, "name": artifact_name},
-    )
-
-    return (
-        db.query(PressureTest)
-        .options(joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts))
-        .filter(PressureTest.id == test.id)
-        .first()
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Physical deletion of artifacts is disabled pending a separate retention policy decision.",
     )
 
 
@@ -612,13 +594,8 @@ def restore_test(
     if active_test:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Log No. '{norm_log}' is already used by an active test. Permanently delete the archived copy before restoring it.",
+            detail=f"Log No. '{norm_log}' is already used by an active test. Restore is not possible while that Log No. is active.",
         )
-    if test.updated_at < datetime.now(timezone.utc) - timedelta(days=14):
-        purge_test_revisions(test, db)
-        db.delete(test)
-        db.commit()
-        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Trash retention period has expired.")
     test.is_archived = False
     test.updated_at = datetime.now(timezone.utc)
     db.commit()
@@ -645,7 +622,9 @@ def permanently_delete_test(
     current_user: User = Depends(require_role(["foreman", "admin"])),
     db: Session = Depends(get_db),
 ):
-    """Permanently delete an archived log and its files; active logs cannot use this endpoint."""
+    """Permanent deletion is disabled pending a separate retention policy decision
+    (AGENTS.md / ADR-005). This handler never mutates the database or storage: it only
+    confirms the archived log exists, then refuses the operation."""
     norm_log = normalize_log_no(log_no)
     test = db.query(PressureTest).filter(
         PressureTest.log_no == norm_log,
@@ -654,30 +633,10 @@ def permanently_delete_test(
     if not test:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Test Log_{norm_log} not found in trash.")
 
-    linked_record = db.query(PressureTestRecordLog).filter(
-        PressureTestRecordLog.pressure_test_id == test.id,
-    ).first()
-    if linked_record:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This archived log is included in a PTR and cannot be permanently deleted.",
-        )
-
-    test_id = str(test.id)
-    purge_test_revisions(test, db)
-    db.delete(test)
-    db.commit()
-
-    log_audit_event(
-        db,
-        action="test_permanently_deleted",
-        entity_type="pressure_test",
-        entity_id=test_id,
-        actor_id=str(current_user.id),
-        actor_name=current_user.full_name,
-        details={"log_no": norm_log},
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Permanent deletion is disabled pending a separate retention policy decision.",
     )
-    return {"status": "success", "message": f"Test Log_{norm_log} permanently deleted."}
 
 
 @router.post("/{log_no}/photos", response_model=PressureTestResponse)
