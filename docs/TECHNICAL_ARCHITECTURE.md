@@ -120,8 +120,8 @@ ardor-pressure-test/
 
 ## 7. Доменные модули
 
-1. **Identity & Access** — users, roles, permissions, sessions, password reset.
-2. **Projects & Visibility** — открытый доступ по умолчанию и deny/restriction rules.
+1. **Identity & Access** — users с фиксированной ролью `admin | foreman | viewer` (role-based, без per-user permission matrix — `ADR-005`), sessions, password reset. Управление аккаунтами доступно только `admin`.
+2. **Projects & Visibility** — в первой версии все внутренние материалы доступны всем трём аутентифицированным ролям согласно capability matrix (`ADR-005 §3`); персональных ограничений видимости нет.
 3. **Pressure Tests** — Log, Revision, metadata, PASS/FAIL proposal.
 4. **Artifacts** — manifest, checksums, categories, downloads.
 5. **Processing** — CSV pipeline и report generation jobs.
@@ -137,29 +137,26 @@ ardor-pressure-test/
 
 ### Identity
 
-- `users`
-- `roles`
-- `permissions`
-- `user_permissions`
-- `sessions`
+- `users`: фиксированное поле роли `admin | foreman | viewer` (`ADR-005`), без отдельной таблицы конфигурируемых permissions на пользователя.
+- `sessions`: серверные, отзываемые — обязательная сущность, не опциональная (browser cookie-сессия и desktop device-сессия — разные записи, см. §16).
 - `password_reset_tokens`
 - `devices`
 - `user_settings`
 - `device_settings`
 
-Должность хранится отдельно от permissions. Это позволяет работнику иметь полный доступ, а конкретному прорабу — не иметь права подтверждения.
+Права определяются ролью целиком (`ADR-005`): управление аккаунтами — только `admin`; `admin`/`foreman` имеют полный рабочий доступ; `foreman` не управляет аккаунтами; `viewer` — только чтение/скачивание, без мутаций. Таблицы `roles`/`permissions`/`user_permissions` из предыдущей редакции не вводятся — персональная permission matrix отменена.
 
 ### Work organization
 
 - `projects`
-- `project_memberships`
-- `visibility_restrictions`
 - `customers`
 - `vessels`
 - `jobs`
 - `sales_orders`
 
 Project остаётся необязательной сущностью до уточнения бизнеса.
+
+**Future / Out of scope для первой версии:** `project_memberships`, `visibility_restrictions`. В первой версии персональных ограничений видимости нет — все внутренние материалы доступны всем трём аутентифицированным ролям согласно capability matrix (`ADR-005 §3`); эти таблицы не входят в целевую модель v1.
 
 ### Pressure tests
 
@@ -170,6 +167,14 @@ Project остаётся необязательной сущностью до у
 - `revision_pipes`
 - `revision_bundles`
 - `test_decisions`: automatic proposal, human decision, reason.
+
+### Gauges
+
+Новая сущность (`ADR-005`), в аудите на базовом commit отсутствует:
+
+- `gauges`: справочник манометров, управляется только `admin`; стабильный ID, серийный номер, модель, статус активности.
+- `test_revisions.gauge_id` — ссылка на текущую запись справочника (для фильтрации/отчётности).
+- `test_revisions` дополнительно хранит immutable snapshot как минимум серийного номера манометра на момент фиксации ревизии — мутируемого FK недостаточно: редактирование или деактивация записи справочника не должны задним числом менять уже зафиксированные испытания.
 
 ### Artifacts
 
@@ -186,6 +191,12 @@ Project остаётся необязательной сущностью до у
 - `record_row_log_links`
 - `record_confirmations`
 - `record_signed_artifacts`
+
+### Publishing
+
+Новая сущность (`ADR-005`):
+
+- `share_links`: стабильный resource ID и тип (лог/PTR/план), token hash (не сам токен), автор, даты, revoked/expiry, режим — только LIVE в первой версии. Создают и отзывают только `admin`/`foreman`. Не связывается с mutable Log No. как единственным идентификатором.
 
 ### Operations
 
@@ -239,7 +250,8 @@ storage/logs/{log_uuid}/revisions/{revision_uuid}/
 - полный список файлов;
 - role/category каждого файла;
 - size and SHA-256;
-- parent revision, если есть.
+- parent revision, если есть;
+- `gauge_id` и immutable snapshot серийного номера манометра (`ADR-005`).
 
 ## 11. Атомарная синхронизация
 
@@ -332,6 +344,8 @@ Layout покрывается golden/visual PDF тестами. Данные н�
 
 ## 16. Authentication и security
 
+Детальная модель ролей, browser/desktop session lifecycle, private/public API boundary и ownership/audit-правила зафиксированы в `docs/adr/ADR-005-auth-session-model.md` (**Accepted**, 2026-09-14) — ниже сохранены только пункты этого раздела, дополненные ссылкой.
+
 - username/email + password;
 - Argon2id password hashing;
 - browser session в Secure, HttpOnly, SameSite cookie;
@@ -361,6 +375,7 @@ redis
 ## 18. Production topology позднее
 
 - reverse proxy с HTTPS;
+- временный вариант HTTPS без домена: Let's Encrypt short-lived сертификат непосредственно на IP-адрес (~160 часов) с обязательным полностью автоматическим ACME-продлением и мониторингом отказа продления (`ADR-005 §15`); установка сертификата и изменение nginx/портов — отдельный infra-этап, не входит в R0;
 - отдельные контейнеры с уникальными names/networks;
 - отдельная БД/роль PostgreSQL;
 - отдельные volumes;
@@ -456,7 +471,7 @@ redis
 - ADR-002 canonical immutable revision;
 - ADR-003 PostgreSQL + filesystem storage;
 - ADR-004 sync protocol and idempotency;
-- ADR-005 auth/session model;
+- ADR-005 auth/session model — **Accepted**, см. `docs/adr/ADR-005-auth-session-model.md`;
 - ADR-006 PASS/FAIL criteria versioning;
 - ADR-007 Pressure Test Record template architecture;
 - ADR-008 legacy import policy;
