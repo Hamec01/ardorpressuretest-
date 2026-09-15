@@ -16,8 +16,13 @@ logger = logging.getLogger("ardor_api")
 async def lifespan(app: FastAPI):
     logger.info("Initializing database tables...")
     Base.metadata.create_all(bind=engine)
-    with SessionLocal() as db:
-        seed_default_users(db)
+    if settings.seed_default_users:
+        logger.warning(
+            "ARDOR_SEED_DEFAULT_USERS is enabled - seeding built-in demo accounts. "
+            "This must never be set outside local development."
+        )
+        with SessionLocal() as db:
+            seed_default_users(db)
     logger.info(f"ARDOR Pressure Test API v{settings.app_version} started.")
     yield
     logger.info("Shutting down ARDOR Pressure Test API.")
@@ -26,12 +31,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs" if settings.is_local_environment else None,
+    redoc_url="/redoc" if settings.is_local_environment else None,
+    openapi_url="/openapi.json" if settings.is_local_environment else None,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origin_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

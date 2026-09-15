@@ -1,0 +1,111 @@
+"""R1 regression guard: Settings must fail closed for non-local ARDOR_ENV with unsafe values.
+
+Pure object-construction tests - Settings is a plain pydantic BaseModel, so each case
+constructs it directly with explicit kwargs rather than mutating process environment
+variables (module-level defaults are only evaluated once, at first import).
+"""
+import pytest
+
+from services.api.config import DEFAULT_CORS_ORIGINS, INSECURE_DEFAULT_SECRET, Settings
+
+GOOD_SECRET = "a-real-randomly-generated-secret-value"
+GOOD_DB_URL = "postgresql://ardor_user:x@postgres:5432/ardor_pressure_test"
+
+
+def _server_settings(**overrides):
+    kwargs = dict(
+        environment="staging",
+        secret_key=GOOD_SECRET,
+        database_url=GOOD_DB_URL,
+        seed_default_users=False,
+        cors_allowed_origins="https://example.ardor.internal",
+    )
+    kwargs.update(overrides)
+    return Settings(**kwargs)
+
+
+def test_server_mode_accepts_fully_safe_configuration():
+    s = _server_settings()
+    assert s.secret_key == GOOD_SECRET
+    assert s.is_local_environment is False
+
+
+@pytest.mark.parametrize("env_name", ["staging", "production", "Staging", "PRODUCTION"])
+def test_server_mode_rejects_default_secret(env_name):
+    with pytest.raises(Exception):
+        _server_settings(environment=env_name, secret_key=INSECURE_DEFAULT_SECRET)
+
+
+def test_server_mode_rejects_sqlite_database_url():
+    with pytest.raises(Exception):
+        _server_settings(database_url="sqlite:///./ardor_local.db")
+
+
+def test_server_mode_rejects_auto_seed_enabled():
+    with pytest.raises(Exception):
+        _server_settings(seed_default_users=True)
+
+
+def test_server_mode_rejects_empty_cors_origins():
+    with pytest.raises(Exception):
+        _server_settings(cors_allowed_origins="")
+
+
+def test_server_mode_rejects_wildcard_cors_origin():
+    with pytest.raises(Exception):
+        _server_settings(cors_allowed_origins="*")
+
+
+@pytest.mark.parametrize("origins", [
+    "*,https://example.ardor.internal",
+    "https://example.ardor.internal,*",
+    "https://a.test,*,https://b.test",
+])
+def test_server_mode_rejects_wildcard_in_any_list_position(origins):
+    with pytest.raises(Exception):
+        _server_settings(cors_allowed_origins=origins)
+
+
+def test_server_mode_rejects_unset_cors_origins_still_at_default():
+    # ARDOR_CORS_ORIGINS was never explicitly set for this deployment - it must not
+    # silently pass validation just because the list happens to be non-empty.
+    with pytest.raises(Exception):
+        _server_settings(cors_allowed_origins=DEFAULT_CORS_ORIGINS)
+
+
+def test_missing_ardor_env_is_treated_as_server_mode_not_local():
+    # Simulates ARDOR_ENV genuinely never being set: environment="" (the class's
+    # fail-closed default) combined with otherwise-insecure local-style values must
+    # still be rejected, not silently tolerated as if it were local.
+    with pytest.raises(Exception):
+        Settings(
+            environment="",
+            secret_key=INSECURE_DEFAULT_SECRET,
+            database_url="sqlite:///./ardor_local.db",
+            seed_default_users=False,
+            cors_allowed_origins=DEFAULT_CORS_ORIGINS,
+        )
+
+
+def test_empty_ardor_env_is_not_local():
+    # Supply otherwise-safe values so only the environment classification is under test.
+    s = _server_settings(environment="")
+    assert s.is_local_environment is False
+
+
+@pytest.mark.parametrize("env_name", ["local", "dev", "development", "test", "testing", "LOCAL"])
+def test_local_environments_allow_insecure_defaults(env_name):
+    # Same "unsafe" values that are rejected in server mode must be tolerated locally.
+    s = Settings(
+        environment=env_name,
+        secret_key=INSECURE_DEFAULT_SECRET,
+        database_url="sqlite:///./ardor_local.db",
+        seed_default_users=True,
+        cors_allowed_origins=DEFAULT_CORS_ORIGINS,
+    )
+    assert s.is_local_environment is True
+
+
+def test_cors_origin_list_parses_comma_separated_values():
+    s = Settings(environment="local", cors_allowed_origins=" http://a.test , http://b.test ")
+    assert s.cors_origin_list == ["http://a.test", "http://b.test"]

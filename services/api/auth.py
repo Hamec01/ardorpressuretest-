@@ -144,48 +144,43 @@ def get_current_user(
 
 
 def require_role(allowed_roles: List[str]):
-    """Защитный декоратор RBAC для маршрутов FastAPI."""
+    """Защитный декоратор RBAC для маршрутов FastAPI.
+
+    Fail-closed: отсутствующий, пустой, невалидный или просроченный токен, а также
+    неизвестный или неактивный пользователь всегда дают 401. Недостаточная роль даёт 403.
+    Никакого fallback-пользователя не существует ни в одной ветке.
+    """
     def role_checker(
         auth: Optional[HTTPAuthorizationCredentials] = Security(security_bearer),
         db: Session = Depends(get_db)
     ) -> User:
         if not auth or not auth.credentials or auth.credentials in ("null", "undefined", "None", ""):
-            # Fallback to default local foreman user for seamless local testing
-            default_user = db.query(User).filter(User.username == "foreman_matti").first()
-            if default_user:
-                return default_user
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication required"
             )
-        try:
-            payload = decode_access_token(auth.credentials)
-            user_id = payload.get("sub")
-            user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
-            if not user:
-                default_user = db.query(User).filter(User.username == "foreman_matti").first()
-                if default_user:
-                    return default_user
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="User not found or inactive"
-                )
-            if user.role not in allowed_roles:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Access denied. Required role: {', '.join(allowed_roles)}"
-                )
-            return user
-        except HTTPException:
-            raise
-        except Exception:
-            default_user = db.query(User).filter(User.username == "foreman_matti").first()
-            if default_user:
-                return default_user
+
+        payload = decode_access_token(auth.credentials)
+        user_id = payload.get("sub")
+        if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token"
             )
+
+        user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or inactive"
+            )
+
+        if user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied. Required role: {', '.join(allowed_roles)}"
+            )
+        return user
     return role_checker
 
 
