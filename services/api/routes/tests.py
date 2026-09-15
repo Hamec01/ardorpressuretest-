@@ -233,7 +233,6 @@ def list_or_search_pressure_tests(
     
 @router.get("/trash", response_model=List[PressureTestResponse])
 def list_trash(db: Session = Depends(get_db)):
-    purge_expired_trash(db)
     return (
         db.query(PressureTest)
         .filter(PressureTest.is_archived == True)
