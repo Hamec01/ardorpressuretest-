@@ -39,7 +39,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from services.api.database import Base
-from services.api.models import Artifact, PressureTest, TestRevision as TestRevisionModel
+from services.api.models import Artifact, PressureTest, TestRevision as RevisionModel
 from services.api.routes.tests import list_trash
 from services.api import storage as storage_module
 
@@ -80,7 +80,7 @@ def test_list_trash_returns_without_mutating_anything(db_session, tmp_path, monk
     )
     db_session.commit()
 
-    revision = TestRevisionModel(
+    revision = RevisionModel(
         pressure_test_id=test.id,
         revision_id="r1",
         status="complete",
@@ -125,7 +125,7 @@ def test_list_trash_returns_without_mutating_anything(db_session, tmp_path, monk
 
     # Assert: nothing was purged - no delete side effects on any of the three rows.
     assert db_session.query(PressureTest).filter(PressureTest.id == test_id).count() == 1
-    assert db_session.query(TestRevisionModel).filter(TestRevisionModel.id == revision_id).count() == 1
+    assert db_session.query(RevisionModel).filter(RevisionModel.id == revision_id).count() == 1
     assert db_session.query(Artifact).filter(Artifact.id == artifact_id).count() == 1
 
     # Assert: the artifact file was not unlinked from disk.
