@@ -26,9 +26,25 @@ Safety model:
     repeat the precondition (which would now trivially disagree with itself, since the
     operation's own uncommitted change is what makes andrei.sakki exist); instead it
     confirms the operation produced exactly the expected end state (exactly one admin
-    row with its identity unchanged, exactly one andrei.sakki row). Any exception before
-    the single final commit rolls back everything - nothing is ever left partially
-    applied.
+    row with its identity unchanged, exactly one andrei.sakki row).
+  - Two distinct failure outcomes are never conflated:
+      * ABORTED_BEFORE_COMMIT - the exception happened before db.commit() was ever
+        called (target verification, or any error while staging the changes). Rollback
+        is guaranteed to fully revert the session, and it is safe to report "nothing
+        changed".
+      * COMMIT_OUTCOME_UNKNOWN - the exception happened during/around db.commit() itself
+        (e.g. the connection drops after the server processes the commit but before the
+        client receives acknowledgement). Calling rollback() here would be misleading:
+        you cannot roll back a commit that may have already happened, and there is no
+        way to know from the client side whether it did. This case is never reported as
+        "rolled back" or "nothing changed" - the operator is told to stop and check the
+        database read-only (--post-check) before deciding on next steps, and never to
+        blindly re-run --apply.
+    The success message is printed strictly after both of these steps have completed
+    without error - never from inside the block that is allowed to call rollback().
+  - --post-check (read-only, independent of --apply) verifies the *result* of a
+    completed or ambiguous apply: exactly two active users with role=admin, and exactly
+    the two expected bootstrap audit events - never printing a password, hash, or UUID.
   - Target verification, required to pass in every case above:
       * ARDOR_ENV is exactly "staging" (not local/dev/test, not anything else)
       * the database dialect is PostgreSQL (never SQLite)
@@ -53,6 +69,7 @@ import argparse
 import getpass
 import sys
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import List, Optional
 
 from sqlalchemy import create_engine, text
@@ -211,6 +228,46 @@ def apply_bootstrap(db: Session, password: str, environment: str) -> ApplyResult
     return ApplyResult(admin_password_changed=True, andrei_created=True)
 
 
+class ApplyOutcome(Enum):
+    SUCCESS = "success"
+    ABORTED_BEFORE_COMMIT = "aborted_before_commit"
+    COMMIT_OUTCOME_UNKNOWN = "commit_outcome_unknown"
+
+
+@dataclass
+class ApplyRunResult:
+    outcome: ApplyOutcome
+    safe_message: Optional[str] = None
+
+
+def run_apply(db: Session, password: str, environment: str) -> ApplyRunResult:
+    """Runs apply_bootstrap() and db.commit() as two separately-handled steps, so a
+    failure while staging the changes and a failure during commit are never conflated:
+
+    - A failure from apply_bootstrap() happens strictly before commit is ever called;
+      db.rollback() is guaranteed to fully revert it, so this is ABORTED_BEFORE_COMMIT.
+    - A failure from db.commit() itself gets no rollback call at all: the commit may
+      have already reached the server, so "rolled back, nothing changed" would be a
+      false claim. This is COMMIT_OUTCOME_UNKNOWN - the caller must not treat it as
+      either success or a safe no-op, and must not blindly retry.
+
+    Never raises: every outcome, including an unexpected exception, comes back as a
+    ApplyRunResult with an already-sanitized safe_message.
+    """
+    try:
+        apply_bootstrap(db, password, environment)
+    except Exception as e:
+        db.rollback()
+        return ApplyRunResult(ApplyOutcome.ABORTED_BEFORE_COMMIT, _safe_failure_message(e))
+
+    try:
+        db.commit()
+    except Exception as e:
+        return ApplyRunResult(ApplyOutcome.COMMIT_OUTCOME_UNKNOWN, _safe_failure_message(e))
+
+    return ApplyRunResult(ApplyOutcome.SUCCESS)
+
+
 def _safe_failure_message(exc: BaseException) -> str:
     """Never surface a raw exception's full text for anything outside this script's own
     controlled error types - SQLAlchemy/psycopg2 exceptions often embed the failing SQL
@@ -302,11 +359,90 @@ def run_pre_apply_check(engine) -> bool:
         db.close()
 
 
+EXPECTED_ACTIVE_ADMIN_COUNT = 2
+BOOTSTRAP_AUDIT_ACTIONS = ("bootstrap_password_reset", "bootstrap_account_created")
+
+
+@dataclass
+class PostApplyCheckResult:
+    active_admin_usernames: List[str]
+    bootstrap_audit_event_count: int
+
+    @property
+    def ok(self) -> bool:
+        return (
+            len(self.active_admin_usernames) == EXPECTED_ACTIVE_ADMIN_COUNT
+            and self.bootstrap_audit_event_count == len(BOOTSTRAP_AUDIT_ACTIONS)
+        )
+
+
+def check_post_apply_state(db: Session) -> PostApplyCheckResult:
+    """Pure query logic for the post-apply result, factored out of run_post_apply_check()
+    so it is directly testable without needing the PostgreSQL-only `BEGIN TRANSACTION
+    READ ONLY` statement that the CLI-facing wrapper adds. Only usernames and audit
+    action names are read - never ids, hashes, or passwords."""
+    active_admins = (
+        db.query(User.username)
+        .filter(User.role == "admin", User.is_active == True)  # noqa: E712
+        .order_by(User.username)
+        .all()
+    )
+    audit_count = (
+        db.query(AuditEvent)
+        .filter(AuditEvent.action.in_(BOOTSTRAP_AUDIT_ACTIONS))
+        .count()
+    )
+    return PostApplyCheckResult(
+        active_admin_usernames=[u.username for u in active_admins],
+        bootstrap_audit_event_count=audit_count,
+    )
+
+
+def run_post_apply_check(engine) -> bool:
+    """Read-only verification of the *result* of a completed (or ambiguous, see
+    COMMIT_OUTCOME_UNKNOWN) apply. Never writes, always rolls back. Any failure is
+    reported via a safe message only, same rationale as run_dry_run()."""
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    db = SessionLocal()
+    try:
+        db.execute(text("BEGIN TRANSACTION READ ONLY;"))
+        ro = db.execute(text("SHOW transaction_read_only;")).scalar()
+        print(f"transaction_read_only: {ro}")
+        if ro != "on":
+            print("STOP: transaction_read_only is not 'on' - aborting before checks.")
+            return False
+
+        result = check_post_apply_state(db)
+        print(f"active_admin_count: {len(result.active_admin_usernames)} (expected {EXPECTED_ACTIVE_ADMIN_COUNT})")
+        print(f"active_admin_usernames: {result.active_admin_usernames}")
+        print(
+            f"bootstrap_audit_event_count: {result.bootstrap_audit_event_count} "
+            f"(expected {len(BOOTSTRAP_AUDIT_ACTIONS)})"
+        )
+        print(f"POST_APPLY_OK: {result.ok}")
+        return result.ok
+    except Exception as e:
+        print(f"POST_APPLY_CHECK_FAILED: {_safe_failure_message(e)}", file=sys.stderr)
+        return False
+    finally:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        db.close()
+
+
 def main() -> Optional[int]:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--apply", action="store_true",
         help="Perform the change. Default is a read-only dry-run that only reports the target check.",
+    )
+    mode.add_argument(
+        "--post-check", action="store_true",
+        help="Read-only: verify two active admin-role users and the two bootstrap audit "
+             "events exist. Does not apply anything.",
     )
     args = parser.parse_args()
 
@@ -316,6 +452,10 @@ def main() -> Optional[int]:
         # settings.database_url may itself contain credentials - never surface raw text.
         print(f"ENGINE_SETUP_FAILED: {_safe_failure_message(e)}", file=sys.stderr)
         return 1
+
+    if args.post_check:
+        ok = run_post_apply_check(engine)
+        return 0 if ok else 1
 
     if not args.apply:
         ok = run_dry_run(engine)
@@ -332,17 +472,30 @@ def main() -> Optional[int]:
         password = prompt_for_password()
         db = SessionLocal()
         try:
-            apply_bootstrap(db, password, settings.environment)
-            db.commit()
-            print("APPLY_OK: admin password reset, andrei.sakki created, 2 audit events committed.")
-        except Exception as e:
-            db.rollback()
-            print(f"ABORTED, rolled back, nothing changed: {_safe_failure_message(e)}", file=sys.stderr)
-            return 1
+            result = run_apply(db, password, settings.environment)
         finally:
             db.close()
     finally:
         password = None  # best-effort: drop the reference as soon as possible
+
+    if result.outcome is ApplyOutcome.ABORTED_BEFORE_COMMIT:
+        print(f"ABORTED BEFORE COMMIT, rolled back, nothing changed: {result.safe_message}", file=sys.stderr)
+        return 1
+
+    if result.outcome is ApplyOutcome.COMMIT_OUTCOME_UNKNOWN:
+        print(f"COMMIT OUTCOME UNKNOWN: {result.safe_message}", file=sys.stderr)
+        print(
+            "Do not re-run --apply. The commit may have already reached the server even "
+            "though this client did not receive confirmation. Run this script with "
+            "--post-check (read-only) to determine the actual state before deciding on "
+            "next steps.",
+            file=sys.stderr,
+        )
+        return 2
+
+    # Only reached on ApplyOutcome.SUCCESS - outside the block that is allowed to call
+    # rollback(), and after commit() has already returned without raising.
+    print("APPLY_OK: admin password reset, andrei.sakki created, 2 audit events committed.")
     return 0
 
 

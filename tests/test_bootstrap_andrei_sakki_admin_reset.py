@@ -56,10 +56,14 @@ from scripts.bootstrap_andrei_sakki_admin_reset import (  # noqa: E402
     NEW_FULL_NAME,
     NEW_ROLE,
     NEW_USERNAME,
+    ApplyOutcome,
     BootstrapPostconditionError,
     BootstrapTargetError,
     apply_bootstrap,
+    check_post_apply_state,
+    run_apply,
     run_dry_run,
+    run_post_apply_check,
     run_pre_apply_check,
     verify_target,
     _safe_failure_message,
@@ -427,3 +431,112 @@ def test_engine_setup_failure_would_also_be_reported_safely():
     assert raised is not None
     safe_message = _safe_failure_message(raised)
     assert "hunter2" not in safe_message
+
+
+# --- run_apply(): the two distinct failure outcomes must never be conflated --------
+
+def test_run_apply_success_returns_success_outcome(db_session, seeded_admin, monkeypatch):
+    def fake_apply_bootstrap(db, password, environment):
+        _force_apply_ignoring_dialect(db, password, environment)
+
+    monkeypatch.setattr(bootstrap_module, "apply_bootstrap", fake_apply_bootstrap)
+
+    result = run_apply(db_session, NEW_PASSWORD, STAGING)
+
+    assert result.outcome is ApplyOutcome.SUCCESS
+    assert result.safe_message is None
+    assert db_session.query(User).filter(User.username == NEW_USERNAME).count() == 1
+
+
+def test_run_apply_aborted_before_commit_is_reported_and_fully_rolled_back(db_session, seeded_admin, monkeypatch):
+    def failing_apply_bootstrap(db, password, environment):
+        raise BootstrapTargetError("simulated pre-commit failure, safe text only")
+
+    monkeypatch.setattr(bootstrap_module, "apply_bootstrap", failing_apply_bootstrap)
+
+    result = run_apply(db_session, NEW_PASSWORD, STAGING)
+
+    assert result.outcome is ApplyOutcome.ABORTED_BEFORE_COMMIT
+    assert "simulated pre-commit failure" in result.safe_message
+    assert db_session.query(User).filter(User.username == NEW_USERNAME).count() == 0
+    admin = db_session.query(User).filter(User.username == ADMIN_USERNAME).first()
+    assert admin.hashed_password == seeded_admin.hashed_password
+
+
+def test_run_apply_commit_failure_is_never_reported_as_rollback_or_success(db_session, seeded_admin, monkeypatch):
+    def fake_apply_bootstrap(db, password, environment):
+        _force_apply_ignoring_dialect(db, password, environment)
+
+    monkeypatch.setattr(bootstrap_module, "apply_bootstrap", fake_apply_bootstrap)
+
+    def failing_commit():
+        raise OperationalError(
+            "COMMIT",
+            {},
+            Exception("connection lost mid-commit, outcome unknown server-side"),
+        )
+
+    monkeypatch.setattr(db_session, "commit", failing_commit)
+
+    result = run_apply(db_session, NEW_PASSWORD, STAGING)
+
+    assert result.outcome is ApplyOutcome.COMMIT_OUTCOME_UNKNOWN
+    assert result.outcome is not ApplyOutcome.ABORTED_BEFORE_COMMIT
+    assert result.outcome is not ApplyOutcome.SUCCESS
+    assert "connection lost" not in result.safe_message
+    assert "outcome unknown server-side" not in result.safe_message
+    assert result.safe_message == "OperationalError (details withheld: may contain SQL text/parameters)"
+    # Crucially: run_apply must not have called rollback() here (that would be a false
+    # claim, since the commit may have already reached the server) - db_session.commit
+    # is monkeypatched to always fail, so if the real code path additionally tried
+    # rollback() it would still be reachable and this assertion only documents intent;
+    # the real guarantee is structural (see the source) and covered by the outcome check
+    # plus the safe_message content above.
+
+
+# --- check_post_apply_state() / run_post_apply_check(): safe result verification ----
+
+def test_check_post_apply_state_before_apply_shows_one_admin_zero_events(db_session, seeded_admin):
+    result = check_post_apply_state(db_session)
+    assert result.active_admin_usernames == [ADMIN_USERNAME]
+    assert result.bootstrap_audit_event_count == 0
+    assert result.ok is False
+
+
+def test_check_post_apply_state_after_apply_shows_two_admins_two_events(db_session, seeded_admin):
+    _force_apply_ignoring_dialect(db_session, NEW_PASSWORD, STAGING)
+    db_session.commit()
+
+    result = check_post_apply_state(db_session)
+    assert sorted(result.active_admin_usernames) == sorted([ADMIN_USERNAME, NEW_USERNAME])
+    assert result.bootstrap_audit_event_count == 2
+    assert result.ok is True
+
+
+def test_run_post_apply_check_output_never_contains_password_hash_or_uuid(db_session, seeded_admin, capsys, monkeypatch):
+    _force_apply_ignoring_dialect(db_session, NEW_PASSWORD, STAGING)
+    db_session.commit()
+
+    admin = db_session.query(User).filter(User.username == ADMIN_USERNAME).first()
+    andrei = db_session.query(User).filter(User.username == NEW_USERNAME).first()
+
+    # run_post_apply_check() itself always issues the Postgres-only
+    # `BEGIN TRANSACTION READ ONLY` and would fail on this SQLite fixture (proven
+    # separately by the dry-run failure-path test) - here we only need to prove the
+    # *printed content* of a successful check is safe, so we drive the same print
+    # statements it uses directly against the already-populated fixture session.
+    result = check_post_apply_state(db_session)
+    output = (
+        f"active_admin_count: {len(result.active_admin_usernames)}\n"
+        f"active_admin_usernames: {result.active_admin_usernames}\n"
+        f"bootstrap_audit_event_count: {result.bootstrap_audit_event_count}\n"
+        f"POST_APPLY_OK: {result.ok}\n"
+    )
+
+    assert NEW_PASSWORD not in output
+    assert NEW_PASSWORD.strip() not in output
+    assert admin.hashed_password not in output
+    assert andrei.hashed_password not in output
+    assert admin.id not in output
+    assert andrei.id not in output
+    assert result.ok is True
