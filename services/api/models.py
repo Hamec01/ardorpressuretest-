@@ -21,9 +21,20 @@ class User(Base):
     email = Column(String(128), unique=True, index=True, nullable=True)
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(128), nullable=True)
-    role = Column(String(32), default="operator", nullable=False)  # operator, foreman, manager, admin
+    role = Column(String(32), default="viewer", nullable=False)  # admin, foreman, viewer (ADR-005); legacy rows may still read "operator"
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class Gauge(Base):
+    __tablename__ = "gauges"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    serial_number = Column(String(128), unique=True, index=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
 
 class PressureTest(Base):
@@ -39,7 +50,7 @@ class PressureTest(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     log_no = Column(String(64), index=True, nullable=False)
-    
+
     # PipeCloud workflow manual status
     pipecloud_added = Column(Boolean, default=False, nullable=False)
     pipecloud_updated_at = Column(DateTime(timezone=True), nullable=True)
@@ -49,6 +60,12 @@ class PressureTest(Base):
     is_archived = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    # R2a: additive actor references, independent of the legacy pipecloud_updated_by_*
+    # fields above and of audit_events - none of those are rewritten by this addition.
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=True)
+    updated_by_user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=True)
+    responsible_user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=True)  # current responsible person, distinct from authorship and from any access right
 
     revisions = relationship("TestRevision", back_populates="pressure_test", cascade="all, delete-orphan")
 
@@ -66,6 +83,15 @@ class TestRevision(Base):
     metadata_json = Column(JSON, default=dict, nullable=False)
     metrics_json = Column(JSON, default=dict, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    # R2a: gauge selection. In Draft, gauge_id and gauge_serial_snapshot are updated
+    # together whenever the selected Gauge changes. On transition to Complete,
+    # gauge_serial_snapshot is fixed from the then-selected Gauge and becomes immutable;
+    # any further change requires a new revision, not an edit of this one.
+    gauge_id = Column(String(36), ForeignKey("gauges.id"), index=True, nullable=True)
+    gauge_serial_snapshot = Column(String(128), nullable=True)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=True)
+    updated_by_user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=True)
 
     pressure_test = relationship("PressureTest", back_populates="revisions")
     artifacts = relationship("Artifact", back_populates="revision", cascade="all, delete-orphan")
@@ -117,10 +143,14 @@ class PlannedTestList(Base):
     name = Column(String(128), nullable=False)
     description = Column(Text, nullable=True)
     is_archived = Column(Boolean, default=False, nullable=False)
-    created_by_user_id = Column(String(36), nullable=True)
+    created_by_user_id = Column(String(36), nullable=True)  # legacy field, not touched by R2a - no FK, kept exactly as-is
     created_by_name = Column(String(128), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    # R2a: additive actor references. created_by_user_id above is untouched.
+    updated_by_user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=True)
+    responsible_user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=True)  # current responsible person, distinct from authorship and from any access right
 
     pipes = relationship("PlannedTestPipe", back_populates="planned_list", cascade="all, delete-orphan")
 
@@ -194,6 +224,12 @@ class PressureTestRecord(Base):
     is_archived = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    # R2a: additive actor references, independent of confirmed_by_* above (an electronic
+    # signature/verification concept, not authorship or current responsibility).
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=True)
+    updated_by_user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=True)
+    responsible_user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=True)  # current responsible person, distinct from authorship and from any access right
 
     items = relationship("PressureTestRecordItem", back_populates="record", cascade="all, delete-orphan")
     logs = relationship("PressureTestRecordLog", back_populates="record", cascade="all, delete-orphan", order_by="PressureTestRecordLog.position")
