@@ -215,6 +215,53 @@ def test_target_guards_run_before_any_r2a_table_query(db_session, monkeypatch):
     assert result.unknown_status_blocker is None
 
 
+def test_run_plan_ok_false_when_a_row_already_has_responsible_set_to_andrei(db_session, seeded_andrei, monkeypatch):
+    """R2c's own idempotency guard (refuse whenever gauges is non-empty) does not by
+    itself catch a row whose responsible_user_id already equals andrei's id, since
+    responsible_user_id and gauges are populated by two different steps of the same
+    apply - a prior partial apply, or an out-of-band write, could set one without the
+    other. run_plan() itself must independently refuse in that case, with a reason that
+    says every responsible_user_id must be NULL before the first R2c apply - not just an
+    isolated R2c-side test or a manual PostgreSQL scenario, since run_plan() is the
+    shared logic both scripts.plan_r2_legacy_backfill.py and R2c's own pre-apply/apply
+    verification depend on.
+
+    dialect_is_postgresql is unavoidably False on SQLite, so verify_target() and
+    compute_wika_nr_stats() (the only two functions in this pipeline that need
+    PostgreSQL-only syntax) are monkeypatched to return a valid, conflict-free result -
+    every other function in run_plan(), including compute_responsibility_stats() and the
+    "problems" loop under test here, runs for real, unmodified, against this SQLite
+    session."""
+    monkeypatch.setattr(
+        plan_module, "verify_target",
+        lambda db, environment: TargetCheckResult(
+            ardor_env_is_staging=True, dialect_is_postgresql=True,
+            current_database_is_expected=True, alembic_head_is_expected=True,
+            andrei_count=1, andrei_is_active_admin=True, problems=[],
+        ),
+    )
+    monkeypatch.setattr(
+        plan_module, "compute_wika_nr_stats",
+        lambda db: WikaNrStats(
+            total_revisions=0, missing_or_null=0, blank=0, nonblank=0,
+            normalized_group_count=0, formatting_conflict_group_count=0,
+            status_breakdown=[], revisions_eligible_for_gauge_link=0, gauges_to_create=0,
+        ),
+    )
+
+    db_session.add(PressureTest(log_no="RUNPLAN-1", responsible_user_id=seeded_andrei.id))
+    db_session.commit()
+
+    result = run_plan(db_session, STAGING)
+
+    assert result.target.ok is True
+    assert result.ok is False
+    assert any(
+        "pressure_tests" in p and "before the first R2c apply every row's responsible_user_id must be NULL" in p
+        for p in result.problems
+    ), result.problems
+
+
 # --- compute_responsibility_stats(): per-table counts -------------------------------
 
 def test_responsibility_stats_all_null_by_default(db_session, seeded_andrei):

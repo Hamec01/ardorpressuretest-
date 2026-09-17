@@ -468,10 +468,19 @@ def run_plan(db: Session, environment: str) -> PlanResult:
 
     problems: List[str] = []
     for s in responsibility_stats:
-        if s.responsible_assigned_to_other > 0:
+        # Before the first R2c apply, every row's responsible_user_id must be NULL -
+        # not "NULL or already andrei". A row already showing andrei here means either a
+        # prior partial apply or an out-of-band write, and R2c's own idempotency guard
+        # (refuse whenever gauges is non-empty) does not by itself catch that case, since
+        # responsible_user_id and gauges are populated by two different steps of the
+        # same apply - so this check has to stand on its own.
+        already_set = s.responsible_already_andrei + s.responsible_assigned_to_other
+        if already_set > 0:
             problems.append(
-                f"{s.table_name}: {s.responsible_assigned_to_other} row(s) already have "
-                f"responsible_user_id assigned to someone other than {ANDREI_USERNAME}"
+                f"{s.table_name}: {already_set} row(s) already have responsible_user_id set "
+                f"(already_andrei={s.responsible_already_andrei}, "
+                f"assigned_to_other={s.responsible_assigned_to_other}) - before the first R2c "
+                f"apply every row's responsible_user_id must be NULL"
             )
     if r2a_field_stats.gauges_row_count > 0:
         problems.append(f"gauges table is not empty ({r2a_field_stats.gauges_row_count} row(s))")
