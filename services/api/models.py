@@ -49,7 +49,11 @@ class PressureTest(Base):
     )
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    log_no = Column(String(64), index=True, nullable=False)
+    # No plain index=True here: the canonical index on log_no is the existing partial
+    # unique index below (uq_pressure_tests_active_log_no) - a second, redundant plain
+    # btree index was never actually created by any migration and does not exist on
+    # live either, so the model must not claim one.
+    log_no = Column(String(64), nullable=False)
 
     # PipeCloud workflow manual status
     pipecloud_added = Column(Boolean, default=False, nullable=False)
@@ -142,7 +146,10 @@ class PlannedTestList(Base):
     id = Column(String(36), primary_key=True, default=generate_uuid)
     name = Column(String(128), nullable=False)
     description = Column(Text, nullable=True)
-    is_archived = Column(Boolean, default=False, nullable=False)
+    # index=True reflects the existing ix_planned_test_lists_is_archived index, which a
+    # migration already created on both a fresh chain and live - the model was simply
+    # never updated to declare it.
+    is_archived = Column(Boolean, default=False, nullable=False, index=True)
     created_by_user_id = Column(String(36), nullable=True)  # legacy field, not touched by R2a - no FK, kept exactly as-is
     created_by_name = Column(String(128), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)

@@ -13,7 +13,7 @@ What it reports (all counts/booleans only - never a UUID, Log No., real gauge se
 number, metadata_json content, password, hash, connection string, or .env value):
 
   1. Target validity: ARDOR_ENV == "staging", PostgreSQL dialect, current_database() ==
-     "ardor_pressure_test", Alembic head == addffa66a1d8, exactly one active admin-role
+     "ardor_pressure_test", Alembic head == 2327325e8143, exactly one active admin-role
      andrei.sakki. The database-identity checks (dialect, current_database, Alembic
      head) surface only as booleans in every output path - the actual database name or
      connection string is never printed, even when the check fails. All of this runs
@@ -67,7 +67,7 @@ from services.api.models import User
 
 EXPECTED_ARDOR_ENV = "staging"
 EXPECTED_DATABASE_NAME = "ardor_pressure_test"
-EXPECTED_ALEMBIC_HEAD = "addffa66a1d8"
+EXPECTED_ALEMBIC_HEAD = "2327325e8143"
 ANDREI_USERNAME = "andrei.sakki"
 RESPONSIBILITY_TABLES = ("pressure_tests", "planned_test_lists", "pressure_test_records")
 KNOWN_STATUSES = ("draft", "complete", "confirmed", "archived")

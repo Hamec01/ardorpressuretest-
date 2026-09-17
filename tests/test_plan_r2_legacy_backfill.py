@@ -10,7 +10,7 @@ Two tiers, matching the two things that need proving:
      run_plan()/run_dry_plan() success path use PostgreSQL-only jsonb operators
      (`::jsonb ?`) and the real `alembic_version`/`current_database()` shape, and are
      deliberately NOT exercised here - they are covered separately against a throwaway
-     PostgreSQL instance upgraded to addffa66a1d8 with synthetic data (a manual CLI
+     PostgreSQL instance upgraded to 2327325e8143 with synthetic data (a manual CLI
      verification, not a pytest module, since it needs a real Postgres server this test
      suite does not have access to).
 
