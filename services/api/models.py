@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, JSON, UniqueConstraint, text
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String, Text, JSON, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 from services.api.database import Base
 
@@ -25,6 +25,10 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     last_login_at = Column(DateTime(timezone=True), nullable=True)
+    # R3b: additive only - no auth code reads or writes this yet. Forces a password
+    # change on next login once R3's change-password flow exists; true only ever set by
+    # an admin-driven create/reset action (also not implemented yet).
+    must_change_password = Column(Boolean, default=False, nullable=False)
 
 
 class Gauge(Base):
@@ -301,3 +305,75 @@ class PressureTestRecordItem(Base):
 
     record = relationship("PressureTestRecord", back_populates="items")
     record_log = relationship("PressureTestRecordLog", back_populates="items")
+
+
+class UserSession(Base):
+    """R3b: additive schema only - no auth code creates, reads, revokes, or otherwise
+    touches this table yet. See docs/adr/ADR-005-auth-session-model.md §8/§9 and the R3
+    design correspondence for the session model this table implements; that behavior
+    lands in a later R3b/R3 stage, not here.
+
+    token_hash / previous_token_hash / csrf_token_hash store only a SHA-256 hex digest
+    of a >=256-bit random secret - never the secret itself - matching the same
+    hash-only discipline ADR-005 §10 already established for share tokens.
+    previous_token_hash exists only for the desktop refresh-rotation reuse-detection
+    design (R3 point 2); csrf_token_hash exists only for the browser cookie-CSRF design
+    (R3 point 5) - the CHECK constraints below enforce which channel each applies to.
+    """
+    __tablename__ = "sessions"
+    __table_args__ = (
+        CheckConstraint("channel IN ('browser', 'desktop')", name="ck_sessions_channel"),
+        CheckConstraint(
+            "(channel = 'browser' AND csrf_token_hash IS NOT NULL) OR "
+            "(channel = 'desktop' AND csrf_token_hash IS NULL)",
+            name="ck_sessions_csrf_token_hash_by_channel",
+        ),
+        CheckConstraint(
+            "previous_token_hash IS NULL OR channel = 'desktop'",
+            name="ck_sessions_previous_token_hash_desktop_only",
+        ),
+        CheckConstraint(
+            "(revoked_at IS NULL AND revoked_reason IS NULL) OR "
+            "(revoked_at IS NOT NULL AND revoked_reason IS NOT NULL)",
+            name="ck_sessions_revoked_at_reason_together",
+        ),
+        CheckConstraint("length(token_hash) = 64", name="ck_sessions_token_hash_length"),
+        CheckConstraint(
+            "previous_token_hash IS NULL OR length(previous_token_hash) = 64",
+            name="ck_sessions_previous_token_hash_length",
+        ),
+        CheckConstraint(
+            "csrf_token_hash IS NULL OR length(csrf_token_hash) = 64",
+            name="ck_sessions_csrf_token_hash_length",
+        ),
+        CheckConstraint("expires_at > created_at", name="ck_sessions_expires_after_created"),
+        Index(
+            "ix_sessions_previous_token_hash",
+            "previous_token_hash",
+            postgresql_where=text("previous_token_hash IS NOT NULL"),
+        ),
+        Index(
+            "ix_sessions_user_id_active",
+            "user_id",
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+    )
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    # No ondelete="CASCADE": a user row referenced by a session is never silently
+    # deletable out from under it - matches every other users.id FK in this file
+    # (created_by_user_id/updated_by_user_id/responsible_user_id all default to the
+    # same no-action behavior).
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    channel = Column(String(16), nullable=False)  # 'browser' | 'desktop'
+    token_hash = Column(String(64), unique=True, index=True, nullable=False)
+    previous_token_hash = Column(String(64), nullable=True)
+    csrf_token_hash = Column(String(64), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_reason = Column(String(32), nullable=True)
+    device_label = Column(String(128), nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(256), nullable=True)
