@@ -1,11 +1,9 @@
-import hashlib
-import math
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import or_, text
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from services.api.auth import (
     AuthenticationMethod,
@@ -22,8 +20,13 @@ from services.api.auth import (
 )
 from services.api.database import get_db
 from services.api.config import settings
+from services.api.auth_operations import (
+    commit_auth_changes,
+    enforce_login_rate_limit,
+    new_auth_audit_event,
+)
 from services.api.http_security import clear_browser_auth_cookies, set_browser_auth_cookies
-from services.api.models import AuditEvent, User, UserSession
+from services.api.models import User, UserSession
 from services.api.session_service import (
     BROWSER_IDLE_LIFETIME,
     RevocationReason,
@@ -86,81 +89,6 @@ class RevokeSessionResponse(BaseModel):
     status: str
 
 
-_LOGIN_FAILURE_WINDOW = timedelta(minutes=15)
-_LOGIN_FAILURE_LIMIT = 5
-
-
-def _audit_event(
-    *,
-    user: User | None,
-    action: str,
-    actor_name: str,
-    details: dict,
-) -> AuditEvent:
-    return AuditEvent(
-        entity_type="user",
-        entity_id=str(user.id) if user is not None else actor_name,
-        action=action,
-        user_id=str(user.id) if user is not None else None,
-        actor_name=actor_name,
-        details_json=details,
-    )
-
-
-def _normalized_db_time(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
-
-
-def _login_rate_lock_key(username: str) -> int:
-    digest = hashlib.sha256(f"ardor-login:{username}".encode("utf-8")).digest()
-    return int.from_bytes(digest[:8], byteorder="big", signed=True)
-
-
-def _enforce_login_rate_limit(db: Session, username: str, now: datetime) -> None:
-    """Serialize and enforce the rolling per-username login-failure window.
-
-    PostgreSQL's transaction-scoped advisory lock makes the count + subsequent
-    success/failure commit one serialized operation per normalized username. This
-    prevents concurrent requests from all observing four failures and then performing
-    expensive Argon2 work together. SQLite is used only by isolated tests and has no
-    equivalent advisory-lock function.
-    """
-    if db.get_bind().dialect.name == "postgresql":
-        db.execute(
-            text("SELECT pg_advisory_xact_lock(:lock_key)"),
-            {"lock_key": _login_rate_lock_key(username)},
-        )
-
-    cutoff = now - _LOGIN_FAILURE_WINDOW
-    recent_failures = (
-        db.query(AuditEvent.created_at)
-        .filter(
-            AuditEvent.action == "login_failed",
-            AuditEvent.actor_name == username,
-            AuditEvent.created_at > cutoff,
-        )
-        .order_by(AuditEvent.created_at.desc())
-        .limit(_LOGIN_FAILURE_LIMIT)
-        .all()
-    )
-    if len(recent_failures) < _LOGIN_FAILURE_LIMIT:
-        return
-
-    fifth_newest = _normalized_db_time(recent_failures[-1][0])
-    retry_after = max(
-        1,
-        math.ceil((fifth_newest + _LOGIN_FAILURE_WINDOW - now).total_seconds()),
-    )
-    db.rollback()
-    raise HTTPException(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail="Too many login attempts. Try again later.",
-        headers={"Retry-After": str(retry_after)},
-    )
-
-
 def _require_account_access(
     context: AuthenticatedRequest,
     *,
@@ -175,17 +103,6 @@ def _require_account_access(
         )
 
 
-def _commit_auth_changes(db: Session) -> None:
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service unavailable",
-        )
-
-
 @router.post("/login", response_model=LoginResponse)
 def login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     """Authenticate, retain transitional Bearer support, and issue browser cookies
@@ -197,7 +114,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
     """
     username = req.username.strip()
     now = datetime.now(timezone.utc)
-    _enforce_login_rate_limit(db, username, now)
+    enforce_login_rate_limit(db, username, now)
     user = db.query(User).filter(User.username == username, User.is_active == True).first()
     password_check = (
         check_password_with_upgrade(req.password, user.hashed_password)
@@ -208,14 +125,14 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
         verify_password(req.password, DUMMY_ARGON2_HASH)
     if user is None or password_check is None or not password_check.ok:
         db.add(
-            _audit_event(
+            new_auth_audit_event(
                 user=None,
                 action="login_failed",
                 actor_name=username,
                 details={"channel": "browser", "ip": request.client.host if request.client else None},
             )
         )
-        _commit_auth_changes(db)
+        commit_auth_changes(db)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password"
@@ -243,7 +160,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
     })
 
     db.add(
-        _audit_event(
+        new_auth_audit_event(
             user=user,
             action="login",
             actor_name=user.full_name or user.username,
@@ -254,7 +171,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
             },
         )
     )
-    _commit_auth_changes(db)
+    commit_auth_changes(db)
 
     if browser_issue is not None:
         set_browser_auth_cookies(response, browser_issue.session_secret, browser_issue.csrf_secret)
@@ -294,14 +211,14 @@ def logout(
             db.rollback()
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session invalid")
     db.add(
-        _audit_event(
+        new_auth_audit_event(
             user=context.user,
             action="logout",
             actor_name=context.user.full_name or context.user.username,
             details={"channel": context.method.value},
         )
     )
-    _commit_auth_changes(db)
+    commit_auth_changes(db)
     clear_browser_auth_cookies(response)
     return {"status": "ok"}
 
@@ -358,14 +275,14 @@ def change_password(
         )
 
     db.add(
-        _audit_event(
+        new_auth_audit_event(
             user=context.user,
             action="password_changed",
             actor_name=context.user.full_name or context.user.username,
             details={"channel": context.method.value},
         )
     )
-    _commit_auth_changes(db)
+    commit_auth_changes(db)
 
     if browser_rotation is not None:
         set_browser_auth_cookies(
@@ -435,14 +352,14 @@ def delete_session(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
     db.add(
-        _audit_event(
+        new_auth_audit_event(
             user=context.user,
             action="session_revoked",
             actor_name=context.user.full_name or context.user.username,
             details={"current_session": session_id == context.session_id},
         )
     )
-    _commit_auth_changes(db)
+    commit_auth_changes(db)
     if session_id == context.session_id:
         clear_browser_auth_cookies(response)
     return {"status": "ok"}
