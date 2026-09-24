@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from wika_report import __version__
 from wika_report.models import ArtifactItem, RevisionManifest
 
 logger = logging.getLogger("wika_report")
@@ -51,7 +52,7 @@ def write_manifest(
     """Записывает manifest.json в каталог ревизии."""
     manifest = RevisionManifest(
         manifest_version="1.0",
-        core_version="1.0.0",
+        core_version=__version__,
         log_no=log_no,
         revision_id=revision_id,
         created_at_utc=datetime.now(timezone.utc).isoformat(),

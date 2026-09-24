@@ -10,6 +10,7 @@ from wika_report.auth_client import (
     DesktopAuthClient,
     DesktopAuthenticationError,
 )
+from wika_report.config import DEFAULT_SYNC_SERVER_URL, normalize_sync_server_url
 from wika_report.sync_client import SyncClient
 from wika_report.sync_queue import QueueItem
 
@@ -26,6 +27,48 @@ class FakeKeyring:
 
     def delete_password(self, service, account):
         self.values.pop((service, account), None)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("https://ardor.example", "https://ardor.example"),
+        ("https://ardor.example/", "https://ardor.example"),
+        ("http://127.0.0.1:8080", "http://127.0.0.1:8080"),
+        ("http://localhost:8080/", "http://localhost:8080"),
+        ("http://[::1]:8080", "http://[::1]:8080"),
+    ],
+)
+def test_sync_server_url_accepts_https_and_explicit_loopback_http(value, expected):
+    assert normalize_sync_server_url(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        " https://ardor.example",
+        "http://ardor.example",
+        "ftp://ardor.example",
+        "https://user:password@ardor.example",
+        "https://ardor.example/api",
+        "https://ardor.example?query=1",
+        "https://ardor.example#fragment",
+        "https://ardor.example:bad",
+    ],
+)
+def test_sync_server_url_rejects_unsafe_or_non_origin_values(value):
+    with pytest.raises(ValueError, match="sync_server_url"):
+        normalize_sync_server_url(value)
+
+
+def test_default_sync_server_is_the_verified_https_origin():
+    assert DEFAULT_SYNC_SERVER_URL == "https://84-247-130-242.sslip.io"
+
+
+def test_auth_client_rejects_remote_plain_http_before_any_request():
+    with pytest.raises(ValueError, match="HTTPS"):
+        DesktopAuthClient("http://84.247.130.242:8080", keyring_backend=FakeKeyring())
 
 
 class FailingKeyring(FakeKeyring):

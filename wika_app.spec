@@ -1,5 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_submodules
+
 block_cipher = None
 
 a = Analysis(
@@ -10,7 +12,7 @@ a = Analysis(
         ('config.json', '.'),
         ('resources/app_icon.ico', 'resources'),
         ('resources/logo.png', 'resources'),
-    ],
+    ] + collect_submodules('keyring.backends') + collect_submodules('win32ctypes'),
     hiddenimports=[
         'openpyxl',
         'matplotlib',

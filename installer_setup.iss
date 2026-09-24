@@ -1,7 +1,7 @@
 ; Inno Setup Script for WIKA CPG1500 Pressure Analyzer
 
 #define MyAppName "WIKA CPG1500 Pressure Analyzer"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.1.0"
 #define MyAppPublisher "WIKA Analyzer Tools"
 #define MyAppExeName "WIKA CPG1500 Processor.exe"
 
@@ -29,7 +29,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "dist\WIKA CPG1500 Processor.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "config.json"; DestDir: "{app}"; Flags: ignoreversion
+Source: "config.json"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
 Source: "resources\app_icon.ico"; DestDir: "{app}\resources"; Flags: ignoreversion
 
 [Dirs]

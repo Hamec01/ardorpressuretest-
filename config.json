@@ -3,6 +3,7 @@
   "default_input_unit": null,
   "move_processed_files": false,
   "open_output_folder_after_finish": true,
+  "sync_server_url": "https://84-247-130-242.sslip.io",
   "graph": {
     "dpi": 180,
     "width_inches": 14,

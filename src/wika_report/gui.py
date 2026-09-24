@@ -491,6 +491,7 @@ class WikaAppGUI:
                 "default_input_unit": self.config.default_input_unit,
                 "move_processed_files": self.config.move_processed_files,
                 "open_output_folder_after_finish": self.config.open_output_folder_after_finish,
+                "sync_server_url": self.config.sync_server_url,
                 "graph": {
                     "y_min_bar": self.config.graph.y_min_bar,
                     "y_max_bar": self.config.graph.y_max_bar,
@@ -538,7 +539,7 @@ class WikaAppGUI:
         from wika_report.sync_client import SyncClient
         from wika_report.sync_queue import sync_queue
 
-        base_url = "http://127.0.0.1:8080"
+        base_url = self.config.sync_server_url
         auth_client = DesktopAuthClient(base_url=base_url)
         try:
             has_saved_login = auth_client.has_saved_login()

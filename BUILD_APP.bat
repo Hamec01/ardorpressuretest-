@@ -36,6 +36,14 @@ echo.
 echo [1/2] Copying configuration file to dist...
 copy /y config.json "dist\config.json" >nul
 
+echo [2/2] Verifying the built executable starts in CLI mode...
+"dist\WIKA CPG1500 Processor.exe" --version
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] Built executable smoke test failed!
+    exit /b 1
+)
+
 echo.
 echo ============================================================
 echo   BUILD COMPLETED SUCCESSFULLY!

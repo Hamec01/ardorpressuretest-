@@ -3,6 +3,7 @@ import os
 import sys
 from pathlib import Path
 
+from wika_report import __version__
 from wika_report.config import load_config
 from wika_report.file_processor import process_batch
 from wika_report.logging_setup import setup_logging
@@ -18,6 +19,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Automatic parsing, cleaning and report generation for WIKA CPG1500 CSV files"
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--input", type=str, default="input", help="Path to input CSV folder (default: input)")
     parser.add_argument("--output", type=str, default="output", help="Path to output folder (default: output)")
     parser.add_argument("--config", type=str, default="config.json", help="Path to config JSON file")

@@ -121,7 +121,7 @@ class ArtifactItem:
 class RevisionManifest:
     """Неизменяемый манифест ревизии с метаданными и контрольными суммами."""
     manifest_version: str = "1.0"
-    core_version: str = "1.0.0"
+    core_version: str = "1.1.0"
     log_no: str = ""
     revision_id: str = ""
     created_at_utc: str = ""
@@ -220,5 +220,4 @@ def normalize_log_no(raw_log: Optional[str], fallback_name: str = "report") -> s
         val = val.replace(ch, '_')
     val = val.strip(" ._")
     return val or "report"
-
 

@@ -14,6 +14,8 @@ def _sync_method_source():
 
 def test_sync_gui_uses_keyring_auth_client_before_constructing_sync_client():
     source = _sync_method_source()
+    assert "base_url = self.config.sync_server_url" in source
+    assert 'base_url = "http://127.0.0.1:8080"' not in source
     assert "DesktopAuthClient(base_url=base_url)" in source
     assert source.index("auth_client.get_access_token()") < source.index(
         "SyncClient(base_url=base_url, auth_client=auth_client)"

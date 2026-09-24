@@ -2,6 +2,43 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
+
+
+DEFAULT_SYNC_SERVER_URL = "https://84-247-130-242.sslip.io"
+
+
+def normalize_sync_server_url(value: str) -> str:
+    """Return a canonical desktop API origin.
+
+    Remote sync is HTTPS-only. Plain HTTP remains available solely for explicit
+    loopback development, never for an arbitrary LAN or public host.
+    """
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise ValueError("sync_server_url must be a non-empty URL without surrounding whitespace")
+    parsed = urlparse(value)
+    try:
+        port = parsed.port
+    except ValueError:
+        raise ValueError("sync_server_url has an invalid port") from None
+    if (
+        not parsed.scheme
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in ("", "/")
+        or parsed.params
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("sync_server_url must be an origin without credentials, path, query, or fragment")
+    hostname = (parsed.hostname or "").lower()
+    is_loopback = hostname in {"localhost", "127.0.0.1", "::1"}
+    if parsed.scheme != "https" and not (parsed.scheme == "http" and is_loopback):
+        raise ValueError("sync_server_url must use HTTPS (HTTP is allowed only for loopback development)")
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    authority = f"{host}:{port}" if port is not None else host
+    return f"{parsed.scheme}://{authority}"
 
 
 @dataclass
@@ -49,6 +86,7 @@ class AppConfig:
     default_input_unit: Optional[str] = None
     move_processed_files: bool = False
     open_output_folder_after_finish: bool = True
+    sync_server_url: str = DEFAULT_SYNC_SERVER_URL
     graph: GraphConfig = field(default_factory=GraphConfig)
     analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
 
@@ -89,6 +127,9 @@ def parse_config_dict(data: Dict[str, Any]) -> AppConfig:
         if not isinstance(data["open_output_folder_after_finish"], bool):
             raise ValueError("Parameter 'open_output_folder_after_finish' must be a boolean (true/false).")
         cfg.open_output_folder_after_finish = data["open_output_folder_after_finish"]
+
+    if "sync_server_url" in data:
+        cfg.sync_server_url = normalize_sync_server_url(data["sync_server_url"])
 
     # Graph settings
     if "graph" in data and isinstance(data["graph"], dict):

@@ -7,6 +7,8 @@ from typing import Optional
 import httpx
 import keyring
 
+from wika_report.config import normalize_sync_server_url
+
 
 class DesktopAuthenticationError(RuntimeError):
     pass
@@ -27,7 +29,7 @@ class DesktopAuthClient:
         keyring_backend=None,
         transport: Optional[httpx.BaseTransport] = None,
     ):
-        self.base_url = base_url.rstrip("/")
+        self.base_url = normalize_sync_server_url(base_url)
         self.timeout = timeout
         self._keyring = keyring_backend or keyring
         self._transport = transport
