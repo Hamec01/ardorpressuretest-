@@ -224,7 +224,7 @@ def test_validate_new_password_constants_match_spec():
     assert PASSWORD_MAX_LENGTH == 128
 
 
-# --- DUMMY_ARGON2_HASH: fixed, valid, not used by any login path yet ----------------
+# --- DUMMY_ARGON2_HASH: fixed, valid, used by the hardened login path ---------------
 
 def test_dummy_argon2_hash_is_a_valid_argon2id_hash_with_the_configured_parameters():
     assert DUMMY_ARGON2_HASH.startswith("$argon2id$")
@@ -240,14 +240,13 @@ def test_dummy_argon2_hash_verifies_only_against_its_own_known_fixed_plaintext()
     assert verify_password("some other guess", DUMMY_ARGON2_HASH) is False
 
 
-def test_dummy_argon2_hash_not_referenced_by_any_route_yet():
-    """Static proof it is genuinely unused so far - no routes module imports it."""
-    import subprocess
-    result = subprocess.run(
-        ["grep", "-rl", "DUMMY_ARGON2_HASH", "services/api/routes/"],
-        capture_output=True, text=True,
-    )
-    assert result.stdout.strip() == "", f"DUMMY_ARGON2_HASH is referenced in: {result.stdout}"
+def test_dummy_argon2_hash_is_used_only_by_the_auth_login_route():
+    """R3b-4 activates the primitive that R3b-2 intentionally left unwired."""
+    import inspect
+    from services.api.routes.auth import login
+
+    source = inspect.getsource(login)
+    assert "verify_password(req.password, DUMMY_ARGON2_HASH)" in source
 
 
 # --- opaque secret helpers: entropy, shape, hash-only storage, constant-time compare -

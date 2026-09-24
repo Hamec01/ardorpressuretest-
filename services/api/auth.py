@@ -13,9 +13,13 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 from services.api.config import settings
 from services.api.database import get_db
-from services.api.models import User
+from services.api.models import User, UserSession
 from services.api.security import compare_secret_hashes, generate_opaque_secret, hash_opaque_secret
-from services.api.session_service import validate_browser_session, validate_desktop_session
+from services.api.session_service import (
+    validate_browser_csrf,
+    validate_browser_session,
+    validate_desktop_session,
+)
 
 security_bearer = HTTPBearer(auto_error=False)
 
@@ -521,6 +525,44 @@ def require_authentication_context(
     db: Session = Depends(get_db),
 ) -> AuthenticatedRequest:
     return authenticate_request(db, request=request, auth=auth)
+
+
+def require_mutating_authentication_context(
+    request: Request,
+    context: AuthenticatedRequest = Depends(require_authentication_context),
+    db: Session = Depends(get_db),
+) -> AuthenticatedRequest:
+    """Add Origin + server-bound CSRF checks to cookie-authenticated mutations.
+
+    Bearer credentials are not ambient browser credentials and therefore do not use
+    the browser CSRF protocol. Browser requests must prove both the configured origin
+    and knowledge of the CSRF secret bound to their exact server-side session row.
+    """
+    if context.method is not AuthenticationMethod.BROWSER_SESSION:
+        return context
+    if request.headers.get("origin") != settings.public_origin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Request origin is not allowed",
+        )
+    csrf_secret = request.headers.get("x-csrf-token")
+    csrf_cookie = request.cookies.get(settings.csrf_cookie_name)
+    if not csrf_secret or not csrf_cookie or not hmac.compare_digest(csrf_secret, csrf_cookie):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF validation failed",
+        )
+    record = (
+        db.query(UserSession)
+        .filter(UserSession.id == context.session_id, UserSession.user_id == context.user.id)
+        .one_or_none()
+    )
+    if record is None or not validate_browser_csrf(record, csrf_secret):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF validation failed",
+        )
+    return context
 
 
 def get_current_user(

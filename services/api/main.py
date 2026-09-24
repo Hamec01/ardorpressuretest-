@@ -6,6 +6,7 @@ from services.api.config import settings
 from services.api.database import Base, engine
 from services.api.auth import seed_default_users
 from services.api.database import SessionLocal
+from services.api.http_security import clear_browser_auth_cookies
 from services.api.routes import audit, auth, health, planned_tests, process, records, sync, tests
 
 logging.basicConfig(level=logging.INFO if not settings.debug else logging.DEBUG)
@@ -44,6 +45,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def clear_rejected_browser_session_cookies(request, call_next):
+    """Stop a rejected browser session from being resent on every later request."""
+    response = await call_next(request)
+    if response.status_code == 401 and settings.session_cookie_name in request.cookies:
+        clear_browser_auth_cookies(response)
+    return response
 
 app.include_router(health.router)
 app.include_router(auth.router)
