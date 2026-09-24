@@ -56,6 +56,8 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
   const [isResolvingPipes, setIsResolvingPipes] = useState<boolean>(false);
   const [availablePipeNumbers, setAvailablePipeNumbers] = useState<string[]>([]);
   const [availableBundleNumbers, setAvailableBundleNumbers] = useState<string[]>([]);
+  const [selectedBundleFilter, setSelectedBundleFilter] = useState<string | null>(null);
+  const [bundlePipeNumbers, setBundlePipeNumbers] = useState<string[] | null>(null);
   const [selectedSourceIdentifiers, setSelectedSourceIdentifiers] = useState<string[]>([]);
   const lastSelectedPipeIndex = useRef<number | null>(null);
   const [isLoadingTests, setIsLoadingTests] = useState<boolean>(false);
@@ -72,12 +74,32 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
     ));
   };
 
-  const toggleSourceIdentifier = (identifier: string) => {
-    setSelectedSourceIdentifiers((selected) => (
-      selected.includes(identifier)
-        ? selected.filter((value) => value !== identifier)
-        : [...selected, identifier]
-    ));
+  const visiblePipeNumbers = bundlePipeNumbers ?? availablePipeNumbers;
+
+  const selectBundle = async (bundleNumber: string) => {
+    if (selectedBundleFilter === bundleNumber) {
+      setSelectedBundleFilter(null);
+      setBundlePipeNumbers(null);
+      setSelectedSourceIdentifiers([]);
+      return;
+    }
+    try {
+      setIsResolvingPipes(true);
+      setErrorMsg(null);
+      const resolution = await resolvePtrSources([bundleNumber]);
+      const pipes = Array.from(new Set(resolution.matches.flatMap((match) => match.selected_pipe_numbers)));
+      setSelectedBundleFilter(bundleNumber);
+      setBundlePipeNumbers(pipes);
+      // The bundle limits the visible set. With no individual selection, Add selected
+      // resolves this bundle; after a pipe/Shift selection, only those exact pipes go in.
+      setSelectedSourceIdentifiers([]);
+      lastSelectedPipeIndex.current = null;
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(t('pipe_resolve_error'));
+    } finally {
+      setIsResolvingPipes(false);
+    }
   };
 
   const togglePipeIdentifier = (identifier: string, index: number, shiftKey: boolean) => {
@@ -85,7 +107,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       if (shiftKey && lastSelectedPipeIndex.current !== null) {
         const start = Math.min(lastSelectedPipeIndex.current, index);
         const end = Math.max(lastSelectedPipeIndex.current, index);
-        return Array.from(new Set([...selected, ...availablePipeNumbers.slice(start, end + 1)]));
+        return Array.from(new Set([...selected, ...visiblePipeNumbers.slice(start, end + 1)]));
       }
       return selected.includes(identifier)
         ? selected.filter((value) => value !== identifier)
@@ -95,12 +117,12 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
   };
 
   const selectAllAvailablePipes = () => {
-    setSelectedSourceIdentifiers((selected) => Array.from(new Set([...selected, ...availablePipeNumbers])));
+    setSelectedSourceIdentifiers((selected) => Array.from(new Set([...selected, ...visiblePipeNumbers])));
   };
 
   useEffect(() => {
     lastSelectedPipeIndex.current = null;
-  }, [availablePipeNumbers]);
+  }, [visiblePipeNumbers]);
 
   const addPipesFromInput = async (raw: string) => {
     const pipeList = normalizePipeList(raw);
@@ -175,6 +197,8 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       if (resolution.matches.length > 0) {
         setPipeInput('');
         setSelectedSourceIdentifiers([]);
+        setSelectedBundleFilter(null);
+        setBundlePipeNumbers(null);
         setIsPipePickerOpen(false);
       }
     } catch (err) {
@@ -218,6 +242,9 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
         .then((sources) => {
           setAvailablePipeNumbers(sources.pipes);
           setAvailableBundleNumbers(sources.bundles);
+          setSelectedBundleFilter(null);
+          setBundlePipeNumbers(null);
+          setSelectedSourceIdentifiers([]);
         })
         .catch((err) => console.error(err));
     }, 150);
@@ -1118,14 +1145,19 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                   <button
                     type="button"
                     onClick={selectAllAvailablePipes}
-                    disabled={availablePipeNumbers.length === 0 || availablePipeNumbers.every((pipeNumber) => selectedSourceIdentifiers.includes(pipeNumber))}
+                    disabled={visiblePipeNumbers.length === 0 || visiblePipeNumbers.every((pipeNumber) => selectedSourceIdentifiers.includes(pipeNumber))}
                     className="filter-pill"
                   >
                     {t('btn_select_all_pipes')}
                   </button>
                   <button
                     type="button"
-                    onClick={() => addPipesFromInput([pipeInput, ...selectedSourceIdentifiers].filter(Boolean).join('\n'))}
+                    onClick={() => addPipesFromInput([
+                      pipeInput,
+                      ...(selectedSourceIdentifiers.length > 0
+                        ? selectedSourceIdentifiers
+                        : selectedBundleFilter ? [selectedBundleFilter] : []),
+                    ].filter(Boolean).join('\n'))}
                     disabled={isResolvingPipes}
                     className="btn-primary"
                     style={{ background: 'var(--accent-amber)', color: '#0F172A', fontWeight: 700, padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
@@ -1150,12 +1182,12 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700, marginBottom: '0.35rem' }}>{t('pipe_bundles_title')}</div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                           {availableBundleNumbers.map((bundleNumber) => {
-                            const isSelected = selectedSourceIdentifiers.includes(bundleNumber);
+                            const isSelected = selectedBundleFilter === bundleNumber;
                             return (
                               <button
                                 key={`bundle-${bundleNumber}`}
                                 type="button"
-                                onClick={() => toggleSourceIdentifier(bundleNumber)}
+                                onClick={() => selectBundle(bundleNumber)}
                                 className="tag-pipe"
                                 aria-pressed={isSelected}
                                 style={{ cursor: 'pointer', background: isSelected ? 'rgba(16, 185, 129, 0.16)' : undefined, borderColor: isSelected ? 'var(--accent-emerald)' : 'var(--accent-violet)', color: isSelected ? 'var(--accent-emerald)' : 'var(--accent-violet)' }}
@@ -1167,11 +1199,11 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                         </div>
                       </section>
                     )}
-                    {availablePipeNumbers.length > 0 && (
+                    {visiblePipeNumbers.length > 0 && (
                       <section>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700, marginBottom: '0.35rem' }}>{t('pipe_numbers_title')}</div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                          {availablePipeNumbers.map((pipeNumber, index) => {
+                          {visiblePipeNumbers.map((pipeNumber, index) => {
                             const isSelected = selectedSourceIdentifiers.includes(pipeNumber);
                             return (
                               <button

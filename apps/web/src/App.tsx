@@ -13,8 +13,9 @@ import { RecordDetailModal } from './components/RecordDetailModal';
 import { FaqTab } from './components/FaqTab';
 import { PlannedTestsTab } from './components/PlannedTestsTab';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
-import { EMPTY_PRESSURE_TEST_FILTERS, fetchPressureTests, fetchTrash, PressureTestFilters } from './api';
+import { fetchPressureTests, fetchTrash } from './api';
 import { PressureTest, PressureTestRecord } from './types';
+import { CardSortKey, SortDirection, sortCards } from './cardSorting';
 import { useI18n } from './context/LanguageContext';
 import { useAuth } from './context/AuthContext';
 import { RefreshCw, Inbox, AlertCircle, ClipboardList, Layers, FileSpreadsheet, HelpCircle, Trash2 } from 'lucide-react';
@@ -29,7 +30,8 @@ export const App: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [advancedFilters, setAdvancedFilters] = useState<PressureTestFilters>(EMPTY_PRESSURE_TEST_FILTERS);
+  const [cardSortKey, setCardSortKey] = useState<CardSortKey>('date');
+  const [cardSortDirection, setCardSortDirection] = useState<SortDirection>('desc');
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [selectedTest, setSelectedTest] = useState<PressureTest | null>(null);
   const [isNewTestOpen, setIsNewTestOpen] = useState<boolean>(false);
@@ -42,11 +44,11 @@ export const App: React.FC = () => {
   const [isNewRecordOpen, setIsNewRecordOpen] = useState<boolean>(false);
   const [recordsRefreshKey, setRecordsRefreshKey] = useState<number>(0);
 
-  const loadData = async (query = searchQuery, filters = advancedFilters) => {
+  const loadData = async (query = searchQuery) => {
     try {
       setLoading(true);
       setError(null);
-      const data = activeTab === 'trash' ? await fetchTrash() : await fetchPressureTests(query, undefined, filters);
+      const data = activeTab === 'trash' ? await fetchTrash() : await fetchPressureTests(query);
       setTests(data);
     } catch (err: any) {
       setError(err.message || 'Failed to load test data from local server.');
@@ -58,11 +60,11 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'tests' || activeTab === 'trash') {
       const timer = setTimeout(() => {
-        loadData(searchQuery, advancedFilters);
+        loadData(searchQuery);
       }, 200);
       return () => clearTimeout(timer);
     }
-  }, [searchQuery, advancedFilters.logNo, advancedFilters.testDate, advancedFilters.operator, advancedFilters.bundle, advancedFilters.pipe, activeTab]);
+  }, [searchQuery, activeTab]);
 
   const filteredTests = useMemo(() => {
     if (activeFilter === 'all') return tests;
@@ -77,6 +79,11 @@ export const App: React.FC = () => {
     if (activeFilter === 'pipecloud_not_added') return tests.filter(t => !t.pipecloud_added);
     return tests;
   }, [tests, activeFilter]);
+
+  const sortedCardTests = useMemo(
+    () => sortCards(filteredTests, cardSortKey, cardSortDirection),
+    [filteredTests, cardSortKey, cardSortDirection]
+  );
 
   const handleTestCreated = (createdTest: PressureTest) => {
     setIsNewTestOpen(false);
@@ -206,7 +213,7 @@ export const App: React.FC = () => {
 
           {activeTab === 'tests' || activeTab === 'trash' ? (
           <>
-              {activeTab === 'tests' && <SearchFilters query={searchQuery} onQueryChange={setSearchQuery} filters={advancedFilters} onFiltersChange={setAdvancedFilters} activeFilter={activeFilter} onFilterSelect={setActiveFilter} viewMode={viewMode} onViewModeChange={setViewMode} />}
+              {activeTab === 'tests' && <SearchFilters query={searchQuery} onQueryChange={setSearchQuery} activeFilter={activeFilter} onFilterSelect={setActiveFilter} viewMode={viewMode} onViewModeChange={setViewMode} cardSortKey={cardSortKey} onCardSortKeyChange={setCardSortKey} cardSortDirection={cardSortDirection} onCardSortDirectionChange={setCardSortDirection} />}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', marginTop: '-0.5rem' }}>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -241,7 +248,7 @@ export const App: React.FC = () => {
               />
             ) : (
               <div className="cards-grid">
-                {filteredTests.map((test) => (
+                {sortedCardTests.map((test) => (
                   <TestCard
                     key={test.id}
                     test={test}

@@ -1,34 +1,34 @@
 import React from 'react';
-import { Search, X, LayoutGrid, List } from 'lucide-react';
+import { Search, X, LayoutGrid, List, ArrowUp, ArrowDown } from 'lucide-react';
 import { useI18n } from '../context/LanguageContext';
-import { EMPTY_PRESSURE_TEST_FILTERS, PressureTestFilters } from '../api';
+import { CardSortKey, SortDirection } from '../cardSorting';
 
 interface SearchFiltersProps {
   query: string;
   onQueryChange: (q: string) => void;
-  filters: PressureTestFilters;
-  onFiltersChange: (filters: PressureTestFilters) => void;
   activeFilter: string;
   onFilterSelect: (filter: string) => void;
   viewMode?: 'grid' | 'table';
   onViewModeChange?: (mode: 'grid' | 'table') => void;
+  cardSortKey: CardSortKey;
+  onCardSortKeyChange: (key: CardSortKey) => void;
+  cardSortDirection: SortDirection;
+  onCardSortDirectionChange: (direction: SortDirection) => void;
 }
 
 export const SearchFilters: React.FC<SearchFiltersProps> = ({
   query,
   onQueryChange,
-  filters,
-  onFiltersChange,
   activeFilter,
   onFilterSelect,
   viewMode = 'grid',
-  onViewModeChange
+  onViewModeChange,
+  cardSortKey,
+  onCardSortKeyChange,
+  cardSortDirection,
+  onCardSortDirectionChange
 }) => {
   const { t } = useI18n();
-  const hasAdvancedFilters = Object.values(filters).some(Boolean);
-  const updateFilter = (key: keyof PressureTestFilters, value: string) => {
-    onFiltersChange({ ...filters, [key]: value });
-  };
 
   return (
     <div className="search-section">
@@ -47,15 +47,6 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
             <X size={16} />
           </button>
         )}
-      </div>
-
-      <div className="advanced-filter-grid" aria-label={t('advanced_filters')}>
-        <label><span>{t('filter_log_no')}</span><input value={filters.logNo} onChange={(event) => updateFilter('logNo', event.target.value)} placeholder={t('filter_log_no_placeholder')} /></label>
-        <label><span>{t('filter_date')}</span><input type="date" value={filters.testDate} onChange={(event) => updateFilter('testDate', event.target.value)} /></label>
-        <label><span>{t('filter_operator')}</span><input value={filters.operator} onChange={(event) => updateFilter('operator', event.target.value)} placeholder={t('filter_operator_placeholder')} /></label>
-        <label><span>{t('filter_bundle')}</span><input value={filters.bundle} onChange={(event) => updateFilter('bundle', event.target.value)} placeholder={t('filter_bundle_placeholder')} /></label>
-        <label><span>{t('filter_pipe')}</span><input value={filters.pipe} onChange={(event) => updateFilter('pipe', event.target.value)} placeholder={t('filter_pipe_placeholder')} /></label>
-        <button type="button" className="filter-clear-button" disabled={!hasAdvancedFilters} onClick={() => onFiltersChange({ ...EMPTY_PRESSURE_TEST_FILTERS })}>{t('filter_clear')}</button>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
@@ -93,6 +84,31 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
             ☁ {t('pipecloud_filter_not_added')}
           </button>
         </div>
+
+        <div className="view-and-sort-controls">
+          {viewMode === 'grid' && (
+            <div className="card-sort-controls">
+              <label htmlFor="card-sort-key">{t('card_sort_label')}</label>
+              <select id="card-sort-key" value={cardSortKey} onChange={(event) => onCardSortKeyChange(event.target.value as CardSortKey)}>
+                <option value="log_no">{t('card_sort_log')}</option>
+                <option value="date">{t('card_sort_date')}</option>
+                <option value="operator">{t('card_sort_operator')}</option>
+                <option value="pressure">{t('card_sort_pressure')}</option>
+                <option value="bundle">{t('card_sort_bundle')}</option>
+                <option value="pipe">{t('card_sort_pipe')}</option>
+              </select>
+              <button
+                type="button"
+                className="card-sort-direction"
+                onClick={() => onCardSortDirectionChange(cardSortDirection === 'asc' ? 'desc' : 'asc')}
+                title={t(cardSortDirection === 'asc' ? 'card_sort_ascending' : 'card_sort_descending')}
+                aria-label={t(cardSortDirection === 'asc' ? 'card_sort_ascending' : 'card_sort_descending')}
+              >
+                {cardSortDirection === 'asc' ? <ArrowUp size={15} /> : <ArrowDown size={15} />}
+                <span>{t(cardSortDirection === 'asc' ? 'card_sort_ascending' : 'card_sort_descending')}</span>
+              </button>
+            </div>
+          )}
 
         {/* View Mode Toggle: Grid vs Table */}
         {onViewModeChange && (
@@ -144,6 +160,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
             </button>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

@@ -34,9 +34,9 @@ def test_pressure_test_filters_are_sent_to_the_server():
 
 def test_pipe_picker_places_bundles_first_and_supports_range_and_select_all():
     source = (WEB / "components" / "NewRecordModal.tsx").read_text(encoding="utf-8")
-    assert source.index("availableBundleNumbers.map") < source.index("availablePipeNumbers.map((pipeNumber, index)")
+    assert source.index("availableBundleNumbers.map") < source.index("visiblePipeNumbers.map((pipeNumber, index)")
     assert "event.shiftKey" in source
-    assert "availablePipeNumbers.slice(start, end + 1)" in source
+    assert "visiblePipeNumbers.slice(start, end + 1)" in source
     assert "selectAllAvailablePipes" in source
     assert "btn_select_all_pipes" in source
 
@@ -57,9 +57,36 @@ def test_every_new_label_exists_in_all_three_languages():
         "filter_bundle",
         "filter_pipe",
         "filter_clear",
+        "card_sort_label",
+        "card_sort_log",
+        "card_sort_date",
+        "card_sort_operator",
+        "card_sort_pressure",
+        "card_sort_bundle",
+        "card_sort_pipe",
+        "card_sort_ascending",
+        "card_sort_descending",
     )
     for key in keys:
         assert source.count(f"{key}:") == 3
+
+
+def test_card_view_has_sorting_and_no_duplicate_advanced_filter_row():
+    app = (WEB / "App.tsx").read_text(encoding="utf-8")
+    filters = (WEB / "components" / "SearchFilters.tsx").read_text(encoding="utf-8")
+    sorting = (WEB / "cardSorting.ts").read_text(encoding="utf-8")
+    assert "sortedCardTests.map" in app
+    assert "advanced-filter-grid" not in filters
+    for key in ("log_no", "date", "operator", "pressure", "bundle", "pipe"):
+        assert f"'{key}'" in sorting
+
+
+def test_bundle_limits_visible_pipes_and_shift_uses_that_visible_range():
+    source = (WEB / "components" / "NewRecordModal.tsx").read_text(encoding="utf-8")
+    assert "resolvePtrSources([bundleNumber])" in source
+    assert "setBundlePipeNumbers(pipes)" in source
+    assert "visiblePipeNumbers.slice(start, end + 1)" in source
+    assert ": selectedBundleFilter ? [selectedBundleFilter] : []" in source
 
 
 def test_pipecloud_row_maps_to_the_actual_pipecloud_columns():

@@ -241,47 +241,33 @@ body {
   color: var(--text-muted);
 }
 
-.advanced-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(130px, 1fr)) auto;
-  gap: 0.6rem;
-  margin-top: 0.75rem;
-  align-items: end;
-}
-
-.advanced-filter-grid label {
+.view-and-sort-controls, .card-sort-controls {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  color: var(--text-muted);
-  font-size: 0.72rem;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
-.advanced-filter-grid input {
-  min-width: 0;
-  padding: 0.48rem 0.6rem;
+.card-sort-controls label {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.card-sort-controls select, .card-sort-direction {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-primary);
+  padding: 0.4rem 0.55rem;
+  font-size: 0.8rem;
 }
 
-.filter-clear-button {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--bg-inset-60);
-  color: var(--text-secondary);
+.card-sort-direction {
   cursor: pointer;
-}
-
-.filter-clear-button:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
-@media (max-width: 1050px) {
-  .advanced-filter-grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 
 .search-clear-btn {
