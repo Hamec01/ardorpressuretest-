@@ -290,7 +290,20 @@ def test_apply_uses_different_salts_for_each_account(db_session, seeded_admin):
     andrei = db_session.query(User).filter(User.username == NEW_USERNAME).first()
 
     assert admin.hashed_password != andrei.hashed_password
-    assert admin.hashed_password.split("$", 1)[0] != andrei.hashed_password.split("$", 1)[0]
+
+    def _salt_component(hashed_password: str) -> str:
+        # hash_password() now always produces Argon2id ($argon2id$v=..$m=..,t=..,p=..
+        # $<salt>$<hash>) - the salt is the 5th '$'-delimited field, not the substring
+        # before the first '$' (which is empty for every Argon2id hash, since the
+        # string itself starts with '$'). This assertion exists to prove the two
+        # accounts did not somehow end up with the same salt - PasswordHasher.hash()
+        # generates a fresh one internally on every call, same as the old PBKDF2
+        # hash_password() did with secrets.token_hex(16).
+        parts = hashed_password.split("$")
+        assert hashed_password.startswith("$argon2id$"), "hash_password() must produce Argon2id output"
+        return parts[4]
+
+    assert _salt_component(admin.hashed_password) != _salt_component(andrei.hashed_password)
 
 
 def test_apply_writes_two_audit_events_in_the_same_transaction(db_session, seeded_admin):
