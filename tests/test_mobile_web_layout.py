@@ -40,6 +40,13 @@ def test_mobile_css_covers_phone_tablet_safe_area_and_touch_targets() -> None:
     assert ".modal-content" in css and "100dvh" in css
 
 
+def test_html_enables_the_real_device_viewport() -> None:
+    html = (ROOT / "apps" / "web" / "index.html").read_text(encoding="utf-8")
+    assert html.count('name="viewport"') == 1
+    assert "width=device-width" in html
+    assert "viewport-fit=cover" in html
+
+
 def test_mobile_labels_exist_in_all_languages() -> None:
     translations = read("i18n.ts")
     for key in (
