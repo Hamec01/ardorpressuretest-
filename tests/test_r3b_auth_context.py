@@ -75,16 +75,28 @@ def _bearer(token):
     return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
 
-def _request(path="/api/v1/auth/me", cookie_value=None):
+def _request(
+    path="/api/v1/auth/me",
+    cookie_value=None,
+    *,
+    method="GET",
+    csrf_value=None,
+    origin=None,
+):
     headers = []
     if cookie_value is not None:
-        headers.append(
-            (b"cookie", f"{settings.session_cookie_name}={cookie_value}".encode("ascii"))
-        )
+        cookies = [f"{settings.session_cookie_name}={cookie_value}"]
+        if csrf_value is not None:
+            cookies.append(f"{settings.csrf_cookie_name}={csrf_value}")
+        headers.append((b"cookie", "; ".join(cookies).encode("ascii")))
+    if csrf_value is not None:
+        headers.append((b"x-csrf-token", csrf_value.encode("ascii")))
+    if origin is not None:
+        headers.append((b"origin", origin.encode("ascii")))
     return Request(
         {
             "type": "http",
-            "method": "GET",
+            "method": method,
             "path": path,
             "headers": headers,
             "query_string": b"",
@@ -274,3 +286,49 @@ def test_missing_credentials_remain_fail_closed(db_session, viewer):
     with pytest.raises(HTTPException) as exc_info:
         authenticate_request(db_session)
     assert exc_info.value.status_code == 401
+
+
+def test_require_role_enforces_csrf_for_every_cookie_authenticated_unsafe_method(
+    db_session, viewer
+):
+    issued = create_browser_session(db_session, viewer.id)
+    db_session.commit()
+    checker = require_role(["viewer"])
+
+    with pytest.raises(HTTPException) as exc_info:
+        checker(
+            auth=None,
+            db=db_session,
+            request=_request(
+                path="/api/v1/business-mutation",
+                method="PATCH",
+                cookie_value=issued.session_secret,
+            ),
+        )
+    assert exc_info.value.status_code == 403
+
+    authenticated = checker(
+        auth=None,
+        db=db_session,
+        request=_request(
+            path="/api/v1/business-mutation",
+            method="PATCH",
+            cookie_value=issued.session_secret,
+            csrf_value=issued.csrf_secret,
+            origin=settings.public_origin,
+        ),
+    )
+    assert authenticated.id == viewer.id
+
+
+def test_require_role_does_not_apply_browser_csrf_protocol_to_bearer_mutation(
+    db_session, viewer
+):
+    checker = require_role(["viewer"])
+    token = create_access_token({"sub": viewer.id})
+    authenticated = checker(
+        auth=_bearer(token),
+        db=db_session,
+        request=_request(path="/api/v1/business-mutation", method="POST"),
+    )
+    assert authenticated.id == viewer.id

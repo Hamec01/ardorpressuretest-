@@ -46,5 +46,6 @@ def test_auth_context_bootstraps_me_login_and_logout_through_cookie_fetch():
     context = (WEB_SRC / "context" / "AuthContext.tsx").read_text()
     assert "authFetch('/api/v1/auth/me')" in context
     assert "authFetch('/api/v1/auth/login'" in context
+    assert "'X-Ardor-Session-Mode': 'browser'" in context
     assert "authFetch('/api/v1/auth/logout', { method: 'POST' })" in context
     assert "localStorage" not in context

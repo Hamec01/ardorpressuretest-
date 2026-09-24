@@ -47,7 +47,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (username: string, password: string) => {
     const res = await authFetch('/api/v1/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Ardor-Session-Mode': 'browser',
+      },
       body: JSON.stringify({ username, password })
     });
 

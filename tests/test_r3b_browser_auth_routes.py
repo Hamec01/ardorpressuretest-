@@ -57,7 +57,14 @@ def _create_user(
 
 
 def _login(client, username="viewer-one", password="correct horse battery staple", *, origin=True):
-    headers = {"Origin": settings.public_origin} if origin else {}
+    headers = (
+        {
+            "Origin": settings.public_origin,
+            "X-Ardor-Session-Mode": "browser",
+        }
+        if origin
+        else {}
+    )
     return client.post(
         "/api/v1/auth/login",
         json={"username": username, "password": password},
@@ -145,6 +152,19 @@ def test_untrusted_or_absent_origin_gets_legacy_bearer_but_no_ambient_cookie():
     with SessionLocal() as db:
         assert db.query(UserSession).count() == 0
         assert db.query(AuditEvent).filter(AuditEvent.action == "login").count() == 2
+
+
+def test_trusted_origin_without_new_web_opt_in_remains_legacy_only_for_safe_rollout():
+    _create_user()
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"username": "viewer-one", "password": "correct horse battery staple"},
+            headers={"Origin": settings.public_origin},
+        )
+        assert response.status_code == 200
+        assert response.json()["access_token"]
+        assert client.cookies.get(settings.session_cookie_name) is None
 
 
 def test_browser_logout_requires_matching_origin_and_server_bound_csrf():

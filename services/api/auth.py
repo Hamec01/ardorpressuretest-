@@ -438,6 +438,7 @@ MUST_CHANGE_PASSWORD_ALLOWED_PATHS = frozenset(
         "/api/v1/auth/change-password",
     }
 )
+UNSAFE_HTTP_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 @dataclass
@@ -542,19 +543,14 @@ def require_authentication_context(
     return authenticate_request(db, request=request, auth=auth)
 
 
-def require_mutating_authentication_context(
+def enforce_browser_csrf(
+    db: Session,
     request: Request,
-    context: AuthenticatedRequest = Depends(require_authentication_context),
-    db: Session = Depends(get_db),
-) -> AuthenticatedRequest:
-    """Add Origin + server-bound CSRF checks to cookie-authenticated mutations.
-
-    Bearer credentials are not ambient browser credentials and therefore do not use
-    the browser CSRF protocol. Browser requests must prove both the configured origin
-    and knowledge of the CSRF secret bound to their exact server-side session row.
-    """
+    context: AuthenticatedRequest,
+) -> None:
+    """Validate Origin and server-bound CSRF for an authenticated browser mutation."""
     if context.method is not AuthenticationMethod.BROWSER_SESSION:
-        return context
+        return
     if request.headers.get("origin") != settings.public_origin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -577,6 +573,15 @@ def require_mutating_authentication_context(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="CSRF validation failed",
         )
+
+
+def require_mutating_authentication_context(
+    request: Request,
+    context: AuthenticatedRequest = Depends(require_authentication_context),
+    db: Session = Depends(get_db),
+) -> AuthenticatedRequest:
+    """Add Origin + server-bound CSRF checks to cookie-authenticated mutations."""
+    enforce_browser_csrf(db, request, context)
     return context
 
 
@@ -604,7 +609,10 @@ def require_role(allowed_roles: List[str]):
         db: Session = Depends(get_db),
         request: Request = None,
     ) -> User:
-        user = authenticate_request(db, request=request, auth=auth).user
+        context = authenticate_request(db, request=request, auth=auth)
+        if request is not None and request.method.upper() in UNSAFE_HTTP_METHODS:
+            enforce_browser_csrf(db, request, context)
+        user = context.user
 
         request_path = request.url.path if request is not None else None
         if (

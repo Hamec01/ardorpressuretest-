@@ -143,7 +143,10 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
     user.last_login_at = now
 
     browser_issue = None
-    if request.headers.get("origin") == settings.public_origin:
+    if (
+        request.headers.get("origin") == settings.public_origin
+        and request.headers.get("x-ardor-session-mode") == "browser"
+    ):
         browser_issue = create_browser_session(
             db,
             str(user.id),
