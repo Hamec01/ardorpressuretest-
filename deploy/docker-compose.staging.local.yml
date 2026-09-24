@@ -13,6 +13,7 @@ services:
       STORAGE_DIR: /data/storage
       SECRET_KEY: ${ARDOR_JWT_SECRET:?ARDOR_JWT_SECRET must be set}
       ARDOR_CORS_ORIGINS: ${ARDOR_CORS_ORIGINS:?ARDOR_CORS_ORIGINS must be set}
+      ARDOR_PUBLIC_ORIGIN: ${ARDOR_PUBLIC_ORIGIN:?ARDOR_PUBLIC_ORIGIN must be set}
   web:
     image: ardor-web-staging:local
     build:
