@@ -22,6 +22,7 @@ from services.api.http_security import set_browser_auth_cookies
 from services.api.main import app
 from services.api.models import AuditEvent, User, UserSession
 from services.api.security import hash_opaque_secret
+from services.api.session_service import create_browser_session, create_desktop_session
 
 
 @pytest.fixture(autouse=True)
@@ -185,6 +186,7 @@ def test_invalid_browser_session_401_clears_both_stale_cookies():
         _replace_client_cookie(client, settings.csrf_cookie_name, "B" * 43)
         response = client.get("/api/v1/auth/me")
         assert response.status_code == 401
+        assert "x-ardor-clear-session" not in response.headers
         assert client.cookies.get(settings.session_cookie_name) is None
         assert client.cookies.get(settings.csrf_cookie_name) is None
 
@@ -338,3 +340,211 @@ def test_failures_outside_window_do_not_rate_limit(monkeypatch):
         db.commit()
     with TestClient(app) as client:
         assert _login(client).status_code == 200
+
+
+def test_change_password_rotates_current_browser_session_and_revokes_all_others():
+    user_id = _create_user(must_change_password=True)
+    old_password = "correct horse battery staple"
+    new_password = " new unicode password ☃ "
+    with TestClient(app) as client:
+        assert _login(client).status_code == 200
+        old_session_secret = client.cookies.get(settings.session_cookie_name)
+        old_csrf_secret = client.cookies.get(settings.csrf_cookie_name)
+
+        with SessionLocal() as db:
+            current_id = db.query(UserSession).filter(UserSession.channel == "browser").one().id
+            other_browser = create_browser_session(db, user_id, device_label="other browser")
+            other_desktop = create_desktop_session(db, user_id, device_label="desktop")
+            db.commit()
+
+        response = client.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": old_password, "new_password": new_password},
+            headers={"Origin": settings.public_origin, "X-CSRF-Token": old_csrf_secret},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok", "reauthentication_required": False}
+        new_session_secret = client.cookies.get(settings.session_cookie_name)
+        new_csrf_secret = client.cookies.get(settings.csrf_cookie_name)
+        assert new_session_secret != old_session_secret
+        assert new_csrf_secret != old_csrf_secret
+        assert client.get("/api/v1/auth/me").status_code == 200
+
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+        assert user.must_change_password is False
+        assert verify_password(new_password, user.hashed_password) is True
+        assert verify_password(new_password.strip(), user.hashed_password) is False
+        assert verify_password(old_password, user.hashed_password) is False
+
+        current = db.get(UserSession, current_id)
+        assert current.revoked_at is None
+        assert current.token_hash == hash_opaque_secret(new_session_secret)
+        assert current.csrf_token_hash == hash_opaque_secret(new_csrf_secret)
+        assert current.token_hash != hash_opaque_secret(old_session_secret)
+        assert db.get(UserSession, other_browser.session_id).revoked_reason == "password_change"
+        assert db.get(UserSession, other_desktop.session_id).revoked_reason == "password_change"
+        assert db.query(AuditEvent).filter(AuditEvent.action == "password_changed").count() == 1
+
+
+@pytest.mark.parametrize("new_password", ["short", "x" * 129])
+def test_change_password_rejects_invalid_new_length_without_mutation(new_password):
+    user_id = _create_user()
+    with TestClient(app) as client:
+        assert _login(client).status_code == 200
+        old_session_secret = client.cookies.get(settings.session_cookie_name)
+        csrf_secret = client.cookies.get(settings.csrf_cookie_name)
+        response = client.post(
+            "/api/v1/auth/change-password",
+            json={
+                "current_password": "correct horse battery staple",
+                "new_password": new_password,
+            },
+            headers={"Origin": settings.public_origin, "X-CSRF-Token": csrf_secret},
+        )
+        assert response.status_code == 422
+        assert client.cookies.get(settings.session_cookie_name) == old_session_secret
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+        assert verify_password("correct horse battery staple", user.hashed_password) is True
+        assert db.query(AuditEvent).filter(AuditEvent.action == "password_changed").count() == 0
+
+
+def test_change_password_rejects_wrong_current_password_without_mutation():
+    user_id = _create_user(must_change_password=True)
+    with TestClient(app) as client:
+        assert _login(client).status_code == 200
+        session_secret = client.cookies.get(settings.session_cookie_name)
+        csrf_secret = client.cookies.get(settings.csrf_cookie_name)
+        response = client.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "wrong current", "new_password": "valid new password"},
+            headers={"Origin": settings.public_origin, "X-CSRF-Token": csrf_secret},
+        )
+        assert response.status_code == 401
+        assert client.cookies.get(settings.session_cookie_name) == session_secret
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+        assert user.must_change_password is True
+        assert verify_password("correct horse battery staple", user.hashed_password) is True
+        assert db.query(UserSession).filter(UserSession.revoked_at.isnot(None)).count() == 0
+
+
+def test_change_password_failure_rolls_back_password_flag_and_all_session_changes(monkeypatch):
+    user_id = _create_user(must_change_password=True)
+    with TestClient(app, raise_server_exceptions=False) as client:
+        assert _login(client).status_code == 200
+        csrf_secret = client.cookies.get(settings.csrf_cookie_name)
+        with SessionLocal() as db:
+            other = create_desktop_session(db, user_id)
+            db.commit()
+
+        def fail_after_other_sessions_were_staged(*_args, **_kwargs):
+            raise RuntimeError("injected failure after staged revocations")
+
+        monkeypatch.setattr(
+            "services.api.routes.auth.rotate_browser_session_secrets",
+            fail_after_other_sessions_were_staged,
+        )
+        response = client.post(
+            "/api/v1/auth/change-password",
+            json={
+                "current_password": "correct horse battery staple",
+                "new_password": "valid replacement password",
+            },
+            headers={"Origin": settings.public_origin, "X-CSRF-Token": csrf_secret},
+        )
+        assert response.status_code == 500
+
+    with SessionLocal() as db:
+        user = db.get(User, user_id)
+        assert user.must_change_password is True
+        assert verify_password("correct horse battery staple", user.hashed_password) is True
+        assert verify_password("valid replacement password", user.hashed_password) is False
+        assert db.get(UserSession, other.session_id).revoked_at is None
+        assert db.query(AuditEvent).filter(AuditEvent.action == "password_changed").count() == 0
+
+
+def test_sessions_list_contains_only_safe_fields_and_marks_current():
+    user_id = _create_user()
+    with TestClient(app) as client:
+        assert _login(client).status_code == 200
+        with SessionLocal() as db:
+            create_desktop_session(db, user_id, device_label="field laptop")
+            db.commit()
+        response = client.get("/api/v1/auth/sessions")
+        assert response.status_code == 200
+        sessions = response.json()
+        assert len(sessions) == 2
+        assert sum(item["is_current"] for item in sessions) == 1
+        assert {item["channel"] for item in sessions} == {"browser", "desktop"}
+        assert any(item["device_label"] == "field laptop" for item in sessions)
+        assert all("token_hash" not in item and "csrf_token_hash" not in item for item in sessions)
+
+
+def test_sessions_list_is_blocked_until_required_password_change():
+    _create_user(must_change_password=True)
+    with TestClient(app) as client:
+        assert _login(client).status_code == 200
+        response = client.get("/api/v1/auth/sessions")
+        assert response.status_code == 403
+        assert response.json() == {"detail": "Password change required"}
+
+
+def test_delete_owned_other_session_requires_csrf_and_revokes_only_target():
+    user_id = _create_user()
+    with TestClient(app) as client:
+        assert _login(client).status_code == 200
+        csrf_secret = client.cookies.get(settings.csrf_cookie_name)
+        with SessionLocal() as db:
+            current_id = db.query(UserSession).filter(UserSession.channel == "browser").one().id
+            other = create_desktop_session(db, user_id, device_label="old laptop")
+            db.commit()
+
+        missing_csrf = client.delete(f"/api/v1/auth/sessions/{other.session_id}")
+        assert missing_csrf.status_code == 403
+        response = client.delete(
+            f"/api/v1/auth/sessions/{other.session_id}",
+            headers={"Origin": settings.public_origin, "X-CSRF-Token": csrf_secret},
+        )
+        assert response.status_code == 200
+        assert client.get("/api/v1/auth/me").status_code == 200
+
+    with SessionLocal() as db:
+        assert db.get(UserSession, current_id).revoked_at is None
+        assert db.get(UserSession, other.session_id).revoked_at is not None
+
+
+def test_delete_session_cannot_revoke_another_users_session():
+    _create_user()
+    other_user_id = _create_user(username="other-viewer")
+    with SessionLocal() as db:
+        other = create_desktop_session(db, other_user_id)
+        db.commit()
+    with TestClient(app) as client:
+        assert _login(client).status_code == 200
+        csrf_secret = client.cookies.get(settings.csrf_cookie_name)
+        response = client.delete(
+            f"/api/v1/auth/sessions/{other.session_id}",
+            headers={"Origin": settings.public_origin, "X-CSRF-Token": csrf_secret},
+        )
+        assert response.status_code == 404
+    with SessionLocal() as db:
+        assert db.get(UserSession, other.session_id).revoked_at is None
+
+
+def test_delete_current_browser_session_clears_cookies_and_invalidates_me():
+    _create_user()
+    with TestClient(app) as client:
+        assert _login(client).status_code == 200
+        csrf_secret = client.cookies.get(settings.csrf_cookie_name)
+        sessions = client.get("/api/v1/auth/sessions").json()
+        current_id = next(item["id"] for item in sessions if item["is_current"])
+        response = client.delete(
+            f"/api/v1/auth/sessions/{current_id}",
+            headers={"Origin": settings.public_origin, "X-CSRF-Token": csrf_secret},
+        )
+        assert response.status_code == 200
+        assert client.cookies.get(settings.session_cookie_name) is None
+        assert client.cookies.get(settings.csrf_cookie_name) is None
+        assert client.get("/api/v1/auth/me").status_code == 401

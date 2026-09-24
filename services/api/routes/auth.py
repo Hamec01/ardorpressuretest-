@@ -5,7 +5,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 from services.api.auth import (
     AuthenticationMethod,
@@ -13,19 +13,24 @@ from services.api.auth import (
     DUMMY_ARGON2_HASH,
     check_password_with_upgrade,
     create_access_token,
+    hash_password,
     require_authentication_context,
     require_mutating_authentication_context,
     require_role,
+    validate_new_password,
     verify_password,
 )
 from services.api.database import get_db
 from services.api.config import settings
 from services.api.http_security import clear_browser_auth_cookies, set_browser_auth_cookies
-from services.api.models import AuditEvent, User
+from services.api.models import AuditEvent, User, UserSession
 from services.api.session_service import (
+    BROWSER_IDLE_LIFETIME,
     RevocationReason,
     create_browser_session,
+    revoke_all_sessions,
     revoke_session,
+    rotate_browser_session_secrets,
 )
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
@@ -54,6 +59,30 @@ class LoginResponse(BaseModel):
 
 
 class LogoutResponse(BaseModel):
+    status: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=1, max_length=128)
+
+
+class ChangePasswordResponse(BaseModel):
+    status: str
+    reauthentication_required: bool
+
+
+class SessionResponse(BaseModel):
+    id: str
+    channel: str
+    created_at: datetime
+    last_seen_at: datetime
+    expires_at: datetime
+    device_label: str | None
+    is_current: bool
+
+
+class RevokeSessionResponse(BaseModel):
     status: str
 
 
@@ -132,6 +161,31 @@ def _enforce_login_rate_limit(db: Session, username: str, now: datetime) -> None
     )
 
 
+def _require_account_access(
+    context: AuthenticatedRequest,
+    *,
+    allow_must_change_password: bool = False,
+) -> None:
+    if context.user.role not in {"admin", "foreman", "viewer"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    if context.user.must_change_password and not allow_must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Password change required",
+        )
+
+
+def _commit_auth_changes(db: Session) -> None:
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication service unavailable",
+        )
+
+
 @router.post("/login", response_model=LoginResponse)
 def login(req: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
     """Authenticate, retain transitional Bearer support, and issue browser cookies
@@ -161,14 +215,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
                 details={"channel": "browser", "ip": request.client.host if request.client else None},
             )
         )
-        try:
-            db.commit()
-        except Exception:
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Authentication service unavailable",
-            )
+        _commit_auth_changes(db)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password"
@@ -207,14 +254,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
             },
         )
     )
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service unavailable",
-        )
+    _commit_auth_changes(db)
 
     if browser_issue is not None:
         set_browser_auth_cookies(response, browser_issue.session_secret, browser_issue.csrf_secret)
@@ -229,8 +269,7 @@ def login(req: LoginRequest, request: Request, response: Response, db: Session =
 @router.get("/me", response_model=UserResponse)
 def get_me(context: AuthenticatedRequest = Depends(require_authentication_context)):
     """Возвращает профиль текущего пользователя."""
-    if context.user.role not in {"admin", "foreman", "viewer"}:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+    _require_account_access(context, allow_must_change_password=True)
     return context.user
 
 
@@ -262,15 +301,150 @@ def logout(
             details={"channel": context.method.value},
         )
     )
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication service unavailable",
-        )
+    _commit_auth_changes(db)
     clear_browser_auth_cookies(response)
+    return {"status": "ok"}
+
+
+@router.post("/change-password", response_model=ChangePasswordResponse)
+def change_password(
+    req: ChangePasswordRequest,
+    request: Request,
+    response: Response,
+    context: AuthenticatedRequest = Depends(require_mutating_authentication_context),
+    db: Session = Depends(get_db),
+):
+    """Change the caller's password and invalidate every pre-change session secret."""
+    _require_account_access(context, allow_must_change_password=True)
+    validation_error = validate_new_password(req.new_password)
+    if validation_error is not None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=validation_error)
+
+    password_check = check_password_with_upgrade(
+        req.current_password,
+        context.user.hashed_password,
+    )
+    if not password_check.ok:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+
+    context.user.hashed_password = hash_password(req.new_password)
+    context.user.must_change_password = False
+    browser_rotation = None
+    if context.method is AuthenticationMethod.BROWSER_SESSION:
+        current_secret = request.cookies.get(settings.session_cookie_name)
+        revoke_all_sessions(
+            db,
+            str(context.user.id),
+            RevocationReason.PASSWORD_CHANGE,
+            except_session_id=context.session_id,
+        )
+        browser_rotation = rotate_browser_session_secrets(
+            db,
+            context.session_id,
+            str(context.user.id),
+            current_secret,
+        )
+    else:
+        # A desktop access token cannot rotate the separate opaque refresh secret,
+        # and a transitional legacy Bearer has no session row at all. Revoke every
+        # server-backed session and require a new login for those channels.
+        revoke_all_sessions(
+            db,
+            str(context.user.id),
+            RevocationReason.PASSWORD_CHANGE,
+        )
+
+    db.add(
+        _audit_event(
+            user=context.user,
+            action="password_changed",
+            actor_name=context.user.full_name or context.user.username,
+            details={"channel": context.method.value},
+        )
+    )
+    _commit_auth_changes(db)
+
+    if browser_rotation is not None:
+        set_browser_auth_cookies(
+            response,
+            browser_rotation.session_secret,
+            browser_rotation.csrf_secret,
+        )
+    else:
+        clear_browser_auth_cookies(response)
+    return {
+        "status": "ok",
+        "reauthentication_required": browser_rotation is None,
+    }
+
+
+@router.get("/sessions", response_model=List[SessionResponse])
+def list_sessions(
+    context: AuthenticatedRequest = Depends(require_authentication_context),
+    db: Session = Depends(get_db),
+):
+    """List the caller's currently usable server-backed sessions without secrets."""
+    _require_account_access(context)
+    now = datetime.now(timezone.utc)
+    rows = (
+        db.query(UserSession)
+        .filter(
+            UserSession.user_id == context.user.id,
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > now,
+            or_(
+                UserSession.channel != "browser",
+                UserSession.last_seen_at > now - BROWSER_IDLE_LIFETIME,
+            ),
+        )
+        .order_by(UserSession.created_at.desc())
+        .all()
+    )
+    return [
+        SessionResponse(
+            id=row.id,
+            channel=row.channel,
+            created_at=row.created_at,
+            last_seen_at=row.last_seen_at,
+            expires_at=row.expires_at,
+            device_label=row.device_label,
+            is_current=row.id == context.session_id,
+        )
+        for row in rows
+    ]
+
+
+@router.delete("/sessions/{session_id}", response_model=RevokeSessionResponse)
+def delete_session(
+    session_id: str,
+    response: Response,
+    context: AuthenticatedRequest = Depends(require_mutating_authentication_context),
+    db: Session = Depends(get_db),
+):
+    """Revoke one caller-owned session; another user's id is indistinguishable from missing."""
+    _require_account_access(context)
+    if not revoke_session(
+        db,
+        str(context.user.id),
+        session_id,
+        RevocationReason.LOGOUT,
+    ):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    db.add(
+        _audit_event(
+            user=context.user,
+            action="session_revoked",
+            actor_name=context.user.full_name or context.user.username,
+            details={"current_session": session_id == context.session_id},
+        )
+    )
+    _commit_auth_changes(db)
+    if session_id == context.session_id:
+        clear_browser_auth_cookies(response)
     return {"status": "ok"}
 
 

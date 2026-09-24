@@ -447,8 +447,17 @@ class AuthenticatedRequest:
     session_id: Optional[str] = None
 
 
-def _authentication_required(detail: str = "Authentication required") -> HTTPException:
-    return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
+def _authentication_required(
+    detail: str = "Authentication required",
+    *,
+    clear_browser_session: bool = False,
+) -> HTTPException:
+    headers = {"X-Ardor-Clear-Session": "1"} if clear_browser_session else None
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers=headers,
+    )
 
 
 def _active_user(db: Session, user_id: str) -> Optional[User]:
@@ -471,7 +480,10 @@ def authenticate_request(
     if cookie_secret is not None:
         checked = validate_browser_session(db, cookie_secret)
         if not checked.ok or checked.session is None:
-            raise _authentication_required("Session invalid or expired")
+            raise _authentication_required(
+                "Session invalid or expired",
+                clear_browser_session=True,
+            )
         session_id = checked.session.id
         user_id = checked.session.user_id
         if checked.last_seen_updated:
@@ -485,7 +497,10 @@ def authenticate_request(
                 )
         user = _active_user(db, user_id)
         if user is None:
-            raise _authentication_required("User not found or inactive")
+            raise _authentication_required(
+                "User not found or inactive",
+                clear_browser_session=True,
+            )
         return AuthenticatedRequest(user, AuthenticationMethod.BROWSER_SESSION, session_id)
 
     credentials = auth.credentials if auth else None

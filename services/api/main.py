@@ -51,7 +51,8 @@ app.add_middleware(
 async def clear_rejected_browser_session_cookies(request, call_next):
     """Stop a rejected browser session from being resent on every later request."""
     response = await call_next(request)
-    if response.status_code == 401 and settings.session_cookie_name in request.cookies:
+    if response.headers.get("x-ardor-clear-session") == "1":
+        del response.headers["x-ardor-clear-session"]
         clear_browser_auth_cookies(response)
     return response
 
