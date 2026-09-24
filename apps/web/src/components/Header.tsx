@@ -91,7 +91,12 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </a>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+        <div className="mobile-header-status" aria-label={t('node_online')} title={t('node_online')}>
+          <span />
+          <span>{t('node_online')}</span>
+        </div>
+
+        <div className="desktop-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           {/* Language Switcher */}
           <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '2px 4px', gap: '2px' }}>
             <Globe size={13} color="var(--text-muted)" style={{ margin: '0 4px' }} />

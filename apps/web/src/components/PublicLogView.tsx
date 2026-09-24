@@ -123,7 +123,7 @@ export const PublicLogView: React.FC<PublicLogViewProps> = ({ logNo }) => {
         </div>
       </header>
 
-      <main style={{ maxWidth: '900px', margin: '0 auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <main className="public-log-main" style={{ maxWidth: '900px', margin: '0 auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {isLoading && (
           <div className="empty-state">Loading log…</div>
         )}

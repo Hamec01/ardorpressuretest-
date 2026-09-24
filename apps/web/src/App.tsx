@@ -13,6 +13,7 @@ import { RecordDetailModal } from './components/RecordDetailModal';
 import { FaqTab } from './components/FaqTab';
 import { PlannedTestsTab } from './components/PlannedTestsTab';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
+import { AppTab, MobileNavigation } from './components/MobileNavigation';
 import { fetchPressureTests, fetchTrash } from './api';
 import { PressureTest, PressureTestRecord } from './types';
 import { CardSortKey, SortDirection, sortCards } from './cardSorting';
@@ -23,8 +24,9 @@ import { RefreshCw, Inbox, AlertCircle, ClipboardList, Layers, FileSpreadsheet, 
 export const App: React.FC = () => {
   const { t } = useI18n();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'tests' | 'trash' | 'plans' | 'records' | 'faq'>('tests');
+  const [activeTab, setActiveTab] = useState<AppTab>('tests');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [isMobileLayout, setIsMobileLayout] = useState(() => window.matchMedia('(max-width: 900px)').matches);
 
   const [tests, setTests] = useState<PressureTest[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -56,6 +58,13 @@ export const App: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 900px)');
+    const handleChange = (event: MediaQueryListEvent) => setIsMobileLayout(event.matches);
+    query.addEventListener('change', handleChange);
+    return () => query.removeEventListener('change', handleChange);
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'tests' || activeTab === 'trash') {
@@ -102,7 +111,7 @@ export const App: React.FC = () => {
 
       <main className="main-content">
         {/* Navigation Tabs (3 Tabs: Tests, PTR, FAQ) */}
-        <div style={{ display: 'flex', gap: '0.75rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+        <div className="desktop-section-tabs" style={{ display: 'flex', gap: '0.75rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
             <button
             onClick={() => setActiveTab('tests')}
             style={{
@@ -241,7 +250,7 @@ export const App: React.FC = () => {
                 </div>
                 <p>{t('no_tests_desc')}</p>
               </div>
-            ) : viewMode === 'table' ? (
+            ) : viewMode === 'table' && !isMobileLayout ? (
               <TestTableView
                 tests={filteredTests}
                 onSelectTest={(t) => setSelectedTest(t)}
@@ -270,6 +279,15 @@ export const App: React.FC = () => {
           <FaqTab />
         )}
       </main>
+
+      <MobileNavigation
+        activeTab={activeTab}
+        totalCount={tests.length}
+        onTabChange={setActiveTab}
+        onNewTest={() => setIsNewTestOpen(true)}
+        onLogin={() => setIsLoginOpen(true)}
+        onAudit={() => setIsAuditOpen(true)}
+      />
 
       {selectedTest && (
         <TestDetailModal

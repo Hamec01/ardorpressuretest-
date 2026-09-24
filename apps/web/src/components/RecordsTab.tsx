@@ -50,7 +50,7 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRec
   }, [search, statusFilter, refreshTrigger]);
 
   return (
-    <div>
+    <div className="records-tab">
       {/* Top Banner / Explanation */}
       <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '0.9rem 1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>

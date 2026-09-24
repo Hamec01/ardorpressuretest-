@@ -223,12 +223,13 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
     const [bundle, suffix = ''] = pipe.pipe_number.split('/', 2);
     const completed = pipe.status === 'completed';
     return (
-      <div key={pipe.id} style={{ border: `1px solid ${completed ? 'rgba(16, 185, 129, 0.42)' : 'var(--border-color)'}`, borderRadius: 'var(--radius-sm)', background: completed ? 'rgba(16, 185, 129, 0.09)' : 'var(--bg-inset-40)', opacity: completed ? 1 : 0.84 }}>
+      <div key={pipe.id} className="planned-pipe-card" style={{ border: `1px solid ${completed ? 'rgba(16, 185, 129, 0.42)' : 'var(--border-color)'}`, borderRadius: 'var(--radius-sm)', background: completed ? 'rgba(16, 185, 129, 0.09)' : 'var(--bg-inset-40)', opacity: completed ? 1 : 0.84 }}>
         <button
           type="button"
           onClick={() => handleOpenLog(pipe)}
           disabled={!completed}
           title={completed ? t('planned_open_log', { log: pipe.latest_log_no || '' }) : t('planned_pending')}
+          className="planned-pipe-button"
           style={{ width: '100%', display: 'grid', gridTemplateColumns: 'minmax(150px, 1.25fr) minmax(105px, 0.75fr) minmax(90px, 0.6fr) auto', gap: '0.75rem', alignItems: 'center', padding: '0.7rem 0.8rem', border: 'none', background: 'transparent', color: 'var(--text-primary)', cursor: completed ? 'pointer' : 'default', textAlign: 'left' }}
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
@@ -259,8 +260,8 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
   const displayRows = getDisplayRows();
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(230px, 0.42fr) minmax(0, 1.58fr)', gap: '1.25rem', alignItems: 'start' }}>
-      <aside style={{ border: '1px solid var(--border-color)', background: 'var(--bg-surface)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
+    <div className="planned-tests-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(230px, 0.42fr) minmax(0, 1.58fr)', gap: '1.25rem', alignItems: 'start' }}>
+      <aside className="planned-lists-panel" style={{ border: '1px solid var(--border-color)', background: 'var(--bg-surface)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.85rem' }}>
           <ClipboardList size={19} color="var(--accent-cyan)" />
           <strong>{t('planned_lists_title')}</strong>
@@ -281,7 +282,7 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
         </div>}
       </aside>
 
-      <section style={{ minWidth: 0 }}>
+      <section className="planned-detail-panel" style={{ minWidth: 0 }}>
         {error && <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', color: 'var(--error-text)', border: '1px solid var(--accent-rose)', borderRadius: 'var(--radius-sm)', background: 'rgba(244, 63, 94, 0.1)' }}>{error}</div>}
         {!selectedPlanId || !detail ? <div className="empty-state"><ClipboardList size={48} style={{ opacity: 0.4, marginBottom: '1rem' }} /><div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{t('planned_empty_title')}</div><p>{t('planned_empty_desc')}</p></div> : <>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: '1rem' }}>
