@@ -51,8 +51,10 @@ def test_windows_requirements_include_desktop_auth_dependencies():
 
 def test_pyinstaller_collects_dynamic_windows_keyring_backends():
     spec = (ROOT / "wika_app.spec").read_text()
-    assert "collect_submodules('keyring.backends')" in spec
-    assert "collect_submodules('win32ctypes')" in spec
+    datas, hiddenimports = spec.split("    hiddenimports=", 1)
+    assert "collect_submodules(" not in datas
+    assert "collect_submodules('keyring.backends')" in hiddenimports
+    assert "collect_submodules('win32ctypes')" in hiddenimports
 
 
 def test_installer_preserves_existing_user_config_on_upgrade():

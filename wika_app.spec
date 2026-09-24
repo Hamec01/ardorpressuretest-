@@ -12,7 +12,7 @@ a = Analysis(
         ('config.json', '.'),
         ('resources/app_icon.ico', 'resources'),
         ('resources/logo.png', 'resources'),
-    ] + collect_submodules('keyring.backends') + collect_submodules('win32ctypes'),
+    ],
     hiddenimports=[
         'openpyxl',
         'matplotlib',
@@ -22,7 +22,7 @@ a = Analysis(
         'tkinter.filedialog',
         'tkinter.ttk',
         'fpdf',
-    ],
+    ] + collect_submodules('keyring.backends') + collect_submodules('win32ctypes'),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
