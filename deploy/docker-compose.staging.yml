@@ -8,9 +8,11 @@ services:
     container_name: ardor_api_staging
     environment:
       - ARDOR_ENV=staging
-      - ARDOR_DATABASE_URL=postgresql://ardor_user:ardor_pass@postgres:5432/ardor_pressure_test
-      - ARDOR_STORAGE_DIR=/data/storage
-      - ARDOR_JWT_SECRET=staging_secret_key_ardor_pipeline_2026
+      - DATABASE_URL=postgresql://ardor_user:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/ardor_pressure_test
+      - STORAGE_DIR=/data/storage
+      - SECRET_KEY=${ARDOR_JWT_SECRET:?ARDOR_JWT_SECRET must be set}
+      - ARDOR_CORS_ORIGINS=${ARDOR_CORS_ORIGINS:?ARDOR_CORS_ORIGINS must be set}
+      - ARDOR_PUBLIC_ORIGIN=${ARDOR_PUBLIC_ORIGIN:?ARDOR_PUBLIC_ORIGIN must be set}
     volumes:
       - ardor_storage:/data/storage
     ports:
@@ -35,7 +37,7 @@ services:
     container_name: ardor_postgres_staging
     environment:
       - POSTGRES_USER=ardor_user
-      - POSTGRES_PASSWORD=ardor_pass
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
       - POSTGRES_DB=ardor_pressure_test
     volumes:
       - ardor_pgdata:/var/lib/postgresql/data
