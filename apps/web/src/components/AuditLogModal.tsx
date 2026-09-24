@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, ShieldAlert, RefreshCw, Clock, User } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { authFetch } from '../authFetch';
 
 interface AuditLogEvent {
   id: string;
@@ -18,7 +18,6 @@ interface AuditLogModalProps {
 }
 
 export const AuditLogModal: React.FC<AuditLogModalProps> = ({ onClose }) => {
-  const { token } = useAuth();
   const [events, setEvents] = useState<AuditLogEvent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,11 +26,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ onClose }) => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/v1/audit?limit=100', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const res = await authFetch('/api/v1/audit?limit=100');
       if (!res.ok) {
         throw new Error(`Failed to load audit logs (${res.status})`);
       }

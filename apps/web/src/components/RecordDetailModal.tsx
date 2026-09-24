@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { SignatureModal } from './SignatureModal';
 import { ConfirmRecordModal } from './ConfirmRecordModal';
-import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/LanguageContext';
 
 interface RecordDetailModalProps {
@@ -31,7 +30,6 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   onClose,
   onUpdate
 }) => {
-  const { token } = useAuth();
   const { t } = useI18n();
   const [record, setRecord] = useState<PressureTestRecord>(initialRecord);
   const [activeView, setActiveView] = useState<'official_pdf' | 'full_pdf' | 'data'>('official_pdf');
@@ -58,7 +56,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
 
     try {
       setIsDeleting(true);
-      await deleteRecord(record.id, token);
+      await deleteRecord(record.id);
       onUpdate();
       onClose();
     } catch (err: any) {
@@ -71,7 +69,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      const updated = await updateRecord(record.id, { ...draft, items: record.items }, token);
+      const updated = await updateRecord(record.id, { ...draft, items: record.items });
       setRecord(updated);
       setIsEditing(false);
       onUpdate();
@@ -86,7 +84,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
     if (!window.confirm('Снять подтверждение? Текущий штамп и код будут отозваны, а рапорт вернётся в черновик.')) return;
     try {
       setIsSaving(true);
-      const updated = await unconfirmRecord(record.id, token);
+      const updated = await unconfirmRecord(record.id);
       setRecord(updated);
       onUpdate();
     } catch (err: any) {

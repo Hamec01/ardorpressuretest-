@@ -16,8 +16,8 @@ import {
   FileText
 } from 'lucide-react';
 import { PressureTest, PressureTestRecord, RecordCustomField, RecordItem, RecordLog, RecordLogArtifact, TestRevision } from '../types';
+import { authFetch } from '../authFetch';
 import { fetchPressureTests, fetchPtrSourceIdentifiers, getArtifactFileUrl, resolvePtrSources } from '../api';
-import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/LanguageContext';
 
 interface NewRecordModalProps {
@@ -26,7 +26,6 @@ interface NewRecordModalProps {
 }
 
 export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSuccess }) => {
-  const { token } = useAuth();
   const { t } = useI18n();
 
   // Document Fields matching official ARDOR PAINEKOEPÖYTÄKIRJA
@@ -452,11 +451,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const res = await fetch('/api/v1/records', {
+      const res = await authFetch('/api/v1/records', {
         method: 'POST',
         headers,
         body: JSON.stringify(payload)

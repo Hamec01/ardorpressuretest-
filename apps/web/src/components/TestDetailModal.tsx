@@ -3,7 +3,7 @@ import { PressureTest, TestRevision, Artifact } from '../types';
 import { getRevisionZipUrl, getArtifactFileUrl, deleteArtifact, deletePressureTest, permanentlyDeletePressureTest, restorePressureTest, updatePipeCloudStatus } from '../api';
 import { copyToClipboard } from '../clipboard';
 import { useI18n } from '../context/LanguageContext';
-import { useAuth } from '../context/AuthContext';
+import { authFetch } from '../authFetch';
 import {
   X,
   Download,
@@ -61,7 +61,6 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   const { t } = useI18n();
-  const { token } = useAuth();
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isTogglingPipeCloud, setIsTogglingPipeCloud] = useState<boolean>(false);
   const [deletingArtifactId, setDeletingArtifactId] = useState<string | null>(null);
@@ -94,13 +93,8 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
       for (let i = 0; i < e.target.files.length; i++) {
         formData.append('photos', e.target.files[i]);
       }
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      const res = await fetch(`/api/v1/tests/${currentTest.log_no}/photos`, {
+      const res = await authFetch(`/api/v1/tests/${currentTest.log_no}/photos`, {
         method: 'POST',
-        headers,
         body: formData
       });
       if (!res.ok) {
@@ -134,7 +128,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
     setCurrentTest(optimistic);
 
     try {
-      const res = await updatePipeCloudStatus(currentTest.log_no, newStatus, token);
+      const res = await updatePipeCloudStatus(currentTest.log_no, newStatus);
       const finalTest: PressureTest = {
         ...currentTest,
         pipecloud_added: res.pipecloud_added,
@@ -159,7 +153,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
 
     try {
       setIsDeleting(true);
-      await deletePressureTest(currentTest.log_no, token);
+      await deletePressureTest(currentTest.log_no);
       if (onUpdate) {
         onUpdate(currentTest);
       }
@@ -174,7 +168,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   const handleRestoreTest = async () => {
     try {
       setIsDeleting(true);
-      const restored = await restorePressureTest(currentTest.log_no, token);
+      const restored = await restorePressureTest(currentTest.log_no);
       setCurrentTest(restored);
       onUpdate?.(restored);
       onClose();
@@ -191,7 +185,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
 
     try {
       setIsDeleting(true);
-      await permanentlyDeletePressureTest(currentTest.log_no, token);
+      await permanentlyDeletePressureTest(currentTest.log_no);
       onUpdate?.(currentTest);
       onClose();
     } catch (err: any) {
@@ -234,7 +228,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
 
     try {
       setDeletingArtifactId(art.id);
-      const updatedTest = await deleteArtifact(art.id, token);
+      const updatedTest = await deleteArtifact(art.id);
       setCurrentTest(updatedTest);
       onUpdate?.(updatedTest);
     } catch (err: any) {
@@ -295,7 +289,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
         bundle_numbers: bundleList,
       };
 
-      const res = await fetch(`/api/v1/tests/${currentTest.log_no}/revisions/${currentRev.revision_id}/metadata`, {
+      const res = await authFetch(`/api/v1/tests/${currentTest.log_no}/revisions/${currentRev.revision_id}/metadata`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, ShieldCheck, AlertTriangle, Check, Lock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PressureTestRecord } from '../types';
+import { authFetch } from '../authFetch';
 
 interface ConfirmRecordModalProps {
   record: PressureTestRecord;
@@ -10,7 +11,7 @@ interface ConfirmRecordModalProps {
 }
 
 export const ConfirmRecordModal: React.FC<ConfirmRecordModalProps> = ({ record, onClose, onSuccess }) => {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [agreed, setAgreed] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -28,11 +29,7 @@ export const ConfirmRecordModal: React.FC<ConfirmRecordModalProps> = ({ record, 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const res = await fetch(`/api/v1/records/${record.id}/confirm`, {
+      const res = await authFetch(`/api/v1/records/${record.id}/confirm`, {
         method: 'POST',
         headers
       });

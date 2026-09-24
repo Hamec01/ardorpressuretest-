@@ -1,18 +1,20 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { authFetch } from '../authFetch';
 
 export interface AuthUser {
   id: string;
   username: string;
-  full_name: string;
-  role: 'operator' | 'foreman' | 'admin';
+  full_name: string | null;
+  role: 'viewer' | 'operator' | 'foreman' | 'admin';
   email?: string | null;
+  must_change_password: boolean;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
-  token: string | null;
   login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -20,36 +22,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('ardor_token'));
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const checkAuth = async () => {
-      const storedToken = localStorage.getItem('ardor_token');
-      if (!storedToken) {
-        setIsLoading(false);
-        return;
-      }
-
       try {
-        const res = await fetch('/api/v1/auth/me', {
-          headers: {
-            Authorization: `Bearer ${storedToken}`
-          }
-        });
+        const res = await authFetch('/api/v1/auth/me');
         if (res.ok) {
           const userData = await res.json();
           setUser(userData);
-          setToken(storedToken);
         } else {
-          localStorage.removeItem('ardor_token');
           setUser(null);
-          setToken(null);
         }
       } catch {
-        localStorage.removeItem('ardor_token');
         setUser(null);
-        setToken(null);
       } finally {
         setIsLoading(false);
       }
@@ -59,7 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const login = async (username: string, password: string) => {
-    const res = await fetch('/api/v1/auth/login', {
+    const res = await authFetch('/api/v1/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password })
@@ -71,19 +57,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const data = await res.json();
-    localStorage.setItem('ardor_token', data.access_token);
-    setToken(data.access_token);
     setUser(data.user);
   };
 
-  const logout = () => {
-    localStorage.removeItem('ardor_token');
-    setToken(null);
-    setUser(null);
+  const logout = async () => {
+    try {
+      const res = await authFetch('/api/v1/auth/logout', { method: 'POST' });
+      if (res.ok || res.status === 401) setUser(null);
+    } catch {
+      // Keep the authenticated UI state when the server did not confirm logout.
+    }
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    const res = await authFetch('/api/v1/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Password change failed');
+    }
+    setUser((current) => current ? { ...current, must_change_password: false } : current);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, changePassword, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

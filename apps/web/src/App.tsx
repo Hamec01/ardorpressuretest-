@@ -12,13 +12,16 @@ import { NewRecordModal } from './components/NewRecordModal';
 import { RecordDetailModal } from './components/RecordDetailModal';
 import { FaqTab } from './components/FaqTab';
 import { PlannedTestsTab } from './components/PlannedTestsTab';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { fetchPressureTests, fetchTrash } from './api';
 import { PressureTest, PressureTestRecord } from './types';
 import { useI18n } from './context/LanguageContext';
+import { useAuth } from './context/AuthContext';
 import { RefreshCw, Inbox, AlertCircle, ClipboardList, Layers, FileSpreadsheet, HelpCircle, Trash2 } from 'lucide-react';
 
 export const App: React.FC = () => {
   const { t } = useI18n();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'tests' | 'trash' | 'plans' | 'records' | 'faq'>('tests');
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
@@ -324,6 +327,8 @@ export const App: React.FC = () => {
           }}
         />
       )}
+
+      {user?.must_change_password && <ChangePasswordModal />}
     </div>
   );
 };

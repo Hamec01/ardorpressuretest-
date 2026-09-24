@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { PressureTestRecord } from '../types';
 import { fetchRecords, getRecordPdfUrl, deleteRecord } from '../api';
 import { useI18n } from '../context/LanguageContext';
-import { useAuth } from '../context/AuthContext';
 import { Plus, Download, User, Search, RefreshCw, FileSpreadsheet, ShieldCheck, Trash2 } from 'lucide-react';
 
 interface RecordsTabProps {
@@ -13,7 +12,6 @@ interface RecordsTabProps {
 
 export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRecordClick, refreshTrigger = 0 }) => {
   const { t } = useI18n();
-  const { token } = useAuth();
   const [records, setRecords] = useState<PressureTestRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [search, setSearch] = useState<string>('');
@@ -37,7 +35,7 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRec
     if (!ok) return;
 
     try {
-      await deleteRecord(rec.id, token);
+      await deleteRecord(rec.id);
       loadRecords();
     } catch (err: any) {
       alert(err.message || 'Failed to delete record');

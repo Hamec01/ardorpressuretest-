@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { X, Check, RotateCcw, PenTool, Upload, AlertCircle } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
 import { PressureTestRecord } from '../types';
+import { authFetch } from '../authFetch';
 
 interface SignatureModalProps {
   record: PressureTestRecord;
@@ -10,7 +10,6 @@ interface SignatureModalProps {
 }
 
 export const SignatureModal: React.FC<SignatureModalProps> = ({ record, onClose, onSuccess }) => {
-  const { token } = useAuth();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
   const [hasDrawn, setHasDrawn] = useState<boolean>(false);
@@ -107,11 +106,7 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({ record, onClose,
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const res = await fetch(`/api/v1/records/${record.id}/signature`, {
+      const res = await authFetch(`/api/v1/records/${record.id}/signature`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ image_base64: dataUrl })

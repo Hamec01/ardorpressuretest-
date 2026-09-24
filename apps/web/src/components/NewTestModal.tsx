@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Upload, Check, AlertCircle, FolderArchive, FileSpreadsheet, FolderUp, PenSquare } from 'lucide-react';
 import { PressureTest } from '../types';
+import { authFetch } from '../authFetch';
 
 interface NewTestModalProps {
   onClose: () => void;
@@ -78,7 +79,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
         formData.append('files', f, (f as any).webkitRelativePath || f.name);
       }
 
-      const res = await fetch('/api/v1/process/package', {
+      const res = await authFetch('/api/v1/process/package', {
         method: 'POST',
         body: formData,
       });
@@ -160,7 +161,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
         formData.append('gauge_photos', gf);
       }
 
-      const res = await fetch('/api/v1/process', {
+      const res = await authFetch('/api/v1/process', {
         method: 'POST',
         body: formData,
       });

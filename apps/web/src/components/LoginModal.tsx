@@ -8,15 +8,10 @@ interface LoginModalProps {
 
 export const LoginModal: React.FC<LoginModalProps> = ({ onClose }) => {
   const { login } = useAuth();
-  const [username, setUsername] = useState<string>('admin');
-  const [password, setPassword] = useState<string>('admin123');
+  const [username, setUsername] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-
-  const handleQuickFill = (u: string, p: string) => {
-    setUsername(u);
-    setPassword(p);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,37 +75,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onClose }) => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
-            </div>
-          </div>
-
-          {/* Quick Demo Switchers */}
-          <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>Demo Accounts:</div>
-            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className="filter-pill"
-                style={{ fontSize: '0.75rem' }}
-                onClick={() => handleQuickFill('admin', 'admin123')}
-              >
-                Admin
-              </button>
-              <button
-                type="button"
-                className="filter-pill"
-                style={{ fontSize: '0.75rem' }}
-                onClick={() => handleQuickFill('foreman_matti', 'foreman123')}
-              >
-                Foreman (Matti)
-              </button>
-              <button
-                type="button"
-                className="filter-pill"
-                style={{ fontSize: '0.75rem' }}
-                onClick={() => handleQuickFill('operator_pekka', 'operator123')}
-              >
-                Operator (Pekka)
-              </button>
             </div>
           </div>
 

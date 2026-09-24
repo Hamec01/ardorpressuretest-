@@ -12,7 +12,6 @@ import {
   updatePlannedTestPipe,
 } from '../api';
 import { PlannedTestList, PlannedTestListDetail, PlannedTestPipe, PressureTest } from '../types';
-import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/LanguageContext';
 import { CheckCircle2, ClipboardList, Clock3, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 
@@ -31,7 +30,6 @@ const pressureValue = (value?: string | null) => {
 
 export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }) => {
   const { t } = useI18n();
-  const { token } = useAuth();
   const [plans, setPlans] = useState<PlannedTestList[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [detail, setDetail] = useState<PlannedTestListDetail | null>(null);
@@ -90,7 +88,7 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
     if (!planName.trim()) return;
     try {
       setSaving(true);
-      const created = await createPlannedTestList(planName.trim(), planDescription.trim(), token);
+      const created = await createPlannedTestList(planName.trim(), planDescription.trim());
       setPlanName('');
       setPlanDescription('');
       await loadPlans();
@@ -106,7 +104,7 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
     if (!selectedPlanId || !pipeInput.trim()) return;
     try {
       setSaving(true);
-      await addPlannedTestPipes(selectedPlanId, pipeInput, token);
+      await addPlannedTestPipes(selectedPlanId, pipeInput);
       setPipeInput('');
       await refreshSelectedPlan();
     } catch (err: any) {
@@ -124,7 +122,7 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
     if (description === null) return;
     try {
       setSaving(true);
-      await updatePlannedTestList(detail.list.id, { name: name.trim(), description }, token);
+      await updatePlannedTestList(detail.list.id, { name: name.trim(), description });
       await refreshSelectedPlan();
     } catch (err: any) {
       setError(err.message || t('planned_update_error'));
@@ -137,7 +135,7 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
     if (!detail || !window.confirm(t('planned_delete_plan_confirm', { plan: detail.list.name }))) return;
     try {
       setSaving(true);
-      await deletePlannedTestList(detail.list.id, token);
+      await deletePlannedTestList(detail.list.id);
       setSelectedPlanId(null);
       setDetail(null);
       await loadPlans();
@@ -154,7 +152,7 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
     if (pipeNumber === null || !pipeNumber.trim()) return;
     try {
       setSaving(true);
-      await updatePlannedTestPipe(pipe.id, pipeNumber, token);
+      await updatePlannedTestPipe(pipe.id, pipeNumber);
       await refreshSelectedPlan();
     } catch (err: any) {
       setError(err.message || t('planned_update_error'));
@@ -168,7 +166,7 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
     if (!window.confirm(t('planned_delete_pipe_confirm', { pipe: pipe.pipe_number }))) return;
     try {
       setSaving(true);
-      await deletePlannedTestPipe(pipe.id, token);
+      await deletePlannedTestPipe(pipe.id);
       await refreshSelectedPlan();
     } catch (err: any) {
       setError(err.message || t('planned_delete_error'));
@@ -181,7 +179,7 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
     if (!selectedPlanId || !window.confirm(t('planned_delete_bundle_confirm', { bundle: bundleNumber, count }))) return;
     try {
       setSaving(true);
-      await deletePlannedTestBundle(selectedPlanId, bundleNumber, token);
+      await deletePlannedTestBundle(selectedPlanId, bundleNumber);
       await refreshSelectedPlan();
     } catch (err: any) {
       setError(err.message || t('planned_delete_error'));
