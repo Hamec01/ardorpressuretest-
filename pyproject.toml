@@ -15,12 +15,13 @@ dependencies = [
     "charset-normalizer>=3.0.0",
     "fpdf2>=2.7.0",
     "pillow>=9.0.0",
+    "httpx>=0.27.0",
+    "keyring>=25.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
-    "httpx>=0.27.0",
 ]
 server = [
     "fastapi>=0.110.0",

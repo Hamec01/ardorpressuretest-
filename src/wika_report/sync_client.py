@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from wika_report.sync_queue import QueueItem, SyncQueue, sync_queue
+from wika_report.auth_client import DesktopAuthClient
 
 logger = logging.getLogger("wika_report")
 
@@ -12,14 +13,34 @@ logger = logging.getLogger("wika_report")
 class SyncClient:
     """Клиент для синхронизации локальных ревизий и статусов PipeCloud с FastAPI бэкендом."""
 
-    def __init__(self, base_url: str = "http://127.0.0.1:8080", timeout: float = 30.0):
+    def __init__(
+        self,
+        base_url: str = "http://127.0.0.1:8080",
+        timeout: float = 30.0,
+        auth_client: Optional[DesktopAuthClient] = None,
+        transport: Optional[httpx.BaseTransport] = None,
+    ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.auth_client = auth_client
+        self.transport = transport
+
+    def _client(self, timeout: Optional[float] = None) -> httpx.Client:
+        return httpx.Client(
+            base_url=self.base_url,
+            timeout=timeout if timeout is not None else self.timeout,
+            transport=self.transport,
+        )
+
+    def _auth_headers(self) -> Dict[str, str]:
+        if self.auth_client is None:
+            return {}
+        return {"Authorization": f"Bearer {self.auth_client.get_access_token()}"}
 
     def check_health(self) -> bool:
         """Проверяет доступность сервера."""
         try:
-            with httpx.Client(base_url=self.base_url, timeout=5.0) as client:
+            with self._client(timeout=5.0) as client:
                 res = client.get("/api/v1/health")
                 return res.status_code == 200 and res.json().get("status") == "ok"
         except Exception as e:
@@ -37,9 +58,10 @@ class SyncClient:
         if getattr(item, "operation_type", "revision_upload") == "pipecloud_status_update":
             try:
                 payload = json.loads(item.payload_json or "{}")
-                with httpx.Client(base_url=self.base_url, timeout=self.timeout) as client:
+                with self._client() as client:
                     res = client.patch(
                         f"/api/v1/tests/{item.log_no}/pipecloud",
+                        headers=self._auth_headers(),
                         json={
                             "added": bool(payload.get("added", False)),
                             "idempotency_key": item.operation_id
@@ -72,13 +94,17 @@ class SyncClient:
             manifest_data = json.load(f)
 
         try:
-            with httpx.Client(base_url=self.base_url, timeout=self.timeout) as client:
+            with self._client() as client:
                 # А. Регистрация сессии синхронизации
                 session_payload = {
                     "idempotency_key": item.operation_id,
                     "manifest": manifest_data
                 }
-                res = client.post("/api/v1/sync/sessions", json=session_payload)
+                res = client.post(
+                    "/api/v1/sync/sessions",
+                    json=session_payload,
+                    headers=self._auth_headers(),
+                )
                 res.raise_for_status()
                 session_resp = res.json()
 
@@ -105,14 +131,16 @@ class SyncClient:
                             up_res = client.post(
                                 f"/api/v1/sync/sessions/{item.revision_id}/upload",
                                 data=upload_data,
-                                files=files
+                                files=files,
+                                headers=self._auth_headers(),
                             )
                             up_res.raise_for_status()
 
                 # В. Фиксация ревизии (Completion)
                 complete_res = client.post(
                     f"/api/v1/sync/sessions/{item.revision_id}/complete",
-                    json=session_payload
+                    json=session_payload,
+                    headers=self._auth_headers(),
                 )
                 complete_res.raise_for_status()
                 complete_data = complete_res.json()
