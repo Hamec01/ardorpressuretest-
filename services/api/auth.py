@@ -2,7 +2,6 @@ import base64
 import hashlib
 import hmac
 import json
-import secrets
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -15,6 +14,7 @@ from sqlalchemy.orm import Session
 from services.api.config import settings
 from services.api.database import get_db
 from services.api.models import User
+from services.api.security import compare_secret_hashes, generate_opaque_secret, hash_opaque_secret
 
 security_bearer = HTTPBearer(auto_error=False)
 
@@ -142,31 +142,6 @@ def validate_new_password(password: str) -> Optional[str]:
     if length > PASSWORD_MAX_LENGTH:
         return f"Password must be at most {PASSWORD_MAX_LENGTH} characters."
     return None
-
-
-# --- opaque secrets: session/refresh/CSRF tokens - generate, hash, compare ----------
-
-def generate_opaque_secret() -> str:
-    """>=256-bit (32-byte) CSPRNG-sourced opaque secret via secrets.token_urlsafe(32)
-    (itself backed by secrets.token_bytes(32)), URL-safe base64 with padding stripped.
-    The URL-safe base64 alphabet (A-Za-z0-9-_) contains no '.' by construction, so this
-    value can never be mistaken for a dot-separated JWT by a naive shape check. This is
-    the raw secret to hand to a client (cookie value / desktop refresh credential) -
-    only its hash (hash_opaque_secret()) is ever meant to be persisted."""
-    return secrets.token_urlsafe(32)
-
-
-def hash_opaque_secret(secret: str) -> str:
-    """SHA-256 hex digest (64 lowercase hex chars) of an opaque secret - the only form
-    of it that should ever be persisted or looked up in storage."""
-    return hashlib.sha256(secret.encode("utf-8")).hexdigest()
-
-
-def compare_secret_hashes(a: str, b: str) -> bool:
-    """Constant-time comparison of two already-computed hash values - e.g. a freshly
-    hashed presented secret against a stored hash. Never compare raw secrets or their
-    hashes with `==`."""
-    return hmac.compare_digest(a, b)
 
 
 def create_access_token(data: dict, expires_delta_seconds: int = 86400 * 7) -> str:
