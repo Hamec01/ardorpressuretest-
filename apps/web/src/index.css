@@ -270,6 +270,23 @@ body {
   gap: 0.3rem;
 }
 
+.revision-delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.32rem;
+  border: 1px solid rgba(244, 63, 94, 0.45);
+  border-radius: 9999px;
+  background: rgba(244, 63, 94, 0.08);
+  color: var(--accent-rose);
+  cursor: pointer;
+}
+
+.revision-delete-button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
 .search-clear-btn {
   background: transparent;
   border: none;

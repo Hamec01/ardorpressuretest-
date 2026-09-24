@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PressureTest, TestRevision, Artifact } from '../types';
-import { getRevisionZipUrl, getArtifactFileUrl, deleteArtifact, deletePressureTest, permanentlyDeletePressureTest, restorePressureTest, updatePipeCloudStatus } from '../api';
+import { getRevisionZipUrl, getArtifactFileUrl, deleteArtifact, deletePressureTest, deleteTestRevision, permanentlyDeletePressureTest, restorePressureTest, updatePipeCloudStatus } from '../api';
 import { copyToClipboard } from '../clipboard';
 import { useI18n } from '../context/LanguageContext';
 import { authFetch } from '../authFetch';
@@ -64,6 +64,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isTogglingPipeCloud, setIsTogglingPipeCloud] = useState<boolean>(false);
   const [deletingArtifactId, setDeletingArtifactId] = useState<string | null>(null);
+  const [deletingRevisionId, setDeletingRevisionId] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState<boolean>(false);
 
   useEffect(() => {
@@ -195,12 +196,32 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
     }
   };
 
-  const revisions = currentTest.revisions || [];
+  const revisions = (currentTest.revisions || []).filter((revision) => revision.status !== 'archived');
   const currentRev: TestRevision | undefined = revisions[selectedRevIndex] || revisions[0];
 
   const meta = currentRev?.metadata_json || {};
   const metrics = currentRev?.metrics_json || {};
   const artifacts = currentRev?.artifacts || [];
+
+  const handleDeleteRevision = async (revision: TestRevision) => {
+    if (revisions.length <= 1) {
+      alert(t('revision_delete_last_blocked'));
+      return;
+    }
+    if (!window.confirm(t('revision_delete_confirm', { revision: revision.revision_id }))) return;
+    try {
+      setDeletingRevisionId(revision.id);
+      const updated = await deleteTestRevision(currentTest.log_no, revision.id);
+      setCurrentTest(updated);
+      setSelectedRevIndex(0);
+      setIsEditing(false);
+      onUpdate?.(updated);
+    } catch (err: any) {
+      alert(err.message || t('revision_delete_failed'));
+    } finally {
+      setDeletingRevisionId(null);
+    }
+  };
 
   // Filter graphs and photos
   const graphArtifact = artifacts.find(
@@ -502,16 +523,27 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {revisions.map((rev, idx) => (
-                  <button
-                    key={rev.id}
-                    className={`filter-pill ${selectedRevIndex === idx ? 'active' : ''}`}
-                    onClick={() => {
-                      setSelectedRevIndex(idx);
-                      setIsEditing(false);
-                    }}
-                  >
-                    Rev {rev.revision_id} {rev.is_primary ? '(Primary)' : ''}
-                  </button>
+                  <span key={rev.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                    <button
+                      className={`filter-pill ${selectedRevIndex === idx ? 'active' : ''}`}
+                      onClick={() => {
+                        setSelectedRevIndex(idx);
+                        setIsEditing(false);
+                      }}
+                    >
+                      Rev {rev.revision_id} {rev.is_primary ? '(Primary)' : ''}
+                    </button>
+                    <button
+                      type="button"
+                      className="revision-delete-button"
+                      disabled={deletingRevisionId === rev.id}
+                      onClick={() => handleDeleteRevision(rev)}
+                      title={t('revision_delete')}
+                      aria-label={t('revision_delete')}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </span>
                 ))}
               </div>
             </div>

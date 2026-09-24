@@ -66,6 +66,10 @@ def test_every_new_label_exists_in_all_three_languages():
         "card_sort_pipe",
         "card_sort_ascending",
         "card_sort_descending",
+        "revision_delete",
+        "revision_delete_confirm",
+        "revision_delete_last_blocked",
+        "revision_delete_failed",
     )
     for key in keys:
         assert source.count(f"{key}:") == 3
@@ -87,6 +91,68 @@ def test_bundle_limits_visible_pipes_and_shift_uses_that_visible_range():
     assert "setBundlePipeNumbers(pipes)" in source
     assert "visiblePipeNumbers.slice(start, end + 1)" in source
     assert ": selectedBundleFilter ? [selectedBundleFilter] : []" in source
+
+
+def test_revision_removal_is_soft_and_promotes_another_primary():
+    from services.api.models import Artifact, User
+    from services.api.routes.tests import archive_test_revision
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    user = User(username="revision_admin", full_name="Revision Admin", role="admin", hashed_password="x", is_active=True)
+    test = PressureTest(log_no="REVDEL01", is_archived=False)
+    old = TestRevision(revision_id="old", status="complete", is_primary=False, operator="A", metadata_json={}, metrics_json={})
+    primary = TestRevision(revision_id="primary", status="complete", is_primary=True, operator="A", metadata_json={}, metrics_json={})
+    primary.artifacts.append(Artifact(name="evidence.csv", relative_path="evidence.csv", file_type="source_csv", size_bytes=1, sha256="a" * 64, storage_key="evidence.csv"))
+    test.revisions.extend([old, primary])
+    db.add_all([user, test])
+    db.commit()
+
+    archive_test_revision(test.log_no, primary.id, user, db)
+    db.refresh(primary)
+    db.refresh(old)
+    assert primary.status == "archived"
+    assert primary.is_primary is False
+    assert old.is_primary is True
+    assert db.query(Artifact).filter(Artifact.test_revision_id == primary.id).count() == 1
+
+
+def test_revision_removal_ui_calls_specific_revision_endpoint():
+    source = (WEB / "components" / "TestDetailModal.tsx").read_text(encoding="utf-8")
+    assert "deleteTestRevision(currentTest.log_no, revision.id)" in source
+    assert "revision.status !== 'archived'" in source
+
+
+def test_old_revision_can_be_removed_without_changing_primary_and_last_is_blocked():
+    from fastapi import HTTPException
+    from services.api.models import User
+    from services.api.routes.tests import archive_test_revision
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    user = User(username="old_revision_admin", full_name="Admin", role="admin", hashed_password="x", is_active=True)
+    test = PressureTest(log_no="REVDEL02", is_archived=False)
+    old = TestRevision(revision_id="old", status="complete", is_primary=False, operator="A", metadata_json={}, metrics_json={})
+    primary = TestRevision(revision_id="primary", status="complete", is_primary=True, operator="A", metadata_json={}, metrics_json={})
+    test.revisions.extend([old, primary])
+    db.add_all([user, test])
+    db.commit()
+
+    archive_test_revision(test.log_no, old.id, user, db)
+    db.refresh(old)
+    db.refresh(primary)
+    assert old.status == "archived"
+    assert primary.is_primary is True
+
+    try:
+        archive_test_revision(test.log_no, primary.id, user, db)
+        assert False, "the last visible revision must not be removable"
+    except HTTPException as exc:
+        assert exc.status_code == 409
 
 
 def test_pipecloud_row_maps_to_the_actual_pipecloud_columns():

@@ -92,6 +92,15 @@ export async function permanentlyDeletePressureTest(logNo: string): Promise<void
   }
 }
 
+export async function deleteTestRevision(logNo: string, revisionId: string): Promise<PressureTest> {
+  const res = await authFetch(`${API_BASE}/tests/${encodeURIComponent(logNo)}/revisions/${encodeURIComponent(revisionId)}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to remove revision (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function fetchPlannedTestLists(query = ''): Promise<PlannedTestList[]> {
   const res = await authFetch(`${API_BASE}/planned-tests/lists?q=${encodeURIComponent(query)}`);
   if (!res.ok) throw new Error(`Failed to load pressure test plans (${res.status})`);

@@ -633,6 +633,70 @@ def update_revision_metadata(
     )
 
 
+@router.delete("/{log_no}/revisions/{revision_id}", response_model=PressureTestResponse)
+def archive_test_revision(
+    log_no: str,
+    revision_id: str,
+    current_user: User = Depends(require_role(["foreman", "admin"])),
+    db: Session = Depends(get_db),
+):
+    """Remove one revision from the visible history without deleting evidence files."""
+    norm_log = normalize_log_no(log_no)
+    test = (
+        db.query(PressureTest)
+        .options(joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts))
+        .filter(PressureTest.log_no == norm_log, PressureTest.is_archived == False)
+        .first()
+    )
+    if not test:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Test Log_{norm_log} not found.")
+
+    visible_revisions = [revision for revision in test.revisions if revision.status != "archived"]
+    revision = next((candidate for candidate in visible_revisions if candidate.id == revision_id), None)
+    if not revision:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Revision not found.")
+    if len(visible_revisions) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The only remaining revision cannot be removed.",
+        )
+
+    was_primary = revision.is_primary
+    replacement = None
+    if was_primary:
+        replacement = max(
+            (candidate for candidate in visible_revisions if candidate.id != revision.id),
+            key=lambda candidate: (candidate.created_at, candidate.id),
+        )
+        replacement.is_primary = True
+    revision.is_primary = False
+    revision.status = "archived"
+    test.updated_at = datetime.now(timezone.utc)
+
+    log_audit_event(
+        db,
+        action="test_revision_archived",
+        entity_type="test_revision",
+        entity_id=str(revision.id),
+        actor_id=str(current_user.id),
+        actor_name=current_user.full_name,
+        details={
+            "log_no": norm_log,
+            "revision_id": revision.revision_id,
+            "was_primary": was_primary,
+            "replacement_revision_id": replacement.revision_id if replacement else None,
+        },
+    )
+
+    db.expire_all()
+    return (
+        db.query(PressureTest)
+        .options(joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts))
+        .filter(PressureTest.id == test.id)
+        .first()
+    )
+
+
 @router.delete("/{log_no}")
 def delete_test(
     log_no: str,
