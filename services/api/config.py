@@ -1,10 +1,12 @@
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 from pydantic import BaseModel, model_validator
 
 INSECURE_DEFAULT_SECRET = "ardor-local-secret-key-change-in-prod"
 LOCAL_ENVIRONMENTS = ("local", "dev", "development", "test", "testing")
 DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
+DEFAULT_PUBLIC_ORIGIN = "http://localhost:5173"
 
 
 class Settings(BaseModel):
@@ -33,6 +35,7 @@ class Settings(BaseModel):
 
     # Comma-separated browser origins allowed to call the API with credentials.
     cors_allowed_origins: str = os.getenv("ARDOR_CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
+    public_origin: str = os.getenv("ARDOR_PUBLIC_ORIGIN", DEFAULT_PUBLIC_ORIGIN)
 
     @property
     def is_local_environment(self) -> bool:
@@ -41,6 +44,18 @@ class Settings(BaseModel):
     @property
     def cors_origin_list(self) -> list:
         return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+
+    @property
+    def session_cookie_name(self) -> str:
+        return "ardor_session" if self.is_local_environment else "__Host-ardor_session"
+
+    @property
+    def csrf_cookie_name(self) -> str:
+        return "ardor_csrf" if self.is_local_environment else "__Host-ardor_csrf"
+
+    @property
+    def secure_cookies(self) -> bool:
+        return not self.is_local_environment
 
     @model_validator(mode="after")
     def _enforce_server_mode_requirements(self) -> "Settings":
@@ -80,6 +95,30 @@ class Settings(BaseModel):
             problems.append(
                 "ARDOR_CORS_ORIGINS was not explicitly set (still the local-dev default "
                 f"'{DEFAULT_CORS_ORIGINS}') - a server deployment must set its real origin(s)"
+            )
+
+        try:
+            parsed_origin = urlparse(self.public_origin)
+            parsed_port = parsed_origin.port
+        except (TypeError, ValueError):
+            parsed_origin = None
+            parsed_port = None
+        if (
+            parsed_origin is None
+            or parsed_origin.scheme != "https"
+            or not parsed_origin.hostname
+            or parsed_origin.path
+            or parsed_origin.params
+            or parsed_origin.query
+            or parsed_origin.fragment
+            or parsed_origin.username
+            or parsed_origin.password
+            or self.public_origin != self.public_origin.strip()
+            or parsed_port == 0
+        ):
+            problems.append(
+                "ARDOR_PUBLIC_ORIGIN must be one canonical HTTPS origin without "
+                "credentials, path, query, or fragment"
             )
 
         if problems:

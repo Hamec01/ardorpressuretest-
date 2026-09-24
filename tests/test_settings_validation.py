@@ -10,6 +10,7 @@ from services.api.config import DEFAULT_CORS_ORIGINS, INSECURE_DEFAULT_SECRET, S
 
 GOOD_SECRET = "a-real-randomly-generated-secret-value"
 GOOD_DB_URL = "postgresql://ardor_user:x@postgres:5432/ardor_pressure_test"
+GOOD_PUBLIC_ORIGIN = "https://84-247-130-242.sslip.io"
 
 
 def _server_settings(**overrides):
@@ -19,6 +20,7 @@ def _server_settings(**overrides):
         database_url=GOOD_DB_URL,
         seed_default_users=False,
         cors_allowed_origins="https://example.ardor.internal",
+        public_origin=GOOD_PUBLIC_ORIGIN,
     )
     kwargs.update(overrides)
     return Settings(**kwargs)
@@ -28,6 +30,27 @@ def test_server_mode_accepts_fully_safe_configuration():
     s = _server_settings()
     assert s.secret_key == GOOD_SECRET
     assert s.is_local_environment is False
+    assert s.session_cookie_name == "__Host-ardor_session"
+    assert s.csrf_cookie_name == "__Host-ardor_csrf"
+    assert s.secure_cookies is True
+
+
+@pytest.mark.parametrize("origin", [
+    "",
+    "http://84.247.130.242:8080",
+    "https://user:pass@example.test",
+    "https://example.test/path",
+    "https://example.test/",
+    "https://example.test?query=1",
+    "https://example.test/#fragment",
+    " https://example.test",
+    "https://example.test ",
+    "https://example.test:0",
+    "https://example.test:invalid",
+])
+def test_server_mode_rejects_invalid_public_origin(origin):
+    with pytest.raises(Exception):
+        _server_settings(public_origin=origin)
 
 
 @pytest.mark.parametrize("env_name", ["staging", "production", "Staging", "PRODUCTION"])
@@ -104,6 +127,9 @@ def test_local_environments_allow_insecure_defaults(env_name):
         cors_allowed_origins=DEFAULT_CORS_ORIGINS,
     )
     assert s.is_local_environment is True
+    assert s.session_cookie_name == "ardor_session"
+    assert s.csrf_cookie_name == "ardor_csrf"
+    assert s.secure_cookies is False
 
 
 def test_cors_origin_list_parses_comma_separated_values():

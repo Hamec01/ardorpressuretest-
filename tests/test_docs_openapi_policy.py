@@ -38,6 +38,7 @@ def _docs_urls_for(environment):
         env["DATABASE_URL"] = "postgresql://probe_user:probe_pass@127.0.0.1:1/probe_db"
         env["SECRET_KEY"] = "subprocess-probe-secret-value"
         env["ARDOR_CORS_ORIGINS"] = "https://example.ardor.internal"
+        env["ARDOR_PUBLIC_ORIGIN"] = "https://example.ardor.internal"
 
         result = subprocess.run(
             [sys.executable, "-c", _PROBE_CODE],

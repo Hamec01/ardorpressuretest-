@@ -8,13 +8,14 @@ from enum import Enum
 from typing import List, Optional
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 from services.api.config import settings
 from services.api.database import get_db
 from services.api.models import User
 from services.api.security import compare_secret_hashes, generate_opaque_secret, hash_opaque_secret
+from services.api.session_service import validate_browser_session, validate_desktop_session
 
 security_bearer = HTTPBearer(auto_error=False)
 
@@ -420,20 +421,116 @@ def seed_default_users(db: Session) -> None:
     db.commit()
 
 
-def get_current_user(
-    auth: Optional[HTTPAuthorizationCredentials] = Security(security_bearer),
-    db: Session = Depends(get_db)
-) -> Optional[User]:
-    """Возвращает текущего аутентифицированного пользователя или None, если токен не передан."""
-    if not auth or not auth.credentials or auth.credentials in ("null", "undefined", "None", ""):
-        return None
+class AuthenticationMethod(str, Enum):
+    BROWSER_SESSION = "browser_session"
+    DESKTOP_ACCESS = "desktop_access"
+    LEGACY_BEARER = "legacy_bearer"
+
+
+MUST_CHANGE_PASSWORD_ALLOWED_PATHS = frozenset(
+    {
+        "/api/v1/auth/me",
+        "/api/v1/auth/logout",
+        "/api/v1/auth/change-password",
+    }
+)
+
+
+@dataclass
+class AuthenticatedRequest:
+    user: User
+    method: AuthenticationMethod
+    session_id: Optional[str] = None
+
+
+def _authentication_required(detail: str = "Authentication required") -> HTTPException:
+    return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
+
+
+def _active_user(db: Session, user_id: str) -> Optional[User]:
+    return db.query(User).filter(User.id == user_id, User.is_active == True).first()
+
+
+def authenticate_request(
+    db: Session,
+    *,
+    request: Optional[Request] = None,
+    auth: Optional[HTTPAuthorizationCredentials] = None,
+) -> AuthenticatedRequest:
+    """Authenticate one request using exactly one credential scheme.
+
+    A presented browser cookie is authoritative and never falls back to Bearer when
+    invalid. Without a cookie, a strict desktop token is checked first; only tokens
+    with neither ``typ`` nor ``sid`` may use the temporary legacy-Bearer path.
+    """
+    cookie_secret = request.cookies.get(settings.session_cookie_name) if request else None
+    if cookie_secret is not None:
+        checked = validate_browser_session(db, cookie_secret)
+        if not checked.ok or checked.session is None:
+            raise _authentication_required("Session invalid or expired")
+        session_id = checked.session.id
+        user_id = checked.session.user_id
+        if checked.last_seen_updated:
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Session update failed",
+                )
+        user = _active_user(db, user_id)
+        if user is None:
+            raise _authentication_required("User not found or inactive")
+        return AuthenticatedRequest(user, AuthenticationMethod.BROWSER_SESSION, session_id)
+
+    credentials = auth.credentials if auth else None
+    if not credentials or credentials in ("null", "undefined", "None", ""):
+        raise _authentication_required()
+
+    desktop = verify_desktop_access_token(credentials)
+    if desktop.ok:
+        checked = validate_desktop_session(db, desktop.session_id, desktop.user_id)
+        if not checked.ok or checked.session is None:
+            raise _authentication_required("Desktop session invalid or expired")
+        user = _active_user(db, desktop.user_id)
+        if user is None:
+            raise _authentication_required("User not found or inactive")
+        return AuthenticatedRequest(user, AuthenticationMethod.DESKTOP_ACCESS, checked.session.id)
 
     try:
-        payload = decode_access_token(auth.credentials)
-        user_id = payload.get("sub")
-        if not user_id:
-            return None
-        return db.query(User).filter(User.id == user_id, User.is_active == True).first()
+        payload = decode_access_token(credentials)
+    except Exception:
+        raise _authentication_required("Authentication credentials invalid")
+    if not isinstance(payload, dict):
+        raise _authentication_required("Authentication credentials invalid")
+    if payload.get("typ") is not None or payload.get("sid") is not None:
+        raise _authentication_required("Authentication credentials invalid")
+    user_id = payload.get("sub")
+    if not isinstance(user_id, str) or not user_id:
+        raise _authentication_required("Invalid token")
+    user = _active_user(db, user_id)
+    if user is None:
+        raise _authentication_required("User not found or inactive")
+    return AuthenticatedRequest(user, AuthenticationMethod.LEGACY_BEARER)
+
+
+def require_authentication_context(
+    request: Request,
+    auth: Optional[HTTPAuthorizationCredentials] = Security(security_bearer),
+    db: Session = Depends(get_db),
+) -> AuthenticatedRequest:
+    return authenticate_request(db, request=request, auth=auth)
+
+
+def get_current_user(
+    auth: Optional[HTTPAuthorizationCredentials] = Security(security_bearer),
+    db: Session = Depends(get_db),
+    request: Request = None,
+) -> Optional[User]:
+    """Compatibility helper: return the current user or None for invalid credentials."""
+    try:
+        return authenticate_request(db, request=request, auth=auth).user
     except Exception:
         return None
 
@@ -447,27 +544,19 @@ def require_role(allowed_roles: List[str]):
     """
     def role_checker(
         auth: Optional[HTTPAuthorizationCredentials] = Security(security_bearer),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        request: Request = None,
     ) -> User:
-        if not auth or not auth.credentials or auth.credentials in ("null", "undefined", "None", ""):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required"
-            )
+        user = authenticate_request(db, request=request, auth=auth).user
 
-        payload = decode_access_token(auth.credentials)
-        user_id = payload.get("sub")
-        if not user_id:
+        request_path = request.url.path if request is not None else None
+        if (
+            user.must_change_password
+            and request_path not in MUST_CHANGE_PASSWORD_ALLOWED_PATHS
+        ):
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
-            )
-
-        user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Password change required",
             )
 
         if user.role not in allowed_roles:
@@ -481,8 +570,9 @@ def require_role(allowed_roles: List[str]):
 
 def require_authenticated_user(
     auth: Optional[HTTPAuthorizationCredentials] = Security(security_bearer),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    request: Request = None,
 ) -> User:
-    """Проверяет активную сессию любого авторизованного сотрудника (operator, foreman, manager, admin)."""
-    checker = require_role(["operator", "foreman", "manager", "admin"])
-    return checker(auth, db)
+    """Authenticate any current or transitional employee role."""
+    checker = require_role(["viewer", "foreman", "admin", "operator", "manager"])
+    return checker(auth, db, request)
