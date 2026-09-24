@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Plus,
@@ -57,6 +57,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
   const [availablePipeNumbers, setAvailablePipeNumbers] = useState<string[]>([]);
   const [availableBundleNumbers, setAvailableBundleNumbers] = useState<string[]>([]);
   const [selectedSourceIdentifiers, setSelectedSourceIdentifiers] = useState<string[]>([]);
+  const lastSelectedPipeIndex = useRef<number | null>(null);
   const [isLoadingTests, setIsLoadingTests] = useState<boolean>(false);
   const [selectedPickerLogs, setSelectedPickerLogs] = useState<string[]>([]);
 
@@ -79,6 +80,28 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
     ));
   };
 
+  const togglePipeIdentifier = (identifier: string, index: number, shiftKey: boolean) => {
+    setSelectedSourceIdentifiers((selected) => {
+      if (shiftKey && lastSelectedPipeIndex.current !== null) {
+        const start = Math.min(lastSelectedPipeIndex.current, index);
+        const end = Math.max(lastSelectedPipeIndex.current, index);
+        return Array.from(new Set([...selected, ...availablePipeNumbers.slice(start, end + 1)]));
+      }
+      return selected.includes(identifier)
+        ? selected.filter((value) => value !== identifier)
+        : [...selected, identifier];
+    });
+    lastSelectedPipeIndex.current = index;
+  };
+
+  const selectAllAvailablePipes = () => {
+    setSelectedSourceIdentifiers((selected) => Array.from(new Set([...selected, ...availablePipeNumbers])));
+  };
+
+  useEffect(() => {
+    lastSelectedPipeIndex.current = null;
+  }, [availablePipeNumbers]);
+
   const addPipesFromInput = async (raw: string) => {
     const pipeList = normalizePipeList(raw);
     if (pipeList.length === 0) {
@@ -90,8 +113,14 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       setErrorMsg(null);
       const resolution = await resolvePtrSources(pipeList);
       const sourceByPipe = new Map<string, typeof resolution.matches[number]>();
+      const pipeCloudDataByPipe = new Map<string, Record<string, string>>();
       resolution.matches.forEach((source) => {
-        source.selected_pipe_numbers.forEach((pipeNumber) => sourceByPipe.set(pipeNumber.trim(), source));
+        source.selected_pipe_numbers.forEach((pipeNumber) => {
+          const normalizedPipeNumber = pipeNumber.trim();
+          sourceByPipe.set(normalizedPipeNumber, source);
+          const sourceData = source.pipe_source_data?.[pipeNumber];
+          if (sourceData) pipeCloudDataByPipe.set(normalizedPipeNumber, sourceData);
+        });
       });
 
       setAttachedLogs((previousLogs) => {
@@ -123,10 +152,11 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
         const additions: RecordItem[] = [];
         sourceByPipe.forEach((source, pipeNumber) => {
           if (existingNumbers.has(pipeNumber)) return;
+          const pipeCloudData = pipeCloudDataByPipe.get(pipeNumber);
           additions.push({
             item_no: previousItems.length + additions.length + 1,
-            drawing_no: `DWG-${source.log_no}`,
-            spool_no: 'SP-01',
+            drawing_no: pipeCloudData?.drawing || null,
+            spool_no: pipeCloudData?.spool_number || null,
             pipe_number: pipeNumber,
             log_no: source.log_no,
             hold_start_bar: source.metrics.min_pressure_bar != null ? `${source.metrics.min_pressure_bar} bar` : (source.metadata.test_pressure || testPressure),
@@ -1084,16 +1114,26 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
 
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{t('pipe_modal_hint')}</div>
-                <button
-                  type="button"
-                  onClick={() => addPipesFromInput([pipeInput, ...selectedSourceIdentifiers].filter(Boolean).join('\n'))}
-                  disabled={isResolvingPipes}
-                  className="btn-primary"
-                  style={{ background: 'var(--accent-amber)', color: '#0F172A', fontWeight: 700, padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
-                >
-                  <Plus size={14} />
-                  <span>{isResolvingPipes ? t('pipe_resolving') : t('btn_add_selected')}</span>
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={selectAllAvailablePipes}
+                    disabled={availablePipeNumbers.length === 0 || availablePipeNumbers.every((pipeNumber) => selectedSourceIdentifiers.includes(pipeNumber))}
+                    className="filter-pill"
+                  >
+                    {t('btn_select_all_pipes')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addPipesFromInput([pipeInput, ...selectedSourceIdentifiers].filter(Boolean).join('\n'))}
+                    disabled={isResolvingPipes}
+                    className="btn-primary"
+                    style={{ background: 'var(--accent-amber)', color: '#0F172A', fontWeight: 700, padding: '0.45rem 0.85rem', fontSize: '0.8rem' }}
+                  >
+                    <Plus size={14} />
+                    <span>{isResolvingPipes ? t('pipe_resolving') : t('btn_add_selected')}</span>
+                  </button>
+                </div>
               </div>
 
               <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.9rem' }}>
@@ -1104,47 +1144,52 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
                 {availablePipeNumbers.length === 0 && availableBundleNumbers.length === 0 ? (
                   <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{t('pipe_no_match')}</div>
                 ) : (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                    {availablePipeNumbers.map((pipeNumber) => {
-                      const isSelected = selectedSourceIdentifiers.includes(pipeNumber);
-                      return (
-                        <button
-                          key={pipeNumber}
-                          type="button"
-                          onClick={() => toggleSourceIdentifier(pipeNumber)}
-                          className="tag-pipe"
-                          aria-pressed={isSelected}
-                          style={{
-                            cursor: 'pointer',
-                            background: isSelected ? 'rgba(16, 185, 129, 0.16)' : undefined,
-                            borderColor: isSelected ? 'var(--accent-emerald)' : undefined,
-                            color: isSelected ? 'var(--accent-emerald)' : undefined,
-                          }}
-                        >
-                          {pipeNumber}
-                        </button>
-                      );
-                    })}
-                    {availableBundleNumbers.map((bundleNumber) => {
-                      const isSelected = selectedSourceIdentifiers.includes(bundleNumber);
-                      return (
-                        <button
-                          key={`bundle-${bundleNumber}`}
-                          type="button"
-                          onClick={() => toggleSourceIdentifier(bundleNumber)}
-                          className="tag-pipe"
-                          aria-pressed={isSelected}
-                          style={{
-                            cursor: 'pointer',
-                            background: isSelected ? 'rgba(16, 185, 129, 0.16)' : undefined,
-                            borderColor: isSelected ? 'var(--accent-emerald)' : 'var(--accent-violet)',
-                            color: isSelected ? 'var(--accent-emerald)' : 'var(--accent-violet)',
-                          }}
-                        >
-                          Bundle {bundleNumber}
-                        </button>
-                      );
-                    })}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {availableBundleNumbers.length > 0 && (
+                      <section>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700, marginBottom: '0.35rem' }}>{t('pipe_bundles_title')}</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                          {availableBundleNumbers.map((bundleNumber) => {
+                            const isSelected = selectedSourceIdentifiers.includes(bundleNumber);
+                            return (
+                              <button
+                                key={`bundle-${bundleNumber}`}
+                                type="button"
+                                onClick={() => toggleSourceIdentifier(bundleNumber)}
+                                className="tag-pipe"
+                                aria-pressed={isSelected}
+                                style={{ cursor: 'pointer', background: isSelected ? 'rgba(16, 185, 129, 0.16)' : undefined, borderColor: isSelected ? 'var(--accent-emerald)' : 'var(--accent-violet)', color: isSelected ? 'var(--accent-emerald)' : 'var(--accent-violet)' }}
+                              >
+                                {t('pipe_bundle_prefix')} {bundleNumber}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    )}
+                    {availablePipeNumbers.length > 0 && (
+                      <section>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700, marginBottom: '0.35rem' }}>{t('pipe_numbers_title')}</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                          {availablePipeNumbers.map((pipeNumber, index) => {
+                            const isSelected = selectedSourceIdentifiers.includes(pipeNumber);
+                            return (
+                              <button
+                                key={pipeNumber}
+                                type="button"
+                                onClick={(event) => togglePipeIdentifier(pipeNumber, index, event.shiftKey)}
+                                className="tag-pipe"
+                                aria-pressed={isSelected}
+                                title={t('pipe_shift_hint')}
+                                style={{ cursor: 'pointer', background: isSelected ? 'rgba(16, 185, 129, 0.16)' : undefined, borderColor: isSelected ? 'var(--accent-emerald)' : undefined, color: isSelected ? 'var(--accent-emerald)' : undefined }}
+                              >
+                                {pipeNumber}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    )}
                   </div>
                 )}
               </div>

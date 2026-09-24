@@ -183,7 +183,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
   const showDraftFrame = uploadMode === 'form' && isDraftMode;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div
         className="modal-content"
         style={{

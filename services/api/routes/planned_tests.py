@@ -35,26 +35,27 @@ class PlannedPipeUpdateRequest(BaseModel):
 
 PIPECLOUD_PIPE_PATTERN = re.compile(r"fit\s+(\d+/\d+)", re.IGNORECASE)
 PIPECLOUD_COLLAPSED_ROW_PATTERN = re.compile(
-    r"^fit\s+\d+/\d+"
-    r"(?P<product>[A-Z]{4}\d{6})"
-    r"(?P<drawing>\d{2})"
-    r"(?P<spool_number>\d{6,})"
-    r"(?P<revision>[A-Z])"
-    r"(?P<pipeline>.*?)"
-    r"(?:(?P<pt>[A-Z])(?P<wp>\d+\s*pcs)|(?P<wp_without_pt>\d+\s*pcs))"
-    r"(?P<kg>\d+(?:[.,]\d+)?)"
-    r"(?P<treatment>RAL.*?PS-\d+A)"
-    r"(?P<size>\d{2,3})"
-    r"(?P<wt>\d+(?:[.,]\d+)?)"
-    r"(?P<material>[A-Z]{2})"
-    r"(?P<bundles>\d+)"
-    r"(?P<pdd_start>\d{4}-\d{2}-\d{2})"
+    r"^fit\s+\d+/\d+\s+"
+    r"(?P<drawing>\S+)\s+"
+    r"(?P<spool_number>\S+)\s+"
+    r"(?P<order_number>\S+)\s+"
+    r"(?P<revision>\S+)\s+"
+    r"(?P<pipeline>.*?)\s+"
+    r"(?P<pt>[A-Z])\s+"
+    r"(?P<wp>\d+\s*pcs)\s+"
+    r"(?P<kg>\d+(?:[.,]\d+)?)\s+"
+    r"(?P<treatment>RAL\s+.*?PS-[A-Z0-9-]+)\s+"
+    r"(?P<size>\d{1,3})\s+"
+    r"(?P<wt>\d+(?:[.,]\d+)?)\s+"
+    r"(?P<material>[A-Z]{1,4})\s+"
+    r"(?P<bundles>\d+)\s+"
+    r"(?P<pdd_start>\d{4}-\d{2}-\d{2})\s+"
     r"(?P<pdd_end>\d{4}-\d{2}-\d{2})"
-    r"(?P<status>.*)$",
+    r"(?:\s+(?P<status>.*))?$",
     re.IGNORECASE,
 )
 PIPECLOUD_COLUMN_NAMES = [
-    "position", "product", "drawing", "spool_number", "order_number", "revision",
+    "pipe_reference", "drawing", "spool_number", "order_number", "revision",
     "pipeline", "pt", "wp", "kg", "class", "treatment", "size", "wt", "material",
     "bundles", "pdd_start", "pdd_end", "status",
 ]
@@ -90,6 +91,16 @@ def _pipecloud_source_data(raw_row: str) -> Dict[str, str]:
     """Keep all copied values; map them to named fields only when columns are preserved by clipboard."""
     raw_source = raw_row.strip()
     data: Dict[str, str] = {"raw_source": raw_source}
+    normalized_row = re.sub(r"\s+", " ", raw_source).strip()
+    collapsed_row = PIPECLOUD_COLLAPSED_ROW_PATTERN.match(normalized_row)
+    if collapsed_row:
+        data.update({
+            key: value.strip()
+            for key, value in collapsed_row.groupdict().items()
+            if value
+        })
+        return data
+
     cells = [cell.strip() for cell in raw_source.split("\t")]
     if len(cells) > 1:
         for index, cell in enumerate(cells[:len(PIPECLOUD_COLUMN_NAMES)]):
@@ -97,17 +108,16 @@ def _pipecloud_source_data(raw_row: str) -> Dict[str, str]:
                 data[PIPECLOUD_COLUMN_NAMES[index]] = cell
         return data
 
-    collapsed_row = PIPECLOUD_COLLAPSED_ROW_PATTERN.match(raw_source)
-    if collapsed_row:
-        inferred = {
-            key: value.strip()
-            for key, value in collapsed_row.groupdict().items()
-            if value and key != "wp_without_pt"
-        }
-        if collapsed_row.group("wp_without_pt"):
-            inferred["wp"] = collapsed_row.group("wp_without_pt").strip()
-        data.update(inferred)
     return data
+
+
+def canonicalize_pipecloud_source_data(source_data: Dict[str, str]) -> Dict[str, str]:
+    """Repair legacy shifted mappings from their immutable copied PipeCloud row."""
+    raw_source = (source_data or {}).get("raw_source", "")
+    if not raw_source:
+        return source_data or {}
+    repaired = _pipecloud_source_data(raw_source)
+    return repaired if len(repaired) > 1 else source_data
 
 
 def parse_planned_pipe_input(input_text: str) -> List[Tuple[str, Dict[str, str]]]:
@@ -166,7 +176,7 @@ def _pipe_response(pipe: PlannedTestPipe, matching_logs: List[dict]) -> dict:
         "id": pipe.id,
         "pipe_number": pipe.pipe_number,
         "bundle_number": pipe.bundle_number,
-        "source_data": pipe.source_data or {},
+        "source_data": canonicalize_pipecloud_source_data(pipe.source_data or {}),
         "status": "completed" if matching_logs else "pending",
         "matching_logs": matching_logs,
         "latest_log_no": latest_log["log_no"] if latest_log else None,

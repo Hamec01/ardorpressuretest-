@@ -1,7 +1,7 @@
 import io
 import json
 import hashlib
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
@@ -10,7 +10,8 @@ from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from services.api.database import get_db
-from services.api.models import Artifact, Bundle, Pipe, PressureTest, PressureTestRecordLog, TestRevision, User
+from services.api.models import Artifact, Bundle, Pipe, PlannedTestPipe, PressureTest, PressureTestRecordLog, TestRevision, User
+from services.api.routes.planned_tests import canonicalize_pipecloud_source_data
 from services.api.schemas import (
     PipeCloudUpdateRequest,
     PipeCloudUpdateResponse,
@@ -80,6 +81,11 @@ def resolve_ptr_sources(payload: PtrSourceResolveRequest, db: Session = Depends(
     }
     if not requested:
         return {"matches": [], "unmatched_identifiers": []}
+    explicit_pipe_requests = {
+        _normalize_ptr_identifier(identifier)
+        for identifier in payload.identifiers
+        if isinstance(identifier, str) and "/" in identifier
+    }
 
     revisions = (
         db.query(TestRevision)
@@ -114,7 +120,19 @@ def resolve_ptr_sources(payload: PtrSourceResolveRequest, db: Session = Depends(
             continue
 
         matched_identifiers.update(_normalize_ptr_identifier(value) for value in matched_pipes + matched_bundles)
-        selected_pipes = pipe_numbers if matched_bundles else matched_pipes
+        if explicit_pipe_requests:
+            # Explicit pipe choices always win, even when the matching bundle chip was
+            # also selected. This prevents a PTR from silently absorbing every pipe
+            # from every log that happens to mention the same bundle.
+            selected_pipes = matched_pipes
+        else:
+            normalized_bundles = {_normalize_ptr_identifier(value) for value in matched_bundles}
+            selected_pipes = [
+                pipe_number for pipe_number in pipe_numbers
+                if _normalize_ptr_identifier(pipe_number.split("/", 1)[0]) in normalized_bundles
+            ]
+        if not selected_pipes:
+            continue
         matches.append({
             "pressure_test_id": revision.pressure_test_id,
             "test_revision_id": revision.id,
@@ -126,6 +144,7 @@ def resolve_ptr_sources(payload: PtrSourceResolveRequest, db: Session = Depends(
             "pipecloud_added": revision.pressure_test.pipecloud_added,
             "selected_pipe_numbers": selected_pipes,
             "matched_bundles": matched_bundles,
+            "pipe_source_data": {},
             "artifacts": [
                 {
                     "artifact_id": artifact.id,
@@ -140,6 +159,31 @@ def resolve_ptr_sources(payload: PtrSourceResolveRequest, db: Session = Depends(
                 for position, artifact in enumerate(revision.artifacts)
             ],
         })
+
+    selected_pipe_numbers = {
+        pipe_number
+        for match in matches
+        for pipe_number in match["selected_pipe_numbers"]
+    }
+    planned_source_by_pipe = {}
+    if selected_pipe_numbers:
+        planned_pipes = (
+            db.query(PlannedTestPipe)
+            .filter(PlannedTestPipe.pipe_number.in_(selected_pipe_numbers))
+            .order_by(PlannedTestPipe.updated_at.desc())
+            .all()
+        )
+        for planned_pipe in planned_pipes:
+            planned_source_by_pipe.setdefault(
+                planned_pipe.pipe_number,
+                canonicalize_pipecloud_source_data(planned_pipe.source_data or {}),
+            )
+    for match in matches:
+        match["pipe_source_data"] = {
+            pipe_number: planned_source_by_pipe[pipe_number]
+            for pipe_number in match["selected_pipe_numbers"]
+            if pipe_number in planned_source_by_pipe
+        }
 
     return {
         "matches": matches,
@@ -175,6 +219,11 @@ def purge_expired_trash(db: Session) -> None:
 @router.get("", response_model=List[PressureTestResponse])
 def list_or_search_pressure_tests(
     q: Optional[str] = Query(None, description="Строка поиска по Log No, Pipe No, Bundle No, оператору или проекту"),
+    log_no: Optional[str] = Query(None, description="Фильтр по Log No"),
+    test_date: Optional[date] = Query(None, description="Фильтр по календарной дате ревизии, отображаемой в карточке"),
+    operator: Optional[str] = Query(None, description="Фильтр по имени оператора"),
+    bundle: Optional[str] = Query(None, description="Фильтр по номеру bundle"),
+    pipe: Optional[str] = Query(None, description="Фильтр по номеру трубы"),
     pipecloud_filter: Optional[str] = Query(None, description="Фильтр: all, added, not_added"),
     skip: int = 0,
     limit: int = 50,
@@ -200,6 +249,49 @@ def list_or_search_pressure_tests(
         query = query.filter(PressureTest.pipecloud_added == True)
     elif pipecloud_filter == "not_added":
         query = query.filter(PressureTest.pipecloud_added == False)
+
+    if isinstance(log_no, str) and log_no.strip():
+        query = query.filter(PressureTest.log_no.ilike(f"%{log_no.strip()}%"))
+
+    if test_date is not None:
+        day_start = datetime.combine(test_date, time.min, tzinfo=timezone.utc)
+        day_end = day_start + timedelta(days=1)
+        dated_test_ids = (
+            db.query(TestRevision.pressure_test_id)
+            .filter(TestRevision.created_at >= day_start, TestRevision.created_at < day_end)
+            .distinct()
+            .scalar_subquery()
+        )
+        query = query.filter(PressureTest.id.in_(dated_test_ids))
+
+    if isinstance(operator, str) and operator.strip():
+        operator_test_ids = (
+            db.query(TestRevision.pressure_test_id)
+            .filter(TestRevision.operator.ilike(f"%{operator.strip()}%"))
+            .distinct()
+            .scalar_subquery()
+        )
+        query = query.filter(PressureTest.id.in_(operator_test_ids))
+
+    if isinstance(bundle, str) and bundle.strip():
+        bundle_test_ids = (
+            db.query(TestRevision.pressure_test_id)
+            .join(Bundle, Bundle.test_revision_id == TestRevision.id)
+            .filter(Bundle.bundle_number.ilike(f"%{bundle.strip()}%"))
+            .distinct()
+            .scalar_subquery()
+        )
+        query = query.filter(PressureTest.id.in_(bundle_test_ids))
+
+    if isinstance(pipe, str) and pipe.strip():
+        pipe_test_ids = (
+            db.query(TestRevision.pressure_test_id)
+            .join(Pipe, Pipe.test_revision_id == TestRevision.id)
+            .filter(Pipe.pipe_number.ilike(f"%{pipe.strip()}%"))
+            .distinct()
+            .scalar_subquery()
+        )
+        query = query.filter(PressureTest.id.in_(pipe_test_ids))
 
     if isinstance(q, str) and q.strip():
         search_term = f"%{q.strip()}%"

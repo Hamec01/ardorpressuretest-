@@ -1,10 +1,13 @@
 import React from 'react';
 import { Search, X, LayoutGrid, List } from 'lucide-react';
 import { useI18n } from '../context/LanguageContext';
+import { EMPTY_PRESSURE_TEST_FILTERS, PressureTestFilters } from '../api';
 
 interface SearchFiltersProps {
   query: string;
   onQueryChange: (q: string) => void;
+  filters: PressureTestFilters;
+  onFiltersChange: (filters: PressureTestFilters) => void;
   activeFilter: string;
   onFilterSelect: (filter: string) => void;
   viewMode?: 'grid' | 'table';
@@ -14,12 +17,18 @@ interface SearchFiltersProps {
 export const SearchFilters: React.FC<SearchFiltersProps> = ({
   query,
   onQueryChange,
+  filters,
+  onFiltersChange,
   activeFilter,
   onFilterSelect,
   viewMode = 'grid',
   onViewModeChange
 }) => {
   const { t } = useI18n();
+  const hasAdvancedFilters = Object.values(filters).some(Boolean);
+  const updateFilter = (key: keyof PressureTestFilters, value: string) => {
+    onFiltersChange({ ...filters, [key]: value });
+  };
 
   return (
     <div className="search-section">
@@ -40,6 +49,15 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
         )}
       </div>
 
+      <div className="advanced-filter-grid" aria-label={t('advanced_filters')}>
+        <label><span>{t('filter_log_no')}</span><input value={filters.logNo} onChange={(event) => updateFilter('logNo', event.target.value)} placeholder={t('filter_log_no_placeholder')} /></label>
+        <label><span>{t('filter_date')}</span><input type="date" value={filters.testDate} onChange={(event) => updateFilter('testDate', event.target.value)} /></label>
+        <label><span>{t('filter_operator')}</span><input value={filters.operator} onChange={(event) => updateFilter('operator', event.target.value)} placeholder={t('filter_operator_placeholder')} /></label>
+        <label><span>{t('filter_bundle')}</span><input value={filters.bundle} onChange={(event) => updateFilter('bundle', event.target.value)} placeholder={t('filter_bundle_placeholder')} /></label>
+        <label><span>{t('filter_pipe')}</span><input value={filters.pipe} onChange={(event) => updateFilter('pipe', event.target.value)} placeholder={t('filter_pipe_placeholder')} /></label>
+        <button type="button" className="filter-clear-button" disabled={!hasAdvancedFilters} onClick={() => onFiltersChange({ ...EMPTY_PRESSURE_TEST_FILTERS })}>{t('filter_clear')}</button>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div className="filter-pills">
           <button
@@ -58,7 +76,7 @@ export const SearchFilters: React.FC<SearchFiltersProps> = ({
             className={`filter-pill ${activeFilter === 'recent' ? 'active' : ''}`}
             onClick={() => onFilterSelect('recent')}
           >
-            Recent (24h)
+            {t('filter_recent')}
           </button>
           <button
             className={`filter-pill ${activeFilter === 'pipecloud_added' ? 'active' : ''}`}

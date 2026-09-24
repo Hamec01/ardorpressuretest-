@@ -13,6 +13,7 @@ export interface ResolvedPtrSource {
   metrics: TestRevision['metrics_json'];
   pipecloud_added: boolean;
   selected_pipe_numbers: string[];
+  pipe_source_data: Record<string, Record<string, string>>;
   artifacts: RecordLogArtifact[];
 }
 
@@ -32,10 +33,31 @@ export async function fetchPtrSourceIdentifiers(query = ''): Promise<{ pipes: st
   return res.json();
 }
 
-export async function fetchPressureTests(query?: string, pipecloudFilter?: string): Promise<PressureTest[]> {
+export interface PressureTestFilters {
+  logNo: string;
+  testDate: string;
+  operator: string;
+  bundle: string;
+  pipe: string;
+}
+
+export const EMPTY_PRESSURE_TEST_FILTERS: PressureTestFilters = {
+  logNo: '',
+  testDate: '',
+  operator: '',
+  bundle: '',
+  pipe: '',
+};
+
+export async function fetchPressureTests(query?: string, pipecloudFilter?: string, filters: PressureTestFilters = EMPTY_PRESSURE_TEST_FILTERS): Promise<PressureTest[]> {
   const params = new URLSearchParams();
   if (query && query.trim()) params.append('q', query.trim());
   if (pipecloudFilter && pipecloudFilter !== 'all') params.append('pipecloud_filter', pipecloudFilter);
+  if (filters.logNo.trim()) params.append('log_no', filters.logNo.trim());
+  if (filters.testDate) params.append('test_date', filters.testDate);
+  if (filters.operator.trim()) params.append('operator', filters.operator.trim());
+  if (filters.bundle.trim()) params.append('bundle', filters.bundle.trim());
+  if (filters.pipe.trim()) params.append('pipe', filters.pipe.trim());
 
   const qs = params.toString();
   const url = qs ? `${API_BASE}/tests?${qs}` : `${API_BASE}/tests`;
