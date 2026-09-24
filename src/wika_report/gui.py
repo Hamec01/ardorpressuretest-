@@ -2,7 +2,7 @@ import os
 import sys
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from pathlib import Path
 from typing import List, Optional
 
@@ -530,8 +530,40 @@ class WikaAppGUI:
 
     def _start_server_sync(self):
         """Запускает синхронизацию локальной очереди с бэкенд-сервером."""
+        from wika_report.auth_client import (
+            CredentialStorageError,
+            DesktopAuthClient,
+            DesktopAuthenticationError,
+        )
         from wika_report.sync_client import SyncClient
         from wika_report.sync_queue import sync_queue
+
+        base_url = "http://127.0.0.1:8080"
+        auth_client = DesktopAuthClient(base_url=base_url)
+        try:
+            has_saved_login = auth_client.has_saved_login()
+        except CredentialStorageError as exc:
+            messagebox.showerror("Desktop authentication", str(exc))
+            return
+
+        pending_username: Optional[str] = None
+        pending_password: Optional[str] = None
+        if not has_saved_login:
+            pending_username = simpledialog.askstring(
+                "Desktop authentication",
+                "Username:",
+                parent=self.root,
+            )
+            if pending_username is None:
+                return
+            pending_password = simpledialog.askstring(
+                "Desktop authentication",
+                "Password:",
+                show="*",
+                parent=self.root,
+            )
+            if pending_password is None:
+                return
 
         summary = sync_queue.get_summary()
         pending_count = summary.get("pending", 0) + summary.get("failed", 0)
@@ -544,16 +576,35 @@ class WikaAppGUI:
         self.btn_sync.configure(state=tk.DISABLED)
 
         def sync_worker():
-            client = SyncClient(base_url="http://127.0.0.1:8080")
-            if not client.check_health():
-                self._log("[СЕРВЕР НЕДОСТУПЕН] Сервер не запущен (http://127.0.0.1:8080). Логи безопасно сохранены в локальной офлайн-очереди.")
+            health_client = SyncClient(base_url=base_url)
+            if not health_client.check_health():
+                self._log(f"[СЕРВЕР НЕДОСТУПЕН] Сервер не отвечает ({base_url}). Логи безопасно сохранены в локальной офлайн-очереди.")
                 self.root.after(0, lambda: self.btn_sync.configure(state=tk.NORMAL))
                 self.root.after(0, lambda: messagebox.showwarning(
                     "Server Offline",
-                    "Local backend server is offline (http://127.0.0.1:8080).\n\nPlease start run_local.bat first.\nAll test logs remain safely queued offline in SQLite."
+                    f"Backend server is offline ({base_url}).\n\nAll test logs remain safely queued offline in SQLite."
                 ))
                 return
 
+            try:
+                if pending_username is not None and pending_password is not None:
+                    auth_client.login(
+                        pending_username,
+                        pending_password,
+                        device_label="WIKA desktop client",
+                    )
+                else:
+                    auth_client.get_access_token()
+            except (DesktopAuthenticationError, CredentialStorageError) as exc:
+                self._log(f"[АУТЕНТИФИКАЦИЯ] {exc}")
+                self.root.after(0, lambda: self.btn_sync.configure(state=tk.NORMAL))
+                self.root.after(0, lambda: messagebox.showwarning(
+                    "Desktop authentication",
+                    str(exc),
+                ))
+                return
+
+            client = SyncClient(base_url=base_url, auth_client=auth_client)
             res = client.sync_all_pending()
             self._log(f"[СИНХРОНИЗАЦИЯ ЗАВЕРШЕНА] Синхронизировано: {res['synced']}, Ошибок: {res['failed']}")
             self.root.after(0, lambda: self.btn_sync.configure(state=tk.NORMAL))
