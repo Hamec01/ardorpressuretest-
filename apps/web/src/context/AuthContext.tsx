@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authFetch } from '../authFetch';
+import { authFetch, setTransitionalBearerToken } from '../authFetch';
 
 export interface AuthUser {
   id: string;
@@ -60,13 +60,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const data = await res.json();
+    setTransitionalBearerToken(typeof data.access_token === 'string' ? data.access_token : null);
     setUser(data.user);
   };
 
   const logout = async () => {
     try {
       const res = await authFetch('/api/v1/auth/logout', { method: 'POST' });
-      if (res.ok || res.status === 401) setUser(null);
+      if (res.ok || res.status === 401) {
+        setTransitionalBearerToken(null);
+        setUser(null);
+      }
     } catch {
       // Keep the authenticated UI state when the server did not confirm logout.
     }

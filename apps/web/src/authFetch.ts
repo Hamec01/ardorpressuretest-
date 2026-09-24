@@ -1,4 +1,11 @@
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+let transitionalBearerToken: string | null = null;
+
+// HTTP staging cannot receive the production-only Secure browser cookie. Keep the
+// already-issued transitional token in memory only: never localStorage/sessionStorage.
+export function setTransitionalBearerToken(token: string | null): void {
+  transitionalBearerToken = token;
+}
 
 function readCookie(name: string): string | null {
   const prefix = `${encodeURIComponent(name)}=`;
@@ -21,6 +28,9 @@ export async function authFetch(
 ): Promise<Response> {
   const method = (init.method ?? 'GET').toUpperCase();
   const headers = new Headers(init.headers);
+  if (transitionalBearerToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${transitionalBearerToken}`);
+  }
   if (UNSAFE_METHODS.has(method)) {
     const csrfToken = readCsrfToken();
     if (csrfToken) headers.set('X-CSRF-Token', csrfToken);

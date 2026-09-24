@@ -125,6 +125,17 @@ def test_revision_removal_ui_calls_specific_revision_endpoint():
     assert "revision.status !== 'archived'" in source
 
 
+def test_http_staging_login_keeps_transitional_bearer_in_memory_only():
+    auth_fetch = (WEB / "authFetch.ts").read_text(encoding="utf-8")
+    auth_context = (WEB / "context" / "AuthContext.tsx").read_text(encoding="utf-8")
+    assert "let transitionalBearerToken: string | null = null" in auth_fetch
+    assert "headers.set('Authorization', `Bearer ${transitionalBearerToken}`)" in auth_fetch
+    assert "setTransitionalBearerToken(typeof data.access_token" in auth_context
+    combined = auth_fetch + auth_context
+    assert "localStorage.setItem" not in combined
+    assert "sessionStorage.setItem" not in combined
+
+
 def test_old_revision_can_be_removed_without_changing_primary_and_last_is_blocked():
     from fastapi import HTTPException
     from services.api.models import User
