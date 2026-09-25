@@ -368,35 +368,47 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
     <div className="modal-overlay">
       <div className="modal-content" style={{ maxWidth: '960px', width: '92vw', position: 'relative' }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="modal-header" style={{ paddingRight: '3.75rem' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span className="log-number" style={{ fontSize: '1.4rem' }}>Log {currentTest.log_no}</span>
-              <span className={`status-badge ${currentRev?.status || 'complete'}`}>
-                {currentRev?.status || 'complete'}
-              </span>
-              {saveSuccess && (
-                <span style={{ fontSize: '0.8rem', color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                  <Check size={14} /> Сохранено!
+        <div className="modal-header test-detail-header">
+          <div className="test-detail-header-top">
+            <div className="test-detail-title-group">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                <span className="log-number" style={{ fontSize: '1.4rem' }}>Log {currentTest.log_no}</span>
+                <span className={`status-badge ${currentRev?.status || 'complete'}`}>
+                  {currentRev?.status || 'complete'}
                 </span>
-              )}
+                {saveSuccess && (
+                  <span style={{ fontSize: '0.8rem', color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <Check size={14} /> Сохранено!
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                {meta.system || 'Industrial Pipeline Test'} — {meta.project || 'Project ARDOR'}
+              </div>
             </div>
-            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-              {meta.system || 'Industrial Pipeline Test'} — {meta.project || 'Project ARDOR'}
-            </div>
+
+            <button
+              type="button"
+              className="modal-close-btn"
+              onClick={onClose}
+              title={t('modal_close')}
+              aria-label={t('modal_close')}
+            >
+              <X size={22} />
+            </button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={currentTest.is_archived ? handleRestoreTest : handleDeleteTest}
-                disabled={isDeleting}
+          <div className="test-detail-actions">
+            <button
+              type="button"
+              onClick={currentTest.is_archived ? handleRestoreTest : handleDeleteTest}
+              disabled={isDeleting}
               className="filter-pill"
-                style={{ background: currentTest.is_archived ? 'rgba(16, 185, 129, 0.14)' : 'rgba(244, 63, 94, 0.12)', color: currentTest.is_archived ? 'var(--accent-emerald)' : 'var(--accent-rose)', border: `1px solid ${currentTest.is_archived ? 'var(--accent-emerald)' : 'var(--accent-rose)'}`, display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', padding: '0.5rem 0.8rem', fontSize: '0.85rem' }}
-                title={currentTest.is_archived ? t('btn_restore_test') : t('btn_delete_test')}
+              style={{ background: currentTest.is_archived ? 'rgba(16, 185, 129, 0.14)' : 'rgba(244, 63, 94, 0.12)', color: currentTest.is_archived ? 'var(--accent-emerald)' : 'var(--accent-rose)', border: `1px solid ${currentTest.is_archived ? 'var(--accent-emerald)' : 'var(--accent-rose)'}`, display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', padding: '0.5rem 0.8rem', fontSize: '0.85rem' }}
+              title={currentTest.is_archived ? t('btn_restore_test') : t('btn_delete_test')}
             >
-                {currentTest.is_archived ? <RefreshCw size={14} /> : <Trash2 size={14} />}
-                <span>{isDeleting ? t('modal_saving') : currentTest.is_archived ? t('btn_restore_test') : t('btn_delete')}</span>
+              {currentTest.is_archived ? <RefreshCw size={14} /> : <Trash2 size={14} />}
+              <span>{isDeleting ? t('modal_saving') : currentTest.is_archived ? t('btn_restore_test') : t('btn_delete')}</span>
             </button>
 
             {currentTest.is_archived && (
@@ -494,17 +506,6 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
             )}
           </div>
         </div>
-
-        <button
-          type="button"
-          className="modal-close-btn"
-          onClick={onClose}
-          title={t('modal_close')}
-          aria-label={t('modal_close')}
-          style={{ position: 'absolute', top: '0.65rem', right: '0.65rem', zIndex: 11 }}
-        >
-          <X size={22} />
-        </button>
 
         {/* Body */}
         <div className="modal-body">

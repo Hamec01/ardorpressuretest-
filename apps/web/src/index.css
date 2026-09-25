@@ -518,6 +518,35 @@ body {
   z-index: 10;
 }
 
+.test-detail-header,
+.record-detail-header {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+
+.test-detail-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.test-detail-title-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.test-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
 .modal-body {
   padding: 1.5rem;
   display: flex;
@@ -1224,6 +1253,14 @@ body {
     min-height: 44px;
   }
 
+  .modal-close-btn {
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
   .filter-pills {
     flex-wrap: nowrap;
     width: 100%;
@@ -1330,6 +1367,35 @@ body {
   .modal-header {
     min-height: 58px;
     padding: calc(0.7rem + env(safe-area-inset-top)) 1rem 0.7rem;
+  }
+
+  .test-detail-header,
+  .record-detail-header {
+    padding: calc(0.7rem + env(safe-area-inset-top)) 1rem 0.7rem;
+    gap: 0.6rem;
+  }
+
+  .test-detail-header-top {
+    gap: 0.5rem;
+  }
+
+  .test-detail-actions {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+
+  .test-detail-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .test-detail-actions .filter-pill,
+  .test-detail-actions .btn-primary {
+    flex: 0 0 auto;
+    white-space: nowrap;
   }
 
   .modal-body {

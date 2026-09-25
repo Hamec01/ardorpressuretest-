@@ -127,54 +127,61 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
       <div className="modal-overlay">
         <div className="modal-content" style={{ maxWidth: '1020px', width: '95vw' }} onClick={(e) => e.stopPropagation()}>
           {/* Header */}
-          <div className="modal-header">
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <FileSpreadsheet size={22} color="var(--accent-amber)" />
-                <span className="log-number" style={{ color: 'var(--accent-amber)', fontSize: '1.3rem' }}>
-                  {record.record_number}
-                </span>
-                <span className={`status-badge ${record.status}`}>
-                  {record.status}
-                </span>
+          {/* Header */}
+          <div className="modal-header record-detail-header">
+            <div className="test-detail-header-top">
+              <div className="test-detail-title-group">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <FileSpreadsheet size={22} color="var(--accent-amber)" />
+                  <span className="log-number" style={{ color: 'var(--accent-amber)', fontSize: '1.3rem' }}>
+                    {record.record_number}
+                  </span>
+                  <span className={`status-badge ${record.status}`}>
+                    {record.status}
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                  {record.ins_no ? `${record.ins_no} — ` : ''}{record.system} — {record.project}
+                </div>
               </div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                {record.ins_no ? `${record.ins_no} — ` : ''}{record.system} — {record.project}
-              </div>
+
+              <button className="modal-close-btn" onClick={onClose} title={t('modal_close')} aria-label={t('modal_close')}>
+                <X size={20} />
+              </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                {(record.status === 'confirmed' || record.status === 'signed') && (
-                  <button
-                    type="button"
-                    onClick={() => void handleUnconfirm()}
-                    disabled={isSaving}
-                    className="filter-pill"
-                    style={{ background: 'rgba(245, 158, 11, 0.14)', color: 'var(--accent-amber)', border: '1px solid var(--accent-amber)', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
-                    title="Снять подтверждение и вернуть рапорт в черновик"
-                  >
-                    <Edit size={14} />
-                    <span>Снять подтверждение</span>
-                  </button>
-                )}
-                {record.status !== 'confirmed' && record.status !== 'signed' && (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing((value) => !value)}
-                    className="filter-pill"
-                    style={{ background: isEditing ? 'rgba(245, 158, 11, 0.14)' : 'rgba(56, 189, 248, 0.12)', color: isEditing ? 'var(--accent-amber)' : 'var(--accent-cyan)', border: `1px solid ${isEditing ? 'var(--accent-amber)' : 'var(--accent-cyan)'}`, display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
+            <div className="test-detail-actions">
+              {(record.status === 'confirmed' || record.status === 'signed') && (
+                <button
+                  type="button"
+                  onClick={() => void handleUnconfirm()}
+                  disabled={isSaving}
+                  className="filter-pill"
+                  style={{ background: 'rgba(245, 158, 11, 0.14)', color: 'var(--accent-amber)', border: '1px solid var(--accent-amber)', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
+                  title="Снять подтверждение и вернуть рапорт в черновик"
+                >
+                  <Edit size={14} />
+                  <span>Снять подтверждение</span>
+                </button>
+              )}
+              {record.status !== 'confirmed' && record.status !== 'signed' && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditing((value) => !value)}
+                  className="filter-pill"
+                  style={{ background: isEditing ? 'rgba(245, 158, 11, 0.14)' : 'rgba(56, 189, 248, 0.12)', color: isEditing ? 'var(--accent-amber)' : 'var(--accent-cyan)', border: `1px solid ${isEditing ? 'var(--accent-amber)' : 'var(--accent-cyan)'}`, display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
                   title="Редактировать рапорт"
                 >
                   <Edit size={14} />
                   <span>{isEditing ? 'Отмена' : 'Редактировать'}</span>
                 </button>
-                )}
-                {isEditing && (
-                  <button type="button" onClick={() => void handleSave()} disabled={isSaving} className="btn-primary" style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}>
-                    <Check size={14} />
-                    <span>{isSaving ? 'Сохраняем...' : 'Сохранить'}</span>
-                  </button>
-                )}
+              )}
+              {isEditing && (
+                <button type="button" onClick={() => void handleSave()} disabled={isSaving} className="btn-primary" style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}>
+                  <Check size={14} />
+                  <span>{isSaving ? 'Сохраняем...' : 'Сохранить'}</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleDeleteRecord}
@@ -220,10 +227,6 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 <Layers size={15} />
                 <span>{t('btn_download_full_pdf')}</span>
               </a>
-
-              <button className="modal-close-btn" onClick={onClose}>
-                <X size={20} />
-              </button>
             </div>
           </div>
 

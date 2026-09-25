@@ -84,3 +84,27 @@ def test_mobile_change_does_not_add_api_or_backend_mutations() -> None:
     source = read("components/MobileNavigation.tsx")
     forbidden = ("fetch(", "authFetch(", "axios", ".commit(", "DELETE FROM", "UPDATE ")
     assert all(token not in source for token in forbidden)
+
+
+def test_detail_modal_responsive_header_and_close_button_isolated() -> None:
+    test_modal = read("components/TestDetailModal.tsx")
+    record_modal = read("components/RecordDetailModal.tsx")
+    css = read("index.css")
+
+    # Both modals should have structured header top and action container
+    assert "test-detail-header" in test_modal
+    assert "test-detail-header-top" in test_modal
+    assert "test-detail-actions" in test_modal
+    assert "test-detail-header-top" in record_modal
+    assert "test-detail-actions" in record_modal
+
+    # Close button is in the top bar flow, not absolute floating
+    assert 'modal-close-btn"\n          style={{ position: \'absolute\'' not in test_modal
+    assert "paddingRight: '3.75rem'" not in test_modal
+
+    # CSS styles exist for both desktop and mobile
+    assert ".test-detail-header" in css
+    assert ".test-detail-header-top" in css
+    assert ".test-detail-actions" in css
+    assert "overflow-x: auto" in css
+
