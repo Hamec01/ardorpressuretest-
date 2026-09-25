@@ -14,12 +14,13 @@ import { FaqTab } from './components/FaqTab';
 import { PlannedTestsTab } from './components/PlannedTestsTab';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { AppTab, MobileNavigation } from './components/MobileNavigation';
+import { StatisticsTab } from './components/StatisticsTab';
 import { fetchPressureTests, fetchTrash } from './api';
 import { PressureTest, PressureTestRecord } from './types';
 import { CardSortKey, SortDirection, sortCards } from './cardSorting';
 import { useI18n } from './context/LanguageContext';
 import { useAuth } from './context/AuthContext';
-import { RefreshCw, Inbox, AlertCircle, ClipboardList, Layers, FileSpreadsheet, HelpCircle, Trash2 } from 'lucide-react';
+import { RefreshCw, Inbox, AlertCircle, BarChart3, ClipboardList, Layers, FileSpreadsheet, HelpCircle, Trash2 } from 'lucide-react';
 
 export const App: React.FC = () => {
   const { t } = useI18n();
@@ -173,6 +174,26 @@ export const App: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setActiveTab('statistics')}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              borderBottom: activeTab === 'statistics' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+              color: activeTab === 'statistics' ? 'var(--text-primary)' : 'var(--text-muted)',
+              padding: '0.6rem 1rem',
+              fontWeight: 600,
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <BarChart3 size={16} color={activeTab === 'statistics' ? 'var(--accent-cyan)' : 'inherit'} />
+            <span>{t('tab_statistics')}</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('faq')}
             style={{
               background: 'transparent',
@@ -275,6 +296,8 @@ export const App: React.FC = () => {
             onSelectRecord={(rec) => setSelectedRecord(rec)}
             onNewRecordClick={() => setIsNewRecordOpen(true)}
           />
+        ) : activeTab === 'statistics' ? (
+          <StatisticsTab tests={tests} />
         ) : (
           <FaqTab />
         )}
@@ -287,6 +310,7 @@ export const App: React.FC = () => {
         onNewTest={() => setIsNewTestOpen(true)}
         onLogin={() => setIsLoginOpen(true)}
         onAudit={() => setIsAuditOpen(true)}
+        onOpenFaq={() => setActiveTab('faq')}
       />
 
       {selectedTest && (

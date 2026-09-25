@@ -11,8 +11,9 @@ def read(relative: str) -> str:
 
 def test_mobile_shell_has_five_primary_destinations_and_more_sheet() -> None:
     source = read("components/MobileNavigation.tsx")
-    for destination in ("'tests'", "'plans'", "'records'", "'faq'"):
+    for destination in ("'tests'", "'plans'", "'records'", "'statistics'"):
         assert f"selectTab({destination})" in source
+    assert "onOpenFaq();" in source
     assert "mobile_more" in source
     assert 'role="dialog"' in source
     assert 'aria-current=' in source
@@ -55,10 +56,28 @@ def test_mobile_labels_exist_in_all_languages() -> None:
         "mobile_ptr",
         "mobile_faq",
         "mobile_more",
+        "mobile_statistics",
         "mobile_language",
         "mobile_trash",
     ):
         assert translations.count(f"{key}:") == 3
+
+
+def test_statistics_dashboard_is_read_only_and_has_requested_metrics() -> None:
+    component = read("components/StatisticsTab.tsx")
+    calculation = read("statistics.ts")
+    for token in (
+        "averagePipesPerActiveDay",
+        "averagePressure",
+        "topBundleByPipes",
+        "topBundleByPressure",
+        "bundleDistribution",
+        "daily",
+    ):
+        assert token in component
+        assert token in calculation
+    forbidden = ("fetch(", "authFetch(", ".commit(", "DELETE FROM", "UPDATE ", "POST ")
+    assert all(token not in component and token not in calculation for token in forbidden)
 
 
 def test_mobile_change_does_not_add_api_or_backend_mutations() -> None:

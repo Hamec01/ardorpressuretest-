@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   ClipboardList,
+  BarChart3,
   FileSpreadsheet,
   HelpCircle,
   Layers,
@@ -19,7 +20,7 @@ import { useI18n } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { Language } from '../i18n';
 
-export type AppTab = 'tests' | 'trash' | 'plans' | 'records' | 'faq';
+export type AppTab = 'tests' | 'trash' | 'plans' | 'records' | 'statistics' | 'faq';
 
 interface MobileNavigationProps {
   activeTab: AppTab;
@@ -28,6 +29,7 @@ interface MobileNavigationProps {
   onNewTest: () => void;
   onLogin: () => void;
   onAudit: () => void;
+  onOpenFaq: () => void;
 }
 
 const LANGUAGES: Array<{ code: Language; label: string }> = [
@@ -43,6 +45,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
   onNewTest,
   onLogin,
   onAudit,
+  onOpenFaq,
 }) => {
   const { user, logout } = useAuth();
   const { lang, setLang, t } = useI18n();
@@ -71,8 +74,8 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
         <button type="button" className={activeTab === 'records' ? 'active ptr' : 'ptr'} onClick={() => selectTab('records')} aria-current={activeTab === 'records' ? 'page' : undefined}>
           <FileSpreadsheet size={21} /><span>{t('mobile_ptr')}</span>
         </button>
-        <button type="button" className={activeTab === 'faq' ? 'active' : ''} onClick={() => selectTab('faq')} aria-current={activeTab === 'faq' ? 'page' : undefined}>
-          <HelpCircle size={21} /><span>{t('mobile_faq')}</span>
+        <button type="button" className={activeTab === 'statistics' ? 'active' : ''} onClick={() => selectTab('statistics')} aria-current={activeTab === 'statistics' ? 'page' : undefined}>
+          <BarChart3 size={21} /><span>{t('mobile_statistics')}</span>
         </button>
         <button type="button" className={moreOpen || activeTab === 'trash' ? 'active' : ''} onClick={() => setMoreOpen(true)} aria-expanded={moreOpen}>
           <Menu size={21} /><span>{t('mobile_more')}</span>
@@ -101,6 +104,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
               <span>{theme === 'light' ? t('mobile_dark_theme') : t('mobile_light_theme')}</span>
             </button>
             <button type="button" className="mobile-sheet-row" onClick={() => selectTab('trash')}><Trash2 size={20} /><span>{t('mobile_trash')}</span></button>
+            <button type="button" className="mobile-sheet-row" onClick={() => { setMoreOpen(false); onOpenFaq(); }}><HelpCircle size={20} /><span>{t('mobile_faq')}</span></button>
             {(user?.role === 'admin' || user?.role === 'foreman') && <button type="button" className="mobile-sheet-row" onClick={() => { setMoreOpen(false); onAudit(); }}><ShieldAlert size={20} /><span>{t('btn_audit')}</span></button>}
 
             <div className="mobile-system-status"><span className="mobile-online-dot" />{t('node_online')} · {t('indexed_count', { count: totalCount })}</div>
