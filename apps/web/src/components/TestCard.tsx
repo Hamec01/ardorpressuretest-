@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { PressureTest, TestRevision } from '../types';
 import { getArtifactFileUrl } from '../api';
 import { copyToClipboard } from '../clipboard';
+import { getPublicShareUrl } from '../shareLinks';
 import { Calendar, User, Gauge, Pipette, Image as ImageIcon, Share2, Check } from 'lucide-react';
 
 interface TestCardProps {
@@ -14,7 +15,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
 
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = `${window.location.origin}/share/${encodeURIComponent(test.log_no)}`;
+    const url = getPublicShareUrl(test.log_no);
     const ok = await copyToClipboard(url);
     if (ok) {
       setLinkCopied(true);

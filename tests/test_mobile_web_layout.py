@@ -108,3 +108,15 @@ def test_detail_modal_responsive_header_and_close_button_isolated() -> None:
     assert ".test-detail-actions" in css
     assert "overflow-x: auto" in css
 
+
+def test_share_buttons_use_clickable_https_staging_links() -> None:
+    helper = read("shareLinks.ts")
+    card = read("components/TestCard.tsx")
+    detail = read("components/TestDetailModal.tsx")
+
+    assert "https://84-247-130-242.sslip.io" in helper
+    assert "encodeURIComponent(logNo)" in helper
+    assert "getPublicShareUrl(test.log_no)" in card
+    assert "getPublicShareUrl(currentTest.log_no)" in detail
+    assert "window.location.origin}/share/" not in card
+    assert "window.location.origin}/share/" not in detail

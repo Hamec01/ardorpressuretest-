@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { PressureTest, TestRevision, Artifact } from '../types';
 import { getRevisionZipUrl, getArtifactFileUrl, deleteArtifact, deletePressureTest, deleteTestRevision, permanentlyDeletePressureTest, restorePressureTest, updatePipeCloudStatus } from '../api';
 import { copyToClipboard } from '../clipboard';
+import { getPublicShareUrl } from '../shareLinks';
 import { useI18n } from '../context/LanguageContext';
 import { authFetch } from '../authFetch';
 import {
@@ -76,7 +77,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   }, [onClose]);
 
   const handleShareLink = async () => {
-    const url = `${window.location.origin}/share/${encodeURIComponent(currentTest.log_no)}`;
+    const url = getPublicShareUrl(currentTest.log_no);
     const ok = await copyToClipboard(url);
     if (ok) {
       setLinkCopied(true);
