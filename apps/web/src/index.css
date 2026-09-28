@@ -1373,6 +1373,9 @@ body {
   .record-detail-header {
     padding: calc(0.7rem + env(safe-area-inset-top)) 1rem 0.7rem;
     gap: 0.6rem;
+    position: relative;
+    top: auto;
+    flex-shrink: 0;
   }
 
   .test-detail-header-top {
@@ -1385,6 +1388,7 @@ body {
     overflow: visible;
     padding-bottom: 0;
     width: 100%;
+    margin-top: 0.15rem;
   }
 
   .test-detail-actions .filter-pill,
@@ -1395,6 +1399,10 @@ body {
     justify-content: center;
     white-space: normal;
     text-align: center;
+  }
+
+  .test-detail-actions > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .modal-body {

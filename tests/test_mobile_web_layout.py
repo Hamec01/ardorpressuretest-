@@ -107,6 +107,8 @@ def test_detail_modal_responsive_header_and_close_button_isolated() -> None:
     assert ".test-detail-header-top" in css
     assert ".test-detail-actions" in css
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
+    assert "flex-shrink: 0" in css
+    assert ".test-detail-actions > :last-child:nth-child(odd)" in css
 
 
 def test_share_buttons_use_clickable_https_staging_links() -> None:
