@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Upload, Check, AlertCircle, FolderArchive, FileSpreadsheet, FolderUp, PenSquare } from 'lucide-react';
 import { PressureTest } from '../types';
 import { authFetch } from '../authFetch';
+import { sortPipeIdentifiers, sortPipeInput } from '../pipeOrdering';
 
 interface NewTestModalProps {
   onClose: () => void;
@@ -142,15 +143,14 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
       formData.append('wika_nr', wikaNr.trim());
       formData.append('note', note.trim());
       // Extract bundle numbers from pipe lines formatted as "Bundle/Pipe" (e.g. 122153/41)
-      const extractedBundles = pipeRaw
-        .split('\n')
-        .map(line => line.trim())
+      const sortedPipes = sortPipeInput(pipeRaw);
+      const extractedBundles = sortedPipes
         .filter(line => line.includes('/'))
         .map(line => line.split('/')[0].trim())
         .filter(Boolean);
-      const autoBundles = Array.from(new Set(extractedBundles)).join('\n');
+      const autoBundles = sortPipeIdentifiers(Array.from(new Set(extractedBundles))).join('\n');
 
-      formData.append('pipe_numbers_raw', pipeRaw);
+      formData.append('pipe_numbers_raw', sortedPipes.join('\n'));
       formData.append('bundle_numbers_raw', autoBundles);
       formData.append('create_pdf', 'true');
 

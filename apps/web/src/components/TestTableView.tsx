@@ -3,6 +3,7 @@ import { PressureTest, TestRevision } from '../types';
 import { getRevisionZipUrl } from '../api';
 import { useI18n } from '../context/LanguageContext';
 import { Download, ExternalLink, User, Calendar, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { sortPipeIdentifiers } from '../pipeOrdering';
 
 interface TestTableViewProps {
   tests: PressureTest[];
@@ -63,7 +64,7 @@ function buildRow(test: PressureTest) {
   const primaryRev: TestRevision | undefined = test.revisions.find((r) => r.is_primary) || test.revisions[0];
   const meta = primaryRev?.metadata_json || {};
   const metrics = primaryRev?.metrics_json || {};
-  const pipes = meta.pipe_numbers || [];
+  const pipes = sortPipeIdentifiers(meta.pipe_numbers || []);
   const status = primaryRev?.status || 'complete';
   const createdAtSource = primaryRev?.created_at || test.created_at;
   const createdAtMs = new Date(createdAtSource).getTime();

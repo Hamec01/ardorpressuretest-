@@ -3,6 +3,7 @@ import { PressureTest, TestRevision } from '../types';
 import { getArtifactFileUrl } from '../api';
 import { copyToClipboard } from '../clipboard';
 import { getPublicShareUrl } from '../shareLinks';
+import { sortPipeIdentifiers } from '../pipeOrdering';
 import { Calendar, User, Gauge, Pipette, Image as ImageIcon, Share2, Check } from 'lucide-react';
 
 interface TestCardProps {
@@ -31,8 +32,8 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
 
   const meta = primaryRev?.metadata_json || {};
   const metrics = primaryRev?.metrics_json || {};
-  const pipes = meta.pipe_numbers || [];
-  const bundles = meta.bundle_numbers || [];
+  const pipes = sortPipeIdentifiers(meta.pipe_numbers || []);
+  const bundles = sortPipeIdentifiers(meta.bundle_numbers || []);
 
   const status = primaryRev?.status || 'complete';
   const createdDate = primaryRev?.created_at 

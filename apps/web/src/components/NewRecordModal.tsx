@@ -19,6 +19,7 @@ import { PressureTest, PressureTestRecord, RecordCustomField, RecordItem, Record
 import { authFetch } from '../authFetch';
 import { fetchPressureTests, fetchPtrSourceIdentifiers, getArtifactFileUrl, resolvePtrSources } from '../api';
 import { useI18n } from '../context/LanguageContext';
+import { comparePipeIdentifiers, sortPipeIdentifiers } from '../pipeOrdering';
 
 interface NewRecordModalProps {
   onClose: () => void;
@@ -64,14 +65,14 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
   const [selectedPickerLogs, setSelectedPickerLogs] = useState<string[]>([]);
 
   const normalizePipeList = (raw: string) => {
-    return Array.from(new Set(
+    return sortPipeIdentifiers(Array.from(new Set(
       raw
         .split(/[\n,;]+/)
         .map((part) => part.trim())
         .filter(Boolean)
         .map((part) => part.replace(/^bundle[:\s-]+/i, '').replace(/\s+/g, ''))
         .filter((part) => part.length > 0)
-    ));
+    )));
   };
 
   const visiblePipeNumbers = bundlePipeNumbers ?? availablePipeNumbers;
@@ -87,7 +88,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       setIsResolvingPipes(true);
       setErrorMsg(null);
       const resolution = await resolvePtrSources([bundleNumber]);
-      const pipes = Array.from(new Set(resolution.matches.flatMap((match) => match.selected_pipe_numbers)));
+      const pipes = sortPipeIdentifiers(Array.from(new Set(resolution.matches.flatMap((match) => match.selected_pipe_numbers))));
       setSelectedBundleFilter(bundleNumber);
       setBundlePipeNumbers(pipes);
       // The bundle limits the visible set. With no individual selection, Add selected
@@ -155,7 +156,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
             log_no: source.log_no,
             position: previousLogs.length + index,
             include_measurement_table: true,
-            selected_pipe_numbers: source.selected_pipe_numbers,
+            selected_pipe_numbers: sortPipeIdentifiers(source.selected_pipe_numbers),
             metadata_snapshot: {
               log_no: source.log_no,
               revision_id: source.revision_id,
@@ -188,7 +189,9 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
           });
           existingNumbers.add(pipeNumber);
         });
-        return [...previousItems, ...additions];
+        return [...previousItems, ...additions]
+          .sort((left, right) => comparePipeIdentifiers(left.pipe_number, right.pipe_number))
+          .map((item, index) => ({ ...item, item_no: index + 1 }));
       });
 
       if (resolution.unmatched_identifiers.length > 0) {
@@ -240,8 +243,8 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
     const timer = setTimeout(() => {
       fetchPtrSourceIdentifiers(pipeInput.trim())
         .then((sources) => {
-          setAvailablePipeNumbers(sources.pipes);
-          setAvailableBundleNumbers(sources.bundles);
+          setAvailablePipeNumbers(sortPipeIdentifiers(sources.pipes));
+          setAvailableBundleNumbers(sortPipeIdentifiers(sources.bundles));
           setSelectedBundleFilter(null);
           setBundlePipeNumbers(null);
           setSelectedSourceIdentifiers([]);
@@ -265,7 +268,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       return;
     }
 
-    const pipeList: string[] = rev.metadata_json?.pipe_numbers || [];
+    const pipeList = sortPipeIdentifiers(rev.metadata_json?.pipe_numbers || []);
 
     // Extract artifacts from revision
     const artifacts: RecordLogArtifact[] = (rev.artifacts || []).map((art, idx) => ({
@@ -320,7 +323,9 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
       notes: durationMin
     }));
 
-    setItems([...items, ...newItems]);
+    setItems([...items, ...newItems]
+      .sort((left, right) => comparePipeIdentifiers(left.pipe_number, right.pipe_number))
+      .map((item, index) => ({ ...item, item_no: index + 1 })));
     setSelectedPickerLogs((selected) => [...selected, `${test.id}:${rev.id}`]);
   };
 
@@ -491,7 +496,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
           test_revision_id: l.test_revision_id,
           position: idx,
           include_measurement_table: l.include_measurement_table,
-          selected_pipe_numbers: l.selected_pipe_numbers,
+          selected_pipe_numbers: sortPipeIdentifiers(l.selected_pipe_numbers),
           artifacts: (l.artifacts || []).map(a => ({
             artifact_id: a.artifact_id || null,
             source: a.source,
@@ -1307,7 +1312,7 @@ export const NewRecordModal: React.FC<NewRecordModalProps> = ({ onClose, onSucce
 
                         {primaryRev?.metadata_json?.pipe_numbers && primaryRev.metadata_json.pipe_numbers.length > 0 && (
                           <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.4rem' }}>
-                            {primaryRev.metadata_json.pipe_numbers.map((pn, pIdx) => (
+                            {sortPipeIdentifiers(primaryRev.metadata_json.pipe_numbers).map((pn, pIdx) => (
                               <span key={pIdx} className="tag-pipe" style={{ fontSize: '10px' }}>{pn}</span>
                             ))}
                           </div>

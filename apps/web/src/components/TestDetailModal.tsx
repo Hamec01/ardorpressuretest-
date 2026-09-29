@@ -5,6 +5,7 @@ import { copyToClipboard } from '../clipboard';
 import { getPublicShareUrl } from '../shareLinks';
 import { useI18n } from '../context/LanguageContext';
 import { authFetch } from '../authFetch';
+import { sortPipeIdentifiers, sortPipeInput } from '../pipeOrdering';
 import {
   X,
   Download,
@@ -269,7 +270,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
     setEditPressure(meta.test_pressure || '');
     setEditWikaNr(meta.wika_nr || '');
     setEditNote(meta.note || '');
-    setEditPipes((meta.pipe_numbers || []).join('\n'));
+    setEditPipes(sortPipeIdentifiers(meta.pipe_numbers || []).join('\n'));
     setIsEditing(true);
     setErrorMsg(null);
     setSaveSuccess(false);
@@ -287,16 +288,13 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
       setIsSaving(true);
       setErrorMsg(null);
 
-      const pipeList = editPipes
-        .split('\n')
-        .map((p) => p.trim())
-        .filter(Boolean);
+      const pipeList = sortPipeInput(editPipes);
 
       const extractedBundles = pipeList
         .filter((line) => line.includes('/'))
         .map((line) => line.split('/')[0].trim())
         .filter(Boolean);
-      const bundleList = Array.from(new Set(extractedBundles));
+      const bundleList = sortPipeIdentifiers(Array.from(new Set(extractedBundles)));
 
       const payload = {
         log_no: editLogNo.trim(),
@@ -962,7 +960,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                         Pipe Numbers ({meta.pipe_numbers.length}):
                       </div>
                       <div className="tag-list">
-                        {meta.pipe_numbers.map((p: string, i: number) => (
+                        {sortPipeIdentifiers(meta.pipe_numbers).map((p: string, i: number) => (
                           <span key={i} className="tag-pipe" style={{ fontSize: '0.85rem', padding: '0.2rem 0.6rem' }}>
                             {p}
                           </span>

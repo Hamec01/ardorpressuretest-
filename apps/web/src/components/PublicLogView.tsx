@@ -17,6 +17,7 @@ import {
 import { PressureTest, TestRevision, Artifact } from '../types';
 import { fetchTestByLog, getArtifactFileUrl, getRevisionZipUrl } from '../api';
 import { useTheme } from '../context/ThemeContext';
+import { sortPipeIdentifiers } from '../pipeOrdering';
 
 interface PublicLogViewProps {
   logNo: string;
@@ -195,7 +196,7 @@ export const PublicLogView: React.FC<PublicLogViewProps> = ({ logNo }) => {
                     Pipe Numbers ({meta.pipe_numbers.length}):
                   </div>
                   <div className="tag-list">
-                    {meta.pipe_numbers.map((p: string, i: number) => (
+                    {sortPipeIdentifiers(meta.pipe_numbers).map((p: string, i: number) => (
                       <span key={i} className="tag-pipe">{p}</span>
                     ))}
                   </div>
