@@ -1,5 +1,5 @@
 const STAGING_IP_HOST = '84.247.130.242';
-const STAGING_PUBLIC_ORIGIN = 'http://84.247.130.242:8080';
+const STAGING_PUBLIC_ORIGIN = 'https://84-247-130-242.sslip.io';
 
 type ShareLocation = Pick<Location, 'hostname' | 'origin'>;
 

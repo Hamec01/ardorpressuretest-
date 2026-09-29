@@ -116,7 +116,7 @@ def test_share_buttons_use_clickable_https_staging_links() -> None:
     card = read("components/TestCard.tsx")
     detail = read("components/TestDetailModal.tsx")
 
-    assert "http://84.247.130.242:8080" in helper
+    assert "https://84-247-130-242.sslip.io" in helper
     assert "encodeURIComponent(logNo)" in helper
     assert "getPublicShareUrl(test.log_no)" in card
     assert "getPublicShareUrl(currentTest.log_no)" in detail
