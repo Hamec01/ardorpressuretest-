@@ -111,12 +111,12 @@ def test_detail_modal_responsive_header_and_close_button_isolated() -> None:
     assert ".test-detail-actions > :last-child:nth-child(odd)" in css
 
 
-def test_share_buttons_use_clickable_https_staging_links() -> None:
+def test_share_buttons_use_direct_public_staging_links() -> None:
     helper = read("shareLinks.ts")
     card = read("components/TestCard.tsx")
     detail = read("components/TestDetailModal.tsx")
 
-    assert "https://84-247-130-242.sslip.io" in helper
+    assert "http://84.247.130.242:8080" in helper
     assert "encodeURIComponent(logNo)" in helper
     assert "getPublicShareUrl(test.log_no)" in card
     assert "getPublicShareUrl(currentTest.log_no)" in detail
