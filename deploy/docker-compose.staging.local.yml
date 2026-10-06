@@ -23,7 +23,8 @@ services:
       dockerfile: ../../deploy/Dockerfile.web
     ports:
       !override
-      - "8080:80"
+      # Loopback only: Caddy proxies 127.0.0.1:8080 and answers the public :8080 itself (redirect).
+      - "127.0.0.1:8080:80"
     volumes:
       - ./nginx.staging.conf:/etc/nginx/conf.d/default.conf:ro
   postgres:

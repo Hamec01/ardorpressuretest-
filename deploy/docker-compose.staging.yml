@@ -18,7 +18,8 @@ services:
     volumes:
       - ardor_storage:/data/storage
     ports:
-      - "8000:8000"
+      # Loopback only: reachable through nginx/Caddy, never directly from outside (ADR-005 §15).
+      - "127.0.0.1:8000:8000"
     depends_on:
       - postgres
     restart: unless-stopped
