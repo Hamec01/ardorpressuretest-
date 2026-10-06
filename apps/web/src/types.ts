@@ -80,10 +80,13 @@ export interface PlannedTestBundle {
   completed_count: number;
 }
 
+export type PlannedTestPriority = 0 | 1 | 2 | 3;
+
 export interface PlannedTestList {
   id: string;
   name: string;
   description?: string | null;
+  priority: PlannedTestPriority;
   created_by_name?: string | null;
   created_at: string;
   updated_at: string;
@@ -92,7 +95,7 @@ export interface PlannedTestList {
 }
 
 export interface PlannedTestListDetail {
-  list: Pick<PlannedTestList, 'id' | 'name' | 'description'>;
+  list: Pick<PlannedTestList, 'id' | 'name' | 'description' | 'priority'>;
   summary: { total: number; completed: number };
   bundles: PlannedTestBundle[];
   pipes: PlannedTestPipe[];

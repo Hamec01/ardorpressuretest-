@@ -11,9 +11,14 @@ import {
   updatePlannedTestList,
   updatePlannedTestPipe,
 } from '../api';
-import { PlannedTestList, PlannedTestListDetail, PlannedTestPipe, PressureTest } from '../types';
+import { PlannedTestList, PlannedTestListDetail, PlannedTestPipe, PlannedTestPriority, PressureTest } from '../types';
 import { useI18n } from '../context/LanguageContext';
-import { CheckCircle2, ClipboardList, Clock3, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { ArrowUp, CheckCircle2, ChevronsUp, ClipboardList, Clock3, Flame, Minus, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
+import {
+  isPlannedTestListComplete,
+  PlannedTestListSortMode,
+  sortPlannedTestLists,
+} from '../plannedTestPlanSorting';
 
 interface PlannedTestsTabProps {
   onSelectTest: (test: PressureTest) => void;
@@ -28,13 +33,29 @@ const pressureValue = (value?: string | null) => {
   return Number.isFinite(parsed) ? parsed : -1;
 };
 
+const priorityColor = (priority: PlannedTestPriority): string => {
+  if (priority === 3) return 'var(--accent-rose)';
+  if (priority === 2) return 'var(--accent-amber)';
+  if (priority === 1) return 'var(--accent-cyan)';
+  return 'var(--text-muted)';
+};
+
+const PriorityIcon = ({ priority, size = 14 }: { priority: PlannedTestPriority; size?: number }) => {
+  if (priority === 3) return <Flame size={size} />;
+  if (priority === 2) return <ChevronsUp size={size} />;
+  if (priority === 1) return <ArrowUp size={size} />;
+  return <Minus size={size} />;
+};
+
 export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }) => {
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
   const [plans, setPlans] = useState<PlannedTestList[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [detail, setDetail] = useState<PlannedTestListDetail | null>(null);
   const [planName, setPlanName] = useState('');
   const [planDescription, setPlanDescription] = useState('');
+  const [planPriority, setPlanPriority] = useState<PlannedTestPriority>(0);
+  const [planSortMode, setPlanSortMode] = useState<PlannedTestListSortMode>('created_desc');
   const [pipeInput, setPipeInput] = useState('');
   const [search, setSearch] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('bundle');
@@ -88,9 +109,10 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
     if (!planName.trim()) return;
     try {
       setSaving(true);
-      const created = await createPlannedTestList(planName.trim(), planDescription.trim());
+      const created = await createPlannedTestList(planName.trim(), planDescription.trim(), planPriority);
       setPlanName('');
       setPlanDescription('');
+      setPlanPriority(0);
       await loadPlans();
       setSelectedPlanId(created.id);
     } catch (err: any) {
@@ -141,6 +163,19 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
       await loadPlans();
     } catch (err: any) {
       setError(err.message || t('planned_delete_error'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePriorityChange = async (priority: PlannedTestPriority) => {
+    if (!detail || detail.list.priority === priority) return;
+    try {
+      setSaving(true);
+      await updatePlannedTestList(detail.list.id, { priority });
+      await refreshSelectedPlan();
+    } catch (err: any) {
+      setError(err.message || t('planned_update_error'));
     } finally {
       setSaving(false);
     }
@@ -258,6 +293,16 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
   };
 
   const displayRows = getDisplayRows();
+  const sortedPlans = sortPlannedTestLists(plans, planSortMode);
+  const selectedPlanComplete = Boolean(
+    detail && detail.summary.total > 0 && detail.summary.completed >= detail.summary.total,
+  );
+  const dateLocale = lang === 'fi' ? 'fi-FI' : lang === 'ru' ? 'ru-RU' : 'en-GB';
+  const formatPlanDate = (value: string) => new Intl.DateTimeFormat(dateLocale, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(value));
 
   return (
     <div className="planned-tests-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(230px, 0.42fr) minmax(0, 1.58fr)', gap: '1.25rem', alignItems: 'start' }}>
@@ -269,14 +314,51 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
         <form onSubmit={handleCreatePlan} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
           <input className="search-input" style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.55rem 0.65rem', background: 'var(--bg-inset-40)' }} placeholder={t('planned_name_placeholder')} value={planName} onChange={(event) => setPlanName(event.target.value)} />
           <input className="search-input" style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.55rem 0.65rem', background: 'var(--bg-inset-40)' }} placeholder={t('planned_description_placeholder')} value={planDescription} onChange={(event) => setPlanDescription(event.target.value)} />
+          <select
+            value={planPriority}
+            onChange={(event) => setPlanPriority(Number(event.target.value) as PlannedTestPriority)}
+            aria-label={t('planned_priority')}
+            title={t('planned_priority_hint')}
+            style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.55rem 0.65rem', background: 'var(--bg-inset-40)', color: 'var(--text-primary)' }}
+          >
+            <option value={0}>{t('planned_priority_none')}</option>
+            <option value={1}>{t('planned_priority_level', { level: 1 })}</option>
+            <option value={2}>{t('planned_priority_level', { level: 2 })}</option>
+            <option value={3}>{t('planned_priority_level', { level: 3 })}</option>
+          </select>
           <button type="submit" className="btn-primary" disabled={saving || !planName.trim()} style={{ justifyContent: 'center', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}><Plus size={16} /><span>{t('planned_create')}</span></button>
         </form>
+        <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 700, marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }} htmlFor="planned-list-sort">{t('planned_list_sort')}</label>
+        <select
+          id="planned-list-sort"
+          value={planSortMode}
+          onChange={(event) => setPlanSortMode(event.target.value as PlannedTestListSortMode)}
+          style={{ width: '100%', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.5rem 0.6rem', marginBottom: '0.75rem', background: 'var(--bg-inset-40)', color: 'var(--text-primary)', fontSize: '0.78rem' }}
+        >
+          <option value="created_desc">{t('planned_list_sort_newest')}</option>
+          <option value="created_asc">{t('planned_list_sort_oldest')}</option>
+          <option value="name_asc">{t('planned_list_sort_number_asc')}</option>
+          <option value="name_desc">{t('planned_list_sort_number_desc')}</option>
+          <option value="pipes_desc">{t('planned_list_sort_pipes_desc')}</option>
+          <option value="pipes_asc">{t('planned_list_sort_pipes_asc')}</option>
+        </select>
         {loading ? <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{t('planned_loading')}</div> : plans.length === 0 ? <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.5 }}>{t('planned_empty_lists')}</div> : <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-          {plans.map((plan) => {
+          {sortedPlans.map((plan) => {
             const active = plan.id === selectedPlanId;
+            const priorityIsActive = !isPlannedTestListComplete(plan) && plan.priority > 0;
+            const createdMeta = plan.created_by_name
+              ? t('planned_added_by', { date: formatPlanDate(plan.created_at), name: plan.created_by_name })
+              : t('planned_added_on', { date: formatPlanDate(plan.created_at) });
             return <button key={plan.id} type="button" onClick={() => setSelectedPlanId(plan.id)} style={{ textAlign: 'left', padding: '0.65rem', borderRadius: 'var(--radius-sm)', border: active ? '1px solid var(--accent-cyan)' : '1px solid transparent', background: active ? 'rgba(56, 189, 248, 0.1)' : 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }}>
-              <div style={{ fontWeight: 700, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{plan.name}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.45rem' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{plan.name}</div>
+                {plan.priority > 0 && <span
+                  title={priorityIsActive ? t('planned_priority_level', { level: plan.priority }) : t('planned_priority_completed_hint')}
+                  style={{ display: 'inline-flex', flexShrink: 0, alignItems: 'center', gap: '0.15rem', color: priorityIsActive ? priorityColor(plan.priority) : 'var(--text-muted)', fontSize: '0.68rem', fontWeight: 800, opacity: priorityIsActive ? 1 : 0.65 }}
+                ><PriorityIcon priority={plan.priority} size={13} />P{plan.priority}</span>}
+              </div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.15rem' }}>{plan.completed_count}/{plan.pipe_count} {t('planned_ready_count')}</div>
+              <div title={createdMeta} style={{ color: 'var(--text-muted)', fontSize: '0.66rem', marginTop: '0.18rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.85 }}>{createdMeta}</div>
             </button>;
           })}
         </div>}
@@ -290,6 +372,27 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
               <h2 style={{ fontSize: '1.2rem', marginBottom: '0.2rem' }}>{detail.list.name}</h2>
               {detail.list.description && <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{detail.list.description}</div>}
               <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.45rem' }}>{detail.summary.completed}/{detail.summary.total} {t('planned_ready_count')}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700, marginRight: '0.15rem' }}>{t('planned_priority')}:</span>
+                {([0, 1, 2, 3] as PlannedTestPriority[]).map((priority) => {
+                  const selected = detail.list.priority === priority;
+                  const color = priorityColor(priority);
+                  const title = priority === 0
+                    ? t('planned_priority_none')
+                    : t('planned_priority_level', { level: priority });
+                  return <button
+                    key={priority}
+                    type="button"
+                    className="filter-pill"
+                    disabled={saving}
+                    onClick={() => handlePriorityChange(priority)}
+                    title={`${title}. ${selectedPlanComplete && priority > 0 ? t('planned_priority_completed_hint') : t('planned_priority_hint')}`}
+                    aria-pressed={selected}
+                    aria-label={title}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', padding: '0.28rem 0.45rem', color: selected ? color : 'var(--text-muted)', borderColor: selected ? color : 'var(--border-color)', background: selected ? 'var(--bg-inset-60)' : 'transparent', fontSize: '0.7rem', fontWeight: 800 }}
+                  ><PriorityIcon priority={priority} size={13} />{priority === 0 ? '—' : `P${priority}`}</button>;
+                })}
+              </div>
             </div>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
               <button type="button" className="filter-pill" onClick={handleEditPlan} title={t('planned_edit_name')}><Pencil size={15} /></button>

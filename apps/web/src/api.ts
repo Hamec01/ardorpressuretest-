@@ -1,4 +1,4 @@
-import { PlannedTestList, PlannedTestListDetail, PressureTest, PressureTestRecord, RecordLogArtifact, TestRevision } from './types';
+import { PlannedTestList, PlannedTestListDetail, PlannedTestPriority, PressureTest, PressureTestRecord, RecordLogArtifact, TestRevision } from './types';
 import { authFetch } from './authFetch';
 
 const API_BASE = '/api/v1';
@@ -107,11 +107,11 @@ export async function fetchPlannedTestLists(query = ''): Promise<PlannedTestList
   return res.json();
 }
 
-export async function createPlannedTestList(name: string, description: string): Promise<{ id: string }> {
+export async function createPlannedTestList(name: string, description: string, priority: PlannedTestPriority = 0): Promise<{ id: string }> {
   const res = await authFetch(`${API_BASE}/planned-tests/lists`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, description }),
+    body: JSON.stringify({ name, description, priority }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -120,7 +120,7 @@ export async function createPlannedTestList(name: string, description: string): 
   return res.json();
 }
 
-export async function updatePlannedTestList(listId: string, payload: { name?: string; description?: string }): Promise<void> {
+export async function updatePlannedTestList(listId: string, payload: { name?: string; description?: string; priority?: PlannedTestPriority }): Promise<void> {
   const res = await authFetch(`${API_BASE}/planned-tests/lists/${encodeURIComponent(listId)}`, {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
   });

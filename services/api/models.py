@@ -146,10 +146,14 @@ class Bundle(Base):
 
 class PlannedTestList(Base):
     __tablename__ = "planned_test_lists"
+    __table_args__ = (
+        CheckConstraint("priority >= 0 AND priority <= 3", name="ck_planned_test_lists_priority"),
+    )
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     name = Column(String(128), nullable=False)
     description = Column(Text, nullable=True)
+    priority = Column(Integer, default=0, nullable=False, index=True)
     # index=True reflects the existing ix_planned_test_lists_is_archived index, which a
     # migration already created on both a fresh chain and live - the model was simply
     # never updated to declare it.

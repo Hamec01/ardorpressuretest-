@@ -7,7 +7,11 @@ from sqlalchemy.orm import sessionmaker
 
 from services.api.database import Base
 from services.api.models import Bundle, Pipe, PlannedTestList, PlannedTestPipe, PressureTest, TestRevision
-from services.api.routes.planned_tests import _pipecloud_source_data, canonicalize_pipecloud_source_data
+from services.api.routes.planned_tests import (
+    _pipecloud_source_data,
+    canonicalize_pipecloud_source_data,
+    parse_planned_pipe_input,
+)
 from services.api.routes.tests import PtrSourceResolveRequest, resolve_ptr_sources
 
 
@@ -189,6 +193,74 @@ def test_legacy_shifted_source_data_is_repaired_from_raw_source():
     assert repaired["drawing"] == "DRAW9001"
     assert repaired["spool_number"] == "07"
     assert "product" not in repaired
+
+
+def test_pipecloud_clipboard_row_preserves_empty_wp_and_embedded_order_revision_lines():
+    raw = (
+        "Fit 125685/4\tD.1408.005D.00WT8.775.311\t1013\t\r\n"
+        "113726\r\nA\t67120P1132\tBW\t\t15.8\t2\tM1-P\t32\t4.5\tFE\t5\t"
+        "2026-10-23\t2026-10-23\t\r\n"
+    )
+
+    source = _pipecloud_source_data(raw)
+
+    assert source["drawing"] == "D.1408.005D.00WT8.775.311"
+    assert source["spool_number"] == "1013"
+    assert source["order_number"] == "113726"
+    assert source["revision"] == "A"
+    assert source["pipeline"] == "67120P1132"
+    assert source["pt"] == "BW"
+    assert "wp" not in source
+    assert source["kg"] == "15.8"
+    assert source["class"] == "2"
+    assert source["treatment"] == "M1-P"
+    assert source["size"] == "32"
+    assert source["wt"] == "4.5"
+    assert source["material"] == "FE"
+    assert source["bundles"] == "5"
+    assert source["pdd_start"] == "2026-10-23"
+    assert source["pdd_end"] == "2026-10-23"
+
+
+def test_real_pipecloud_multiline_clipboard_input_maps_each_row_independently():
+    raw = (
+        "Fit 125685/4\tD.1408.005D.00WT8.775.311\t1013\t\n"
+        "113726\nA\t67120P1132\tBW\t\t15.8\t2\tM1-P\t32\t4.5\tFE\t5\t"
+        "2026-10-23\t2026-10-23\t\n\n"
+        "Fit 125685/8\tD.1408.005D.00WT8.775.311\t1014\t\n"
+        "113726\nA\t67120P1139\tBW\t\t6.5\t2\tM1-P\t25\t3.2\tFE\t5\t"
+        "2026-10-23\t2026-10-23\t\n"
+    )
+
+    parsed = parse_planned_pipe_input(raw)
+
+    assert [pipe_number for pipe_number, _ in parsed] == ["125685/4", "125685/8"]
+    assert parsed[0][1]["revision"] == "A"
+    assert parsed[0][1]["pipeline"] == "67120P1132"
+    assert parsed[0][1]["pt"] == "BW"
+    assert parsed[0][1]["kg"] == "15.8"
+    assert parsed[1][1]["revision"] == "A"
+    assert parsed[1][1]["pipeline"] == "67120P1139"
+    assert parsed[1][1]["kg"] == "6.5"
+
+
+def test_legacy_pipecloud_mapping_is_repaired_from_real_clipboard_source():
+    raw = (
+        "Fit 125685/4\tD.1408.005D.00WT8.775.311\t1013\t\n"
+        "113726\nA\t67120P1132\tBW\t\t15.8\t2\tM1-P\t32\t4.5\tFE\t5\t"
+        "2026-10-23\t2026-10-23"
+    )
+    repaired = canonicalize_pipecloud_source_data({
+        "raw_source": raw,
+        "order_number": "113726 A",
+        "revision": "67120P1132",
+        "pipeline": "BW",
+    })
+
+    assert repaired["order_number"] == "113726"
+    assert repaired["revision"] == "A"
+    assert repaired["pipeline"] == "67120P1132"
+    assert repaired["pt"] == "BW"
 
 
 def test_ptr_resolution_keeps_only_explicit_pipes_and_returns_repaired_metadata():

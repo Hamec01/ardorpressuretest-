@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from services.api.audit import log_audit_event
@@ -18,11 +18,13 @@ router = APIRouter(prefix="/api/v1/planned-tests", tags=["Planned Pressure Tests
 class PlannedListCreateRequest(BaseModel):
     name: str
     description: Optional[str] = None
+    priority: int = Field(default=0, ge=0, le=3)
 
 
 class PlannedListUpdateRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    priority: Optional[int] = Field(default=None, ge=0, le=3)
 
 
 class PlannedPipeBulkCreateRequest(BaseModel):
@@ -91,6 +93,27 @@ def _pipecloud_source_data(raw_row: str) -> Dict[str, str]:
     """Keep all copied values; map them to named fields only when columns are preserved by clipboard."""
     raw_source = raw_row.strip()
     data: Dict[str, str] = {"raw_source": raw_source}
+
+    # PipeCloud's grid clipboard output is mostly tab-separated, but Order and
+    # Revision can be separated by line breaks inside a single tab cell.  Keep
+    # genuinely empty tab cells (WP is commonly empty), while expanding those
+    # embedded line-separated values into their actual columns.
+    if "\t" in raw_source:
+        cells: List[str] = []
+        for tab_cell in raw_source.split("\t"):
+            if "\n" in tab_cell or "\r" in tab_cell:
+                cells.extend(
+                    part.strip()
+                    for part in re.split(r"[\r\n]+", tab_cell)
+                    if part.strip()
+                )
+            else:
+                cells.append(tab_cell.strip())
+        for index, cell in enumerate(cells[:len(PIPECLOUD_COLUMN_NAMES)]):
+            if cell:
+                data[PIPECLOUD_COLUMN_NAMES[index]] = cell
+        return data
+
     normalized_row = re.sub(r"\s+", " ", raw_source).strip()
     collapsed_row = PIPECLOUD_COLLAPSED_ROW_PATTERN.match(normalized_row)
     if collapsed_row:
@@ -99,13 +122,6 @@ def _pipecloud_source_data(raw_row: str) -> Dict[str, str]:
             for key, value in collapsed_row.groupdict().items()
             if value
         })
-        return data
-
-    cells = [cell.strip() for cell in raw_source.split("\t")]
-    if len(cells) > 1:
-        for index, cell in enumerate(cells[:len(PIPECLOUD_COLUMN_NAMES)]):
-            if cell:
-                data[PIPECLOUD_COLUMN_NAMES[index]] = cell
         return data
 
     return data
@@ -216,11 +232,12 @@ def list_planned_lists(q: str = "", db: Session = Depends(get_db)):
         total["total"] += 1
         if matches.get(pipe.pipe_number):
             total["completed"] += 1
-    return [
+    result = [
         {
             "id": planned_list.id,
             "name": planned_list.name,
             "description": planned_list.description,
+            "priority": planned_list.priority,
             "created_by_name": planned_list.created_by_name,
             "created_at": planned_list.created_at.isoformat(),
             "updated_at": planned_list.updated_at.isoformat(),
@@ -229,6 +246,14 @@ def list_planned_lists(q: str = "", db: Session = Depends(get_db)):
         }
         for planned_list in lists
     ]
+    result.sort(key=lambda item: item["updated_at"], reverse=True)
+    result.sort(
+        key=lambda item: item["priority"]
+        if not (item["pipe_count"] > 0 and item["completed_count"] >= item["pipe_count"])
+        else 0,
+        reverse=True,
+    )
+    return result
 
 
 @router.post("/lists")
@@ -243,6 +268,7 @@ def create_planned_list(
     planned_list = PlannedTestList(
         name=name,
         description=(payload.description or "").strip() or None,
+        priority=payload.priority,
         created_by_user_id=current_user.id,
         created_by_name=current_user.full_name or current_user.username,
     )
@@ -252,9 +278,14 @@ def create_planned_list(
     log_audit_event(
         db, "planned_test_list", planned_list.id, "planned_list_created",
         str(current_user.id), current_user.full_name or current_user.username,
-        {"name": planned_list.name},
+        {"name": planned_list.name, "priority": planned_list.priority},
     )
-    return {"id": planned_list.id, "name": planned_list.name, "description": planned_list.description}
+    return {
+        "id": planned_list.id,
+        "name": planned_list.name,
+        "description": planned_list.description,
+        "priority": planned_list.priority,
+    }
 
 
 @router.get("/lists/{list_id}/pipes")
@@ -283,7 +314,12 @@ def list_planned_pipes(
     for item in result:
         bundles.setdefault(item["bundle_number"], []).append(item)
     return {
-        "list": {"id": planned_list.id, "name": planned_list.name, "description": planned_list.description},
+        "list": {
+            "id": planned_list.id,
+            "name": planned_list.name,
+            "description": planned_list.description,
+            "priority": planned_list.priority,
+        },
         "summary": {"total": len(result), "completed": sum(item["status"] == "completed" for item in result)},
         "bundles": [
             {"bundle_number": bundle_number, "pipes": grouped_pipes, "completed_count": sum(item["status"] == "completed" for item in grouped_pipes)}
@@ -367,13 +403,20 @@ def update_planned_list(
         planned_list.name = name
     if payload.description is not None:
         planned_list.description = payload.description.strip() or None
+    if payload.priority is not None:
+        planned_list.priority = payload.priority
     db.commit()
     log_audit_event(
         db, "planned_test_list", planned_list.id, "planned_list_updated",
         str(current_user.id), current_user.full_name or current_user.username,
-        {"name": planned_list.name},
+        {"name": planned_list.name, "priority": planned_list.priority},
     )
-    return {"id": planned_list.id, "name": planned_list.name, "description": planned_list.description}
+    return {
+        "id": planned_list.id,
+        "name": planned_list.name,
+        "description": planned_list.description,
+        "priority": planned_list.priority,
+    }
 
 
 @router.delete("/lists/{list_id}/bundles/{bundle_number}")
