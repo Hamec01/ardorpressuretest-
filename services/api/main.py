@@ -7,7 +7,7 @@ from services.api.database import Base, engine
 from services.api.auth import seed_default_users
 from services.api.database import SessionLocal
 from services.api.http_security import clear_browser_auth_cookies
-from services.api.routes import audit, auth, desktop_auth, health, planned_tests, process, records, sync, tests
+from services.api.routes import accounts, audit, auth, desktop_auth, health, planned_tests, process, records, sync, tests
 
 logging.basicConfig(level=logging.INFO if not settings.debug else logging.DEBUG)
 logger = logging.getLogger("ardor_api")
@@ -58,6 +58,7 @@ async def clear_rejected_browser_session_cookies(request, call_next):
 
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(accounts.router)
 app.include_router(desktop_auth.router)
 app.include_router(audit.router)
 app.include_router(tests.router)

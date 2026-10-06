@@ -31,6 +31,31 @@ class User(Base):
     must_change_password = Column(Boolean, default=False, nullable=False)
 
 
+class PasswordLink(Base):
+    """One-time link that lets an account holder set a new password without the old one.
+
+    Created by an admin for a new account ("invite") or a lost password ("reset");
+    see docs/ACCESS_PLAN_R4-R7.md stage 1. Only the SHA-256 digest of the 256-bit
+    token is stored, never the token itself. A link is usable only while it is unused,
+    unrevoked, unexpired and its account is active.
+    """
+    __tablename__ = "password_links"
+    __table_args__ = (
+        CheckConstraint("purpose IN ('invite', 'reset')", name="ck_password_links_purpose"),
+        CheckConstraint("length(token_hash) = 64", name="ck_password_links_token_hash_length"),
+    )
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), index=True, nullable=False)
+    token_hash = Column(String(64), unique=True, nullable=False)
+    purpose = Column(String(16), nullable=False)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+
 class Gauge(Base):
     __tablename__ = "gauges"
 

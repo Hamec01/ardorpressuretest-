@@ -11,6 +11,7 @@ import {
   Moon,
   Plus,
   ShieldAlert,
+  Users,
   Sun,
   Trash2,
   X,
@@ -20,7 +21,7 @@ import { useI18n } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { Language } from '../i18n';
 
-export type AppTab = 'tests' | 'trash' | 'plans' | 'records' | 'statistics' | 'faq';
+export type AppTab = 'tests' | 'trash' | 'plans' | 'records' | 'statistics' | 'faq' | 'accounts';
 
 interface MobileNavigationProps {
   activeTab: AppTab;
@@ -77,7 +78,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
         <button type="button" className={activeTab === 'statistics' ? 'active' : ''} onClick={() => selectTab('statistics')} aria-current={activeTab === 'statistics' ? 'page' : undefined}>
           <BarChart3 size={21} /><span>{t('mobile_statistics')}</span>
         </button>
-        <button type="button" className={moreOpen || activeTab === 'trash' ? 'active' : ''} onClick={() => setMoreOpen(true)} aria-expanded={moreOpen}>
+        <button type="button" className={moreOpen || activeTab === 'trash' || activeTab === 'accounts' ? 'active' : ''} onClick={() => setMoreOpen(true)} aria-expanded={moreOpen}>
           <Menu size={21} /><span>{t('mobile_more')}</span>
         </button>
       </nav>
@@ -105,6 +106,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
             </button>
             <button type="button" className="mobile-sheet-row" onClick={() => selectTab('trash')}><Trash2 size={20} /><span>{t('mobile_trash')}</span></button>
             <button type="button" className="mobile-sheet-row" onClick={() => { setMoreOpen(false); onOpenFaq(); }}><HelpCircle size={20} /><span>{t('mobile_faq')}</span></button>
+            {user?.role === 'admin' && <button type="button" className="mobile-sheet-row" onClick={() => selectTab('accounts')}><Users size={20} /><span>{t('tab_accounts')}</span></button>}
             {(user?.role === 'admin' || user?.role === 'foreman') && <button type="button" className="mobile-sheet-row" onClick={() => { setMoreOpen(false); onAudit(); }}><ShieldAlert size={20} /><span>{t('btn_audit')}</span></button>}
 
             <div className="mobile-system-status"><span className="mobile-online-dot" />{t('node_online')} · {t('indexed_count', { count: totalCount })}</div>

@@ -15,12 +15,13 @@ import { PlannedTestsTab } from './components/PlannedTestsTab';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { AppTab, MobileNavigation } from './components/MobileNavigation';
 import { StatisticsTab } from './components/StatisticsTab';
+import { AccountsTab } from './components/AccountsTab';
 import { fetchPressureTests, fetchTrash } from './api';
 import { PressureTest, PressureTestRecord } from './types';
 import { CardSortKey, SortDirection, sortCards } from './cardSorting';
 import { useI18n } from './context/LanguageContext';
 import { useAuth } from './context/AuthContext';
-import { RefreshCw, Inbox, AlertCircle, BarChart3, ClipboardList, Layers, FileSpreadsheet, HelpCircle, Trash2 } from 'lucide-react';
+import { RefreshCw, Inbox, AlertCircle, BarChart3, ClipboardList, Layers, FileSpreadsheet, HelpCircle, Trash2, Users } from 'lucide-react';
 
 export const App: React.FC = () => {
   const { t } = useI18n();
@@ -217,6 +218,28 @@ export const App: React.FC = () => {
             <span>{t('tab_faq')}</span>
           </button>
 
+          {user?.role === 'admin' && (
+            <button
+              onClick={() => setActiveTab('accounts')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                borderBottom: activeTab === 'accounts' ? '2px solid var(--accent-rose)' : '2px solid transparent',
+                color: activeTab === 'accounts' ? 'var(--text-primary)' : 'var(--text-muted)',
+                padding: '0.6rem 1rem',
+                fontWeight: 600,
+                fontSize: '0.92rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+            >
+              <Users size={16} color={activeTab === 'accounts' ? 'var(--accent-rose)' : 'inherit'} />
+              <span>{t('tab_accounts')}</span>
+            </button>
+          )}
+
             <button
               type="button"
               onClick={() => setActiveTab('trash')}
@@ -303,6 +326,8 @@ export const App: React.FC = () => {
           />
         ) : activeTab === 'statistics' ? (
           <StatisticsTab tests={tests} />
+        ) : activeTab === 'accounts' && user?.role === 'admin' ? (
+          <AccountsTab />
         ) : (
           <FaqTab />
         )}

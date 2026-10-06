@@ -14,7 +14,6 @@ from services.api.auth import (
     hash_password,
     require_authentication_context,
     require_mutating_authentication_context,
-    require_role,
     validate_new_password,
     verify_password,
 )
@@ -368,10 +367,4 @@ def delete_session(
     return {"status": "ok"}
 
 
-@router.get("/users", response_model=List[UserResponse])
-def list_users(
-    user: User = Depends(require_role(["admin"])),
-    db: Session = Depends(get_db)
-):
-    """Список активных пользователей системы (только Admin)."""
-    return db.query(User).filter(User.is_active == True).all()
+# GET /api/v1/auth/users and the rest of account management: services/api/routes/accounts.py

@@ -41,3 +41,14 @@ export async function authFetch(
     credentials: 'same-origin',
   });
 }
+
+/**
+ * Anonymous request for the few public endpoints (one-time password links): never sends
+ * cookies, auth or CSRF headers, so a signed-in browser cannot leak its session.
+ */
+export async function publicFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> {
+  return window.fetch(input, { ...init, credentials: 'omit' });
+}

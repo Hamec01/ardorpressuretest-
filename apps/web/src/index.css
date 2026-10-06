@@ -1056,6 +1056,386 @@ body {
   letter-spacing: 0.04em;
 }
 
+/* ---- Accounts (admin) ---- */
+.accounts-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.accounts-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.accounts-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.35rem;
+}
+
+.accounts-head p {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  margin-top: 0.25rem;
+}
+
+.accounts-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.accounts-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 0.85rem;
+}
+
+.account-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.account-card.inactive {
+  opacity: 0.68;
+}
+
+.account-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.account-avatar {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: var(--role-color);
+  background: color-mix(in srgb, var(--role-color) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--role-color) 45%, transparent);
+}
+
+.account-identity {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.account-identity strong {
+  overflow-wrap: anywhere;
+}
+
+.account-identity em {
+  font-style: normal;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.account-identity span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.account-role-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--role-color);
+  border: 1px solid color-mix(in srgb, var(--role-color) 45%, transparent);
+  background: color-mix(in srgb, var(--role-color) 10%, transparent);
+}
+
+.account-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+}
+
+.account-chip {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid currentColor;
+}
+
+.account-chip.danger { color: var(--accent-rose); }
+.account-chip.warn { color: var(--accent-amber); }
+.account-chip.info { color: var(--accent-cyan); }
+
+.account-meta {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.account-actions .filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.account-actions .account-danger { color: var(--accent-rose); }
+.account-actions .account-ok { color: var(--accent-emerald); }
+
+.account-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.account-form-fields > label:not(.account-check),
+.account-field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.account-form-fields input[type='text'],
+.account-form-fields input[type='email'],
+.account-form-fields input:not([type]),
+.account-password-field input,
+.auth-form input[type='password'] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset-40);
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.account-form-fields small {
+  font-size: 0.75rem;
+}
+
+.account-password-field {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.account-password-field button {
+  flex-shrink: 0;
+  min-width: 80px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.account-role-options {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.account-role-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.account-role-option.selected {
+  border-color: var(--role-color);
+  background: color-mix(in srgb, var(--role-color) 9%, transparent);
+}
+
+.account-role-option.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.account-role-option input {
+  margin-top: 0.2rem;
+  accent-color: var(--role-color);
+}
+
+.account-role-option span {
+  display: flex;
+  flex-direction: column;
+}
+
+.account-role-option small {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.account-check {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.account-check input {
+  width: 20px;
+  height: 20px;
+}
+
+.account-note {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.account-error {
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--accent-rose);
+  border-radius: var(--radius-sm);
+  background: rgba(244, 63, 94, 0.1);
+  color: var(--error-text);
+  font-size: 0.88rem;
+}
+
+.account-link-box {
+  padding: 0.75rem;
+  border: 1px dashed var(--accent-cyan);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset-60);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* ---- Public auth pages (set password; sign-in in stage 3) ---- */
+.auth-page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: calc(8vh + env(safe-area-inset-top)) 1rem 2rem;
+  background: radial-gradient(900px 500px at 50% -10%, rgba(56, 189, 248, 0.12), transparent 60%), var(--bg-main);
+}
+
+.auth-card {
+  width: min(100%, 420px);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  background: var(--bg-surface);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35);
+}
+
+.auth-brand {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.auth-brand img {
+  height: 26px;
+}
+
+.auth-langs {
+  display: flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--bg-inset-60);
+}
+
+.auth-langs button {
+  min-width: 40px;
+  min-height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-langs button.active {
+  background: var(--brand-primary);
+  color: #fff;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.auth-form h1,
+.auth-result h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.3rem;
+}
+
+.auth-form label {
+  margin-top: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.auth-form .btn-primary {
+  margin-top: 0.6rem;
+  min-height: 48px;
+}
+
+.auth-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: center;
+}
+
+.auth-result .btn-primary {
+  width: 100%;
+  min-height: 48px;
+}
+
+.auth-muted {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 /* Shown instead of the PDF iframe on phones (see the 900px media query) */
 .pdf-mobile-fallback {
   display: none;
@@ -1626,13 +2006,15 @@ body {
   }
 
   /* Sign-in stays a compact card instead of an empty full-screen page */
-  .modal-overlay:has(.login-modal) {
+  .modal-overlay:has(.login-modal),
+  .modal-overlay:has(.compact-modal) {
     align-items: flex-start;
     padding: calc(10vh + env(safe-area-inset-top)) 1rem 1rem;
     background: rgba(2, 6, 23, 0.86);
   }
 
-  .modal-content.login-modal {
+  .modal-content.login-modal,
+  .modal-content.compact-modal {
     min-height: 0;
     max-height: none !important;
     border: 1px solid var(--border-color);
@@ -1806,6 +2188,35 @@ body {
 
   .search-clear-btn {
     min-width: 44px;
+  }
+
+  /* Accounts */
+  .accounts-head .btn-primary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .accounts-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .account-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .account-actions .filter-pill {
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .account-card-top {
+    flex-wrap: wrap;
+  }
+
+  .modal-overlay:has(.compact-modal) {
+    overflow-y: auto;
   }
 }
 

@@ -180,3 +180,39 @@ export interface PressureTestRecord {
   items: RecordItem[];
   logs?: RecordLog[];
 }
+
+// Admin account management (docs/ACCESS_PLAN_R4-R7.md stage 1)
+export type AccountRole = 'admin' | 'foreman' | 'viewer';
+
+export interface PasswordLinkState {
+  status: 'pending' | 'none';
+  purpose?: 'invite' | 'reset' | null;
+  expires_at?: string | null;
+}
+
+export interface Account {
+  id: string;
+  username: string;
+  full_name: string | null;
+  email: string | null;
+  role: string; // admin | foreman | viewer; legacy rows may still read operator/manager
+  is_active: boolean;
+  must_change_password: boolean;
+  created_at: string;
+  last_login_at: string | null;
+  active_sessions: number;
+  password_link: PasswordLinkState;
+}
+
+export interface IssuedPasswordLink {
+  url: string;
+  purpose: 'invite' | 'reset';
+  expires_at: string;
+}
+
+export interface PasswordLinkInfo {
+  username: string;
+  full_name: string | null;
+  purpose: 'invite' | 'reset';
+  expires_at: string;
+}

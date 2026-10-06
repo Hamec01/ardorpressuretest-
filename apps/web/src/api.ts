@@ -1,5 +1,5 @@
-import { PlannedTestList, PlannedTestListDetail, PlannedTestPriority, PressureTest, PressureTestRecord, RecordLogArtifact, TestRevision } from './types';
-import { authFetch } from './authFetch';
+import { Account, AccountRole, IssuedPasswordLink, PasswordLinkInfo, PlannedTestList, PlannedTestListDetail, PlannedTestPriority, PressureTest, PressureTestRecord, RecordLogArtifact, TestRevision } from './types';
+import { authFetch, publicFetch } from './authFetch';
 
 const API_BASE = '/api/v1';
 
@@ -296,4 +296,84 @@ export async function deletePressureTest(logNo: string): Promise<void> {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Failed to delete test (${res.status})`);
   }
+}
+
+
+// ---- Admin account management (docs/ACCESS_PLAN_R4-R7.md stage 1) ----
+
+/** Error carrying the HTTP status so the UI can show a translated message. */
+export class ApiError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function apiError(res: Response): Promise<ApiError> {
+  const body = await res.json().catch(() => ({}));
+  const detail = typeof body?.detail === 'string' ? body.detail : `HTTP ${res.status}`;
+  return new ApiError(res.status, detail);
+}
+
+async function jsonOrThrow<T>(res: Response): Promise<T> {
+  if (!res.ok) throw await apiError(res);
+  return res.json();
+}
+
+export async function fetchAccounts(): Promise<Account[]> {
+  return jsonOrThrow(await authFetch(`${API_BASE}/auth/users`));
+}
+
+export interface AccountCreatePayload {
+  username: string;
+  full_name: string;
+  email?: string | null;
+  role: AccountRole;
+  password?: string | null;
+  require_password_change?: boolean;
+}
+
+export async function createAccount(payload: AccountCreatePayload): Promise<{ account: Account; password_link: IssuedPasswordLink | null }> {
+  return jsonOrThrow(await authFetch(`${API_BASE}/auth/users`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }));
+}
+
+export async function updateAccount(
+  id: string,
+  changes: { full_name?: string; email?: string | null; role?: AccountRole; is_active?: boolean },
+): Promise<Account> {
+  return jsonOrThrow(await authFetch(`${API_BASE}/auth/users/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(changes),
+  }));
+}
+
+export async function createPasswordLink(id: string): Promise<IssuedPasswordLink> {
+  return jsonOrThrow(await authFetch(`${API_BASE}/auth/users/${encodeURIComponent(id)}/password-link`, { method: 'POST' }));
+}
+
+export async function setAccountPassword(id: string, password: string, requirePasswordChange: boolean): Promise<Account> {
+  return jsonOrThrow(await authFetch(`${API_BASE}/auth/users/${encodeURIComponent(id)}/password`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password, require_password_change: requirePasswordChange }),
+  }));
+}
+
+/** Public: the link token itself authorises these two calls. */
+export async function fetchPasswordLink(token: string): Promise<PasswordLinkInfo> {
+  return jsonOrThrow(await publicFetch(`${API_BASE}/auth/password-links/${encodeURIComponent(token)}`));
+}
+
+export async function submitPasswordLink(token: string, newPassword: string): Promise<{ status: string; username: string }> {
+  return jsonOrThrow(await publicFetch(`${API_BASE}/auth/password-links/${encodeURIComponent(token)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ new_password: newPassword }),
+  }));
 }
