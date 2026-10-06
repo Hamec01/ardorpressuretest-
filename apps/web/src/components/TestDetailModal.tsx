@@ -4,6 +4,8 @@ import { getRevisionZipUrl, getArtifactFileUrl, deleteArtifact, deletePressureTe
 import { copyToClipboard } from '../clipboard';
 import { getPublicShareUrl } from '../shareLinks';
 import { useI18n } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
+import { ImageViewer } from './ImageViewer';
 import { authFetch } from '../authFetch';
 import { sortPipeIdentifiers, sortPipeInput } from '../pipeOrdering';
 import {
@@ -63,6 +65,9 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   const { t } = useI18n();
+  const { user } = useAuth();
+  // Guests and viewers only read and download; mutations are for admin/foreman (ADR-005).
+  const canEdit = user?.role === 'admin' || user?.role === 'foreman';
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isTogglingPipeCloud, setIsTogglingPipeCloud] = useState<boolean>(false);
   const [deletingArtifactId, setDeletingArtifactId] = useState<string | null>(null);
@@ -377,7 +382,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                 </span>
                 {saveSuccess && (
                   <span style={{ fontSize: '0.8rem', color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                    <Check size={14} /> Сохранено!
+                    <Check size={14} /> {t('detail_saved')}
                   </span>
                 )}
               </div>
@@ -398,6 +403,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
           </div>
 
           <div className="test-detail-actions">
+            {canEdit && (
             <button
               type="button"
               onClick={currentTest.is_archived ? handleRestoreTest : handleDeleteTest}
@@ -409,8 +415,9 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               {currentTest.is_archived ? <RefreshCw size={14} /> : <Trash2 size={14} />}
               <span>{isDeleting ? t('modal_saving') : currentTest.is_archived ? t('btn_restore_test') : t('btn_delete')}</span>
             </button>
+            )}
 
-            {currentTest.is_archived && (
+            {canEdit && currentTest.is_archived && (
               <button
                 type="button"
                 onClick={handlePermanentDeleteTest}
@@ -424,11 +431,11 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               </button>
             )}
 
-            {/* PipeCloud Manual Toggle */}
+            {/* PipeCloud Manual Toggle (read-only status for guests/viewers) */}
             <button
               type="button"
-              onClick={handleTogglePipeCloud}
-              disabled={isTogglingPipeCloud}
+              onClick={canEdit ? handleTogglePipeCloud : undefined}
+              disabled={isTogglingPipeCloud || !canEdit}
               className="filter-pill"
               style={{
                 background: currentTest.pipecloud_added ? 'rgba(16, 185, 129, 0.18)' : 'rgba(239, 68, 68, 0.12)',
@@ -437,7 +444,8 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.4rem',
-                cursor: 'pointer',
+                cursor: canEdit ? 'pointer' : 'default',
+                opacity: 1,
                 padding: '0.5rem 0.85rem',
                 fontSize: '0.85rem',
                 fontWeight: 600,
@@ -451,7 +459,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               </span>
             </button>
 
-            {!isEditing && (
+            {canEdit && !isEditing && (
               <button
                 type="button"
                 onClick={handleStartEdit}
@@ -459,20 +467,20 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                 style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--accent-cyan)', border: '1px solid var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', padding: '0.5rem 0.9rem', fontSize: '0.85rem' }}
               >
                 <Edit3 size={15} />
-                <span>Редактировать данные</span>
+                <span>{t('detail_edit')}</span>
               </button>
             )}
 
-            {!isEditing && currentRev?.status === 'draft' && onAttachCsv && (
+            {canEdit && !isEditing && currentRev?.status === 'draft' && onAttachCsv && (
               <button
                 type="button"
                 onClick={() => onAttachCsv(currentTest)}
                 className="filter-pill"
                 style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--accent-emerald)', border: '1px solid var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', padding: '0.5rem 0.9rem', fontSize: '0.85rem', fontWeight: 600 }}
-                title="Загрузить CSV-файл измерений и завершить этот черновик"
+                title={t('detail_attach_csv_hint')}
               >
                 <FileSpreadsheet size={15} />
-                <span>Прикрепить CSV</span>
+                <span>{t('detail_attach_csv')}</span>
               </button>
             )}
 
@@ -487,10 +495,10 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                 display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer',
                 padding: '0.5rem 0.85rem', fontSize: '0.85rem', fontWeight: 600
               }}
-              title="Скопировать ссылку на этот лог для отправки в чат"
+              title={t('share_hint')}
             >
               {linkCopied ? <Check size={15} /> : <Share2 size={15} />}
-              <span>{linkCopied ? 'Скопировано!' : 'Ссылка на лог'}</span>
+              <span>{linkCopied ? t('share_copied') : t('share_link')}</span>
             </button>
 
             {currentRev && (
@@ -519,7 +527,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
           {revisions.length > 1 && (
             <div style={{ background: 'var(--bg-inset-40)', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem', fontWeight: 600 }}>
-                REVISION HISTORY ({revisions.length} revisions):
+                {t('revision_history', { count: revisions.length })}:
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {revisions.map((rev, idx) => (
@@ -531,9 +539,9 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                         setIsEditing(false);
                       }}
                     >
-                      Rev {rev.revision_id} {rev.is_primary ? '(Primary)' : ''}
+                      Rev {rev.revision_id} {rev.is_primary ? `(${t('revision_primary')})` : ''}
                     </button>
-                    <button
+                    {canEdit && <button
                       type="button"
                       className="revision-delete-button"
                       disabled={deletingRevisionId === rev.id}
@@ -542,7 +550,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                       aria-label={t('revision_delete')}
                     >
                       <Trash2 size={13} />
-                    </button>
+                    </button>}
                   </span>
                 ))}
               </div>
@@ -728,34 +736,34 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               {/* Key Metrics */}
               <div>
                 <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
-                  Inspection & Pressure Metrics
+                  {t('metrics_title')}
                 </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem' }}>
                   <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TEST PRESSURE</div>
+                    <div className="detail-metric-label">{t('metric_test_pressure')}</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.2rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
                       {meta.test_pressure || 'N/A'}
                     </div>
                   </div>
 
                   <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>MIN / MAX RECORDED</div>
+                    <div className="detail-metric-label">{t('metric_min_max')}</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.1rem', fontWeight: 700 }}>
                       {metrics.min_pressure_bar != null ? `${metrics.min_pressure_bar.toFixed(1)} / ${metrics.max_pressure_bar?.toFixed(1)} bar` : 'N/A'}
                     </div>
                   </div>
 
                   <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TEST DURATION</div>
+                    <div className="detail-metric-label">{t('metric_duration')}</div>
                     <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1.1rem', fontWeight: 700 }}>
                       {metrics.duration_formatted || '00:00:00'}
                     </div>
                   </div>
 
                   <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>EVALUATION PROPOSAL</div>
+                    <div className="detail-metric-label">{t('metric_evaluation')}</div>
                     <div style={{ fontWeight: 700, color: metrics.evaluation_status === 'PASS' ? 'var(--accent-emerald)' : 'var(--text-primary)' }}>
-                      {metrics.evaluation_status || 'Not Evaluated'}
+                      {metrics.evaluation_status === 'PASS' || metrics.evaluation_status === 'FAIL' ? metrics.evaluation_status : t('not_evaluated')}
                     </div>
                   </div>
                 </div>
@@ -764,18 +772,19 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               {/* Visual Section: Main Graph Display */}
               {graphArtifact && graphArtifact.id && (
                 <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <div className="detail-section-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                     <h3 style={{ fontSize: '0.95rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-cyan)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <ImageIcon size={16} />
-                      <span>График давления и температуры (Pressure Graph)</span>
+                      <span>{t('graph_title')}</span>
                     </h3>
                     <button
                       type="button"
+                      className="detail-section-button"
                       onClick={() => setPreviewImage({ url: getArtifactFileUrl(graphArtifact.id!), title: graphArtifact.name })}
                       style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', padding: '0.25rem 0.6rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                     >
                       <Maximize2 size={12} />
-                      <span>Развернуть</span>
+                      <span>{t('graph_expand')}</span>
                     </button>
                   </div>
 
@@ -790,7 +799,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                       textAlign: 'center',
                       maxHeight: '340px'
                     }}
-                    title="Нажмите для просмотра в полном размере"
+                    title={t('image_open_full')}
                   >
                     <img
                       src={getArtifactFileUrl(graphArtifact.id)}
@@ -803,13 +812,14 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
 
               {/* Visual Section: Photos Gallery */}
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                <div className="detail-section-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
                   <h3 style={{ fontSize: '0.95rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <Camera size={16} />
-                    <span>Прикреплённые фотографии ({photoArtifacts.length})</span>
+                    <span>{t('photos_title', { count: photoArtifacts.length })}</span>
                   </h3>
-                  <button
+                  {canEdit && <button
                     type="button"
+                    className="detail-section-button"
                     onClick={() => photoInputRef.current?.click()}
                     disabled={isUploadingPhotos}
                     style={{
@@ -828,15 +838,15 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                     {isUploadingPhotos ? (
                       <>
                         <div className="animate-spin" style={{ width: '12px', height: '12px', border: '2px solid var(--accent-cyan)', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                        <span>Загрузка...</span>
+                        <span>{t('photos_uploading')}</span>
                       </>
                     ) : (
                       <>
                         <Plus size={14} />
-                        <span>Прикрепить фото</span>
+                        <span>{t('photos_attach')}</span>
                       </>
                     )}
-                  </button>
+                  </button>}
                   <input
                     type="file"
                     ref={photoInputRef}
@@ -854,7 +864,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                       const photoUrl = getArtifactFileUrl(photo.id);
                       const isGauge = photo.category === 'gauge' || photo.name.toLowerCase().includes('gauge');
                       const isPipe = photo.category === 'pipe' || photo.name.toLowerCase().includes('pipe');
-                      const badgeLabel = isGauge ? 'Манометр (Gauge)' : isPipe ? 'Труба (Pipe)' : 'Фото';
+                      const badgeLabel = isGauge ? t('photo_gauge') : isPipe ? t('photo_pipe') : t('photo_other');
 
                       return (
                         <div
@@ -869,7 +879,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                             cursor: 'pointer',
                             height: '140px'
                           }}
-                          title="Нажмите для увеличения"
+                          title={t('image_open_full')}
                         >
                           <img
                             src={photoUrl}
@@ -890,7 +900,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                               alignItems: 'center'
                             }}
                           >
-                            <span style={{ fontSize: '10px', color: 'var(--accent-cyan)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: '12px', color: 'var(--accent-cyan)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {badgeLabel}
                             </span>
                             <Maximize2 size={11} color="var(--text-muted)" />
@@ -901,23 +911,25 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                   </div>
                 ) : (
                   <div
-                    onClick={() => photoInputRef.current?.click()}
+                    onClick={canEdit ? () => photoInputRef.current?.click() : undefined}
                     style={{
                       padding: '1.25rem',
                       background: 'var(--bg-inset-40)',
                       borderRadius: 'var(--radius-md)',
                       border: '1px dashed var(--border-color)',
                       textAlign: 'center',
-                      cursor: 'pointer',
+                      cursor: canEdit ? 'pointer' : 'default',
                       color: 'var(--text-muted)',
                       fontSize: '0.85rem'
                     }}
                   >
                     <Camera size={24} style={{ margin: '0 auto 0.4rem', opacity: 0.5 }} />
-                    <div>Фотографии манометра или труб пока не прикреплены.</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', marginTop: '0.2rem' }}>
-                      Нажмите сюда или на кнопку выше, чтобы добавить фото (.jpg, .jpeg, .png)
-                    </div>
+                    <div>{t('photos_empty')}</div>
+                    {canEdit && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--accent-cyan)', marginTop: '0.2rem' }}>
+                        {t('photos_empty_hint')}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -925,31 +937,31 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               {/* Traceability Metadata */}
               <div>
                 <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
-                  Traceability & Pipe Identifiers
+                  {t('trace_title')}
                 </h3>
                 <div style={{ background: 'var(--bg-inset-60)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
                     <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Operator: </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('trace_operator')}: </span>
                       <strong style={{ color: 'var(--accent-cyan)' }}>{currentRev?.operator || 'N/A'}</strong>
                     </div>
                     <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Inspection No: </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('trace_ins_no')}: </span>
                       <strong>{meta.ins_no || 'N/A'}</strong>
                     </div>
                     <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>WIKA Gauge Serial: </span>
-                      <strong>{meta.wika_nr || 'N/A'}</strong>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('trace_wika')}: </span>
+                      <strong style={{ overflowWrap: 'anywhere' }}>{meta.wika_nr || 'N/A'}</strong>
                     </div>
                     <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Project: </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('trace_project')}: </span>
                       <strong>{meta.project || 'ARDOR'}</strong>
                     </div>
                   </div>
 
                   {meta.note && (
                     <div style={{ marginBottom: '0.75rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Notes: </span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t('trace_notes')}: </span>
                       {meta.note}
                     </div>
                   )}
@@ -957,7 +969,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                   {meta.pipe_numbers && meta.pipe_numbers.length > 0 && (
                     <div style={{ marginTop: '0.5rem' }}>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
-                        Pipe Numbers ({meta.pipe_numbers.length}):
+                        {t('trace_pipes', { count: meta.pipe_numbers.length })}:
                       </div>
                       <div className="tag-list">
                         {sortPipeIdentifiers(meta.pipe_numbers).map((p: string, i: number) => (
@@ -975,12 +987,12 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
 
           {/* Actionable Artifacts & Files */}
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <div className="detail-section-head detail-files-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
-                Файлы и отчёты ревизии ({artifacts.length})
+                {t('files_title', { count: artifacts.length })}
               </h3>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Нажмите на любой файл (Excel, PDF, TXT, CSV), чтобы открыть или скачать его
+                {t('files_hint')}
               </span>
             </div>
 
@@ -994,45 +1006,53 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                     className="artifact-card"
                     onClick={() => handleOpenArtifact(art)}
                     style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
-                    title={`Открыть ${art.name}`}
+                    title={art.name}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', overflow: 'hidden' }}>
+                    <div className="artifact-main" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', overflow: 'hidden' }}>
                       {getArtifactIcon(art.file_type)}
                       <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        <div className="artifact-name" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                           {art.name}
                         </div>
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                          {(art.size_bytes / 1024).toFixed(1)} KB • Нажмите для открытия
+                          {(art.size_bytes / 1024).toFixed(1)} KB • {t('file_tap_to_open')}
                         </div>
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <div className="artifact-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <a
+                        className="artifact-action"
                         href={fileUrl}
                         download={art.name}
                         onClick={(e) => e.stopPropagation()}
                         style={{ color: 'var(--text-muted)', padding: '0.2rem', display: 'flex', alignItems: 'center' }}
-                        title={`Скачать ${art.name}`}
+                        title={`${t('file_download')}: ${art.name}`}
+                        aria-label={`${t('file_download')}: ${art.name}`}
                       >
                         <Download size={15} />
                       </a>
                       <button
+                        type="button"
+                        className="artifact-action"
                         onClick={(e) => handleCopySha(art.sha256, e)}
                         style={{ background: 'transparent', border: 'none', color: copiedSha === art.sha256 ? 'var(--accent-emerald)' : 'var(--text-muted)', cursor: 'pointer', padding: '0.2rem' }}
-                        title={`Копировать SHA-256: ${art.sha256}`}
+                        title={`${t('file_copy_sha')}: ${art.sha256}`}
+                        aria-label={t('file_copy_sha')}
                       >
                         {copiedSha === art.sha256 ? <CheckCircle2 size={15} /> : <Copy size={15} />}
                       </button>
-                        <button
+                        {canEdit && <button
+                          type="button"
+                          className="artifact-action artifact-action-danger"
                           onClick={(e) => handleDeleteArtifact(art, e)}
                           disabled={deletingArtifactId === art.id}
                           style={{ background: 'transparent', border: 'none', color: 'var(--accent-rose)', cursor: deletingArtifactId === art.id ? 'wait' : 'pointer', padding: '0.2rem', display: 'flex', alignItems: 'center' }}
-                          title={`Удалить ${art.name}`}
+                          title={`${t('file_delete')}: ${art.name}`}
+                          aria-label={`${t('file_delete')}: ${art.name}`}
                         >
                           <Trash2 size={15} />
-                        </button>
+                        </button>}
                     </div>
                   </div>
                 );
@@ -1042,47 +1062,9 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
         </div>
       </div>
 
-      {/* Lightbox / Fullscreen Image Preview */}
+      {/* Full-screen image viewer (graph and photos) */}
       {previewImage && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1100,
-            background: 'rgba(0, 0, 0, 0.88)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '2rem'
-          }}
-          onClick={() => setPreviewImage(null)}
-        >
-          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', color: '#fff' }}>
-              <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{previewImage.title}</span>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <a
-                  href={previewImage.url}
-                  download
-                  style={{ color: '#fff', background: 'rgba(255,255,255,0.15)', padding: '0.3rem 0.6rem', borderRadius: 'var(--radius-sm)', textDecoration: 'none', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                >
-                  <Download size={14} /> Скачать
-                </a>
-                <button
-                  onClick={() => setPreviewImage(null)}
-                  style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff', borderRadius: 'var(--radius-sm)', padding: '0.3rem 0.6rem', cursor: 'pointer' }}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-            <img
-              src={previewImage.url}
-              alt={previewImage.title}
-              style={{ maxWidth: '90vw', maxHeight: '82vh', objectFit: 'contain', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}
-            />
-          </div>
-        </div>
+        <ImageViewer url={previewImage.url} title={previewImage.title} onClose={() => setPreviewImage(null)} />
       )}
     </div>
   );

@@ -13,6 +13,7 @@ import {
 } from '../api';
 import { PlannedTestList, PlannedTestListDetail, PlannedTestPipe, PlannedTestPriority, PressureTest } from '../types';
 import { useI18n } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { ArrowUp, CheckCircle2, ChevronsUp, ClipboardList, Clock3, Flame, Minus, Pencil, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import {
   isPlannedTestListComplete,
@@ -49,6 +50,9 @@ const PriorityIcon = ({ priority, size = 14 }: { priority: PlannedTestPriority; 
 
 export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }) => {
   const { lang, t } = useI18n();
+  const { user } = useAuth();
+  // Guests and viewers only read; plan changes are for admin/foreman (ADR-005).
+  const canEdit = user?.role === 'admin' || user?.role === 'foreman';
   const [plans, setPlans] = useState<PlannedTestList[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [detail, setDetail] = useState<PlannedTestListDetail | null>(null);
@@ -275,10 +279,10 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
           </span>
           <span style={{ fontSize: '0.78rem', color: completed ? 'var(--accent-emerald)' : 'var(--text-muted)', fontWeight: 700 }}>{completed ? t('planned_completed') : t('planned_pending')}</span>
           <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{completed ? `${pipe.latest_log_no} ${pipe.latest_test_pressure ? `· ${pipe.latest_test_pressure}` : ''}` : '—'}</span>
-          <span style={{ display: 'flex', gap: '0.2rem', justifyContent: 'flex-end' }}>
+          {canEdit ? <span style={{ display: 'flex', gap: '0.2rem', justifyContent: 'flex-end' }}>
             <span role="button" tabIndex={0} onClick={(event) => handleEditPipe(pipe, event as unknown as React.MouseEvent)} title={t('planned_edit_pipe')} style={{ color: 'var(--text-muted)', padding: '0.35rem', display: 'inline-flex' }}><Pencil size={15} /></span>
             <span role="button" tabIndex={0} onClick={(event) => handleDeletePipe(pipe, event as unknown as React.MouseEvent)} title={t('planned_delete_pipe')} style={{ color: 'var(--accent-rose)', padding: '0.35rem', display: 'inline-flex' }}><Trash2 size={15} /></span>
-          </span>
+          </span> : <span />}
         </button>
         {pipe.source_data?.raw_source && <details style={{ borderTop: '1px solid var(--border-color)', padding: '0.45rem 0.8rem' }}>
           <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '0.78rem' }}>{t('planned_source_columns')}</summary>
@@ -311,7 +315,7 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
           <ClipboardList size={19} color="var(--accent-cyan)" />
           <strong>{t('planned_lists_title')}</strong>
         </div>
-        <form onSubmit={handleCreatePlan} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+        {canEdit && <form onSubmit={handleCreatePlan} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
           <input className="search-input" style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.55rem 0.65rem', background: 'var(--bg-inset-40)' }} placeholder={t('planned_name_placeholder')} value={planName} onChange={(event) => setPlanName(event.target.value)} />
           <input className="search-input" style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.55rem 0.65rem', background: 'var(--bg-inset-40)' }} placeholder={t('planned_description_placeholder')} value={planDescription} onChange={(event) => setPlanDescription(event.target.value)} />
           <select
@@ -327,7 +331,7 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
             <option value={3}>{t('planned_priority_level', { level: 3 })}</option>
           </select>
           <button type="submit" className="btn-primary" disabled={saving || !planName.trim()} style={{ justifyContent: 'center', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}><Plus size={16} /><span>{t('planned_create')}</span></button>
-        </form>
+        </form>}
         <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 700, marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.04em' }} htmlFor="planned-list-sort">{t('planned_list_sort')}</label>
         <select
           id="planned-list-sort"
@@ -351,14 +355,14 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
               : t('planned_added_on', { date: formatPlanDate(plan.created_at) });
             return <button key={plan.id} type="button" onClick={() => setSelectedPlanId(plan.id)} style={{ textAlign: 'left', padding: '0.65rem', borderRadius: 'var(--radius-sm)', border: active ? '1px solid var(--accent-cyan)' : '1px solid transparent', background: active ? 'rgba(56, 189, 248, 0.1)' : 'transparent', color: 'var(--text-primary)', cursor: 'pointer' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.45rem' }}>
-                <div style={{ fontWeight: 700, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{plan.name}</div>
+                <div className="planned-list-name" style={{ fontWeight: 700, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={plan.name}>{plan.name}</div>
                 {plan.priority > 0 && <span
                   title={priorityIsActive ? t('planned_priority_level', { level: plan.priority }) : t('planned_priority_completed_hint')}
                   style={{ display: 'inline-flex', flexShrink: 0, alignItems: 'center', gap: '0.15rem', color: priorityIsActive ? priorityColor(plan.priority) : 'var(--text-muted)', fontSize: '0.68rem', fontWeight: 800, opacity: priorityIsActive ? 1 : 0.65 }}
                 ><PriorityIcon priority={plan.priority} size={13} />P{plan.priority}</span>}
               </div>
               <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.15rem' }}>{plan.completed_count}/{plan.pipe_count} {t('planned_ready_count')}</div>
-              <div title={createdMeta} style={{ color: 'var(--text-muted)', fontSize: '0.66rem', marginTop: '0.18rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.85 }}>{createdMeta}</div>
+              <div className="planned-list-meta" title={createdMeta} style={{ color: 'var(--text-muted)', fontSize: '0.66rem', marginTop: '0.18rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.85 }}>{createdMeta}</div>
             </button>;
           })}
         </div>}
@@ -369,10 +373,15 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
         {!selectedPlanId || !detail ? <div className="empty-state"><ClipboardList size={48} style={{ opacity: 0.4, marginBottom: '1rem' }} /><div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{t('planned_empty_title')}</div><p>{t('planned_empty_desc')}</p></div> : <>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: '1rem' }}>
             <div>
-              <h2 style={{ fontSize: '1.2rem', marginBottom: '0.2rem' }}>{detail.list.name}</h2>
+              <h2 style={{ fontSize: '1.2rem', marginBottom: '0.2rem', overflowWrap: 'anywhere' }}>{detail.list.name}</h2>
               {detail.list.description && <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{detail.list.description}</div>}
               <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.45rem' }}>{detail.summary.completed}/{detail.summary.total} {t('planned_ready_count')}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
+              {!canEdit && detail.list.priority > 0 && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.6rem', color: selectedPlanComplete ? 'var(--text-muted)' : priorityColor(detail.list.priority), fontSize: '0.8rem', fontWeight: 800 }}>
+                  <PriorityIcon priority={detail.list.priority} size={14} />{t('planned_priority_level', { level: detail.list.priority })}
+                </div>
+              )}
+              {canEdit && <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700, marginRight: '0.15rem' }}>{t('planned_priority')}:</span>
                 {([0, 1, 2, 3] as PlannedTestPriority[]).map((priority) => {
                   const selected = detail.list.priority === priority;
@@ -392,30 +401,30 @@ export const PlannedTestsTab: React.FC<PlannedTestsTabProps> = ({ onSelectTest }
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', padding: '0.28rem 0.45rem', color: selected ? color : 'var(--text-muted)', borderColor: selected ? color : 'var(--border-color)', background: selected ? 'var(--bg-inset-60)' : 'transparent', fontSize: '0.7rem', fontWeight: 800 }}
                   ><PriorityIcon priority={priority} size={13} />{priority === 0 ? '—' : `P${priority}`}</button>;
                 })}
-              </div>
+              </div>}
             </div>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <button type="button" className="filter-pill" onClick={handleEditPlan} title={t('planned_edit_name')}><Pencil size={15} /></button>
-              <button type="button" className="filter-pill" onClick={handleDeletePlan} title={t('planned_delete_plan')} style={{ color: 'var(--accent-rose)' }}><Trash2 size={15} /></button>
-              <button type="button" className="filter-pill" onClick={() => loadDetail(detail.list.id, search)} title={t('btn_refresh')}><RefreshCw size={15} /></button>
+              {canEdit && <button type="button" className="filter-pill" onClick={handleEditPlan} title={t('planned_edit_name')} aria-label={t('planned_edit_name')}><Pencil size={15} /></button>}
+              {canEdit && <button type="button" className="filter-pill" onClick={handleDeletePlan} title={t('planned_delete_plan')} aria-label={t('planned_delete_plan')} style={{ color: 'var(--accent-rose)' }}><Trash2 size={15} /></button>}
+              <button type="button" className="filter-pill" onClick={() => loadDetail(detail.list.id, search)} title={t('btn_refresh')} aria-label={t('btn_refresh')}><RefreshCw size={15} /></button>
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '0.75rem', marginBottom: '1rem' }}>
             <div className="search-input-wrapper"><Search size={17} className="search-icon" /><input className="search-input" placeholder={t('planned_search_placeholder')} value={search} onChange={(event) => setSearch(event.target.value)} /></div>
-            <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)} aria-label={t('planned_sort')} style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0 0.65rem', fontSize: '0.85rem' }}>
+            <select className="planned-sort-select" value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)} aria-label={t('planned_sort')} style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0 0.65rem', fontSize: '0.85rem' }}>
               <option value="bundle">{t('planned_sort_bundle')}</option><option value="pipe">{t('planned_sort_pipe')}</option><option value="date">{t('planned_sort_date')}</option><option value="pressure">{t('planned_sort_pressure')}</option><option value="log">{t('planned_sort_log')}</option>
             </select>
           </div>
 
-          <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.85rem', background: 'var(--bg-inset-40)', marginBottom: '1.15rem' }}>
+          {canEdit && <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '0.85rem', background: 'var(--bg-inset-40)', marginBottom: '1.15rem' }}>
             <label style={{ display: 'block', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.45rem' }}>{t('planned_add_pipes')}</label>
             <textarea value={pipeInput} onChange={(event) => setPipeInput(event.target.value)} placeholder={t('planned_pipe_input_placeholder')} rows={4} style={{ width: '100%', resize: 'vertical', border: '1px solid var(--border-color)', background: 'var(--bg-surface)', color: 'var(--text-primary)', borderRadius: 'var(--radius-sm)', padding: '0.65rem', fontFamily: 'var(--font-mono)' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center', marginTop: '0.55rem', flexWrap: 'wrap' }}><span style={{ color: 'var(--text-muted)', fontSize: '0.76rem' }}>{t('planned_input_hint')}</span><button type="button" className="btn-primary" onClick={handleAddPipes} disabled={saving || !pipeInput.trim()} style={{ padding: '0.45rem 0.85rem', fontSize: '0.85rem' }}><Plus size={15} /><span>{t('planned_add')}</span></button></div>
-          </div>
+          </div>}
 
           {displayRows.length === 0 ? <div className="empty-state" style={{ padding: '2.5rem 1rem' }}>{t('planned_no_pipes')}</div> : sortMode === 'bundle' ? detail.bundles.map((bundle) => <div key={bundle.bundle_number} style={{ marginBottom: '1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-            <div style={{ padding: '0.65rem 0.85rem', background: 'var(--bg-inset-60)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center' }}><div><strong style={{ color: 'var(--text-secondary)' }}>{t('planned_bundle')} {bundle.bundle_number}</strong><span style={{ marginLeft: '0.55rem', color: 'var(--text-muted)', fontSize: '0.78rem' }}>{bundle.completed_count}/{bundle.pipes.length} {t('planned_ready_count')}</span></div><button type="button" className="filter-pill" onClick={() => handleDeleteBundle(bundle.bundle_number, bundle.pipes.length)} title={t('planned_delete_bundle')} style={{ color: 'var(--accent-rose)', padding: '0.3rem' }}><Trash2 size={14} /></button></div>
+            <div style={{ padding: '0.65rem 0.85rem', background: 'var(--bg-inset-60)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center' }}><div><strong style={{ color: 'var(--text-secondary)' }}>{t('planned_bundle')} {bundle.bundle_number}</strong><span style={{ marginLeft: '0.55rem', color: 'var(--text-muted)', fontSize: '0.78rem' }}>{bundle.completed_count}/{bundle.pipes.length} {t('planned_ready_count')}</span></div>{canEdit && <button type="button" className="filter-pill" onClick={() => handleDeleteBundle(bundle.bundle_number, bundle.pipes.length)} title={t('planned_delete_bundle')} aria-label={t('planned_delete_bundle')} style={{ color: 'var(--accent-rose)', padding: '0.3rem' }}><Trash2 size={14} /></button>}</div>
             <div style={{ padding: '0.45rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>{bundle.pipes.map(renderPipe)}</div>
           </div>) : <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>{displayRows.map(renderPipe)}</div>}
         </>}

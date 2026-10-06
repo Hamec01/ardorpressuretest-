@@ -5,6 +5,7 @@ import { copyToClipboard } from '../clipboard';
 import { getPublicShareUrl } from '../shareLinks';
 import { sortPipeIdentifiers } from '../pipeOrdering';
 import { Calendar, User, Gauge, Pipette, Image as ImageIcon, Share2, Check } from 'lucide-react';
+import { useI18n } from '../context/LanguageContext';
 
 interface TestCardProps {
   test: PressureTest;
@@ -12,6 +13,7 @@ interface TestCardProps {
 }
 
 export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
+  const { t } = useI18n();
   const [linkCopied, setLinkCopied] = useState(false);
 
   const handleShare = async (e: React.MouseEvent) => {
@@ -47,15 +49,15 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
   const gaugePhoto = photos.find(p => p.category === 'gauge') || photos.find(p => p.name.toLowerCase().includes('gauge') || p.name.toLowerCase().includes('manometer'));
   const pipePhoto = photos.find(p => p.category === 'pipe') || photos.find(p => p !== gaugePhoto && (p.name.toLowerCase().includes('pipe') || p.name.toLowerCase().includes('tube')));
   const displayPhotos = [
-    ...(gaugePhoto ? [{ photo: gaugePhoto, label: 'Gauge (Манометр)', icon: Gauge }] : []),
-    ...(pipePhoto ? [{ photo: pipePhoto, label: 'Pipe (Труба)', icon: Pipette }] : []),
+    ...(gaugePhoto ? [{ photo: gaugePhoto, label: t('photo_gauge'), icon: Gauge }] : []),
+    ...(pipePhoto ? [{ photo: pipePhoto, label: t('photo_pipe'), icon: Pipette }] : []),
   ];
   // Fallback if not categorized: show first 2 photos
   if (displayPhotos.length === 0 && photos.length > 0) {
     photos.slice(0, 2).forEach((p, idx) => {
       displayPhotos.push({
         photo: p,
-        label: idx === 0 ? 'Photo 1' : 'Photo 2',
+        label: `${t('photo_other')} ${idx + 1}`,
         icon: ImageIcon
       });
     });
@@ -91,7 +93,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
                 }}
                 title={test.pipecloud_updated_by_name ? `Added to PipeCloud by ${test.pipecloud_updated_by_name}` : 'Added to PipeCloud'}
               >
-                ☁ PIPECLOUD: ADDED
+                ☁ {t('card_pipecloud')}: {t('pipecloud_added')}
               </span>
             ) : (
               <span
@@ -109,7 +111,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
                 }}
                 title="Not yet marked as added in PipeCloud"
               >
-                ☁ NOT ADDED
+                ☁ {t('pipecloud_not_added')}
               </span>
             )}
           </div>
@@ -117,17 +119,17 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
 
         <div className="metrics-row">
           <div className="metric-item">
-            <span className="metric-label">Target</span>
+            <span className="metric-label">{t('card_target')}</span>
             <span className="metric-val">{meta.test_pressure || 'N/A'}</span>
           </div>
           <div className="metric-item">
-            <span className="metric-label">Min / Max</span>
+            <span className="metric-label">{t('card_min_max')}</span>
             <span className="metric-val">
               {metrics.min_pressure_bar != null ? `${metrics.min_pressure_bar.toFixed(1)} / ${metrics.max_pressure_bar?.toFixed(1)}` : 'N/A'}
             </span>
           </div>
           <div className="metric-item">
-            <span className="metric-label">Duration</span>
+            <span className="metric-label">{t('card_duration')}</span>
             <span className="metric-val">{metrics.duration_formatted || '00:00:00'}</span>
           </div>
         </div>
@@ -140,8 +142,8 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
                 key={idx}
                 style={{
                   position: 'relative',
-                  width: '64px',
-                  height: '52px',
+                  width: '72px',
+                  height: '56px',
                   borderRadius: 'var(--radius-sm)',
                   overflow: 'hidden',
                   border: '1px solid var(--border-color)',
@@ -164,7 +166,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
                     right: '0',
                     background: 'var(--bg-inset-85)',
                     color: 'var(--accent-cyan)',
-                    fontSize: '8.5px',
+                    fontSize: '11px',
                     fontWeight: 600,
                     textAlign: 'center',
                     padding: '1px 2px',
@@ -173,7 +175,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
                     textOverflow: 'ellipsis'
                   }}
                 >
-                  {label.split(' ')[0]}
+                  {label}
                 </span>
               </div>
             ))}
@@ -183,19 +185,19 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
         <div className="tags-section">
           {pipes.length > 0 && (
             <div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Pipes ({pipes.length}):</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>{t('card_pipes', { count: pipes.length })}:</div>
               <div className="tag-list">
                 {pipes.slice(0, 4).map((p, i) => (
                   <span key={i} className="tag-pipe">{p}</span>
                 ))}
-                {pipes.length > 4 && <span className="tag-pipe">+{pipes.length - 4} more</span>}
+                {pipes.length > 4 && <span className="tag-pipe">{t('card_more', { count: pipes.length - 4 })}</span>}
               </div>
             </div>
           )}
 
           {bundles.length > 0 && (
             <div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>Bundles:</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>{t('card_bundles')}:</div>
               <div className="tag-list">
                 {bundles.slice(0, 3).map((b, i) => (
                   <span key={i} className="tag-bundle">{b}</span>
@@ -218,8 +220,9 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
           </div>
           <button
             type="button"
+            className="card-share-button"
             onClick={handleShare}
-            title="Скопировать ссылку на этот лог (для отправки в чат)"
+            title={t('share_hint')}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -236,7 +239,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
             }}
           >
             {linkCopied ? <Check size={12} /> : <Share2 size={12} />}
-            <span>{linkCopied ? 'Скопировано' : 'Ссылка'}</span>
+            <span>{linkCopied ? t('card_copied') : t('card_share')}</span>
           </button>
         </div>
       </div>

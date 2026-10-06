@@ -18,6 +18,7 @@ import {
 import { SignatureModal } from './SignatureModal';
 import { ConfirmRecordModal } from './ConfirmRecordModal';
 import { useI18n } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 
 interface RecordDetailModalProps {
   record: PressureTestRecord;
@@ -31,6 +32,9 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   onUpdate
 }) => {
   const { t } = useI18n();
+  const { user } = useAuth();
+  // Guests and viewers only read and download; mutations are for admin/foreman (ADR-005).
+  const canEdit = user?.role === 'admin' || user?.role === 'foreman';
   const [record, setRecord] = useState<PressureTestRecord>(initialRecord);
   const [activeView, setActiveView] = useState<'official_pdf' | 'full_pdf' | 'data'>('official_pdf');
   const [isSignOpen, setIsSignOpen] = useState<boolean>(false);
@@ -121,6 +125,10 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   const officialPdfUrl = getRecordPdfUrl(record.id);
   const fullPdfUrl = getRecordFullPdfUrl(record.id);
   const currentActivePdfUrl = activeView === 'full_pdf' ? fullPdfUrl : officialPdfUrl;
+  const subtitle = [record.ins_no, record.system, record.project].filter((part) => part && String(part).trim()).join(' — ');
+  // confirmed_by_name may already contain the role, e.g. "Matti Meikäläinen (Foreman)".
+  const signerRole = record.confirmed_by_role || '';
+  const showSignerRole = Boolean(signerRole) && !(record.confirmed_by_name || '').toLowerCase().includes(`(${signerRole.toLowerCase()})`);
 
   return (
     <>
@@ -140,9 +148,11 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                     {record.status}
                   </span>
                 </div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                  {record.ins_no ? `${record.ins_no} — ` : ''}{record.system} — {record.project}
-                </div>
+                {subtitle && (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.2rem', overflowWrap: 'anywhere' }}>
+                    {subtitle}
+                  </div>
+                )}
               </div>
 
               <button className="modal-close-btn" onClick={onClose} title={t('modal_close')} aria-label={t('modal_close')}>
@@ -151,38 +161,38 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
             </div>
 
             <div className="test-detail-actions">
-              {(record.status === 'confirmed' || record.status === 'signed') && (
+              {canEdit && (record.status === 'confirmed' || record.status === 'signed') && (
                 <button
                   type="button"
                   onClick={() => void handleUnconfirm()}
                   disabled={isSaving}
                   className="filter-pill"
                   style={{ background: 'rgba(245, 158, 11, 0.14)', color: 'var(--accent-amber)', border: '1px solid var(--accent-amber)', display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
-                  title="Снять подтверждение и вернуть рапорт в черновик"
+                  title={t('ptr_unconfirm_hint')}
                 >
                   <Edit size={14} />
-                  <span>Снять подтверждение</span>
+                  <span>{t('ptr_unconfirm')}</span>
                 </button>
               )}
-              {record.status !== 'confirmed' && record.status !== 'signed' && (
+              {canEdit && record.status !== 'confirmed' && record.status !== 'signed' && (
                 <button
                   type="button"
                   onClick={() => setIsEditing((value) => !value)}
                   className="filter-pill"
                   style={{ background: isEditing ? 'rgba(245, 158, 11, 0.14)' : 'rgba(56, 189, 248, 0.12)', color: isEditing ? 'var(--accent-amber)' : 'var(--accent-cyan)', border: `1px solid ${isEditing ? 'var(--accent-amber)' : 'var(--accent-cyan)'}`, display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
-                  title="Редактировать рапорт"
+                  title={t('ptr_edit')}
                 >
                   <Edit size={14} />
-                  <span>{isEditing ? 'Отмена' : 'Редактировать'}</span>
+                  <span>{isEditing ? t('ptr_cancel') : t('ptr_edit')}</span>
                 </button>
               )}
               {isEditing && (
                 <button type="button" onClick={() => void handleSave()} disabled={isSaving} className="btn-primary" style={{ padding: '0.45rem 0.8rem', fontSize: '0.85rem' }}>
                   <Check size={14} />
-                  <span>{isSaving ? 'Сохраняем...' : 'Сохранить'}</span>
+                  <span>{isSaving ? t('ptr_saving') : t('ptr_save')}</span>
                 </button>
               )}
-              <button
+              {canEdit && <button
                 type="button"
                 onClick={handleDeleteRecord}
                 disabled={isDeleting}
@@ -192,7 +202,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               >
                 <Trash2 size={14} />
                 <span>{isDeleting ? t('modal_saving') : t('btn_delete')}</span>
-              </button>
+              </button>}
 
               <a
                 href={currentActivePdfUrl}
@@ -231,7 +241,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
           </div>
 
           {/* View Mode Toggle & Actions Bar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+          <div className="record-view-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button
                 type="button"
@@ -266,7 +276,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
 
             {/* Workflow Action Buttons */}
             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              {record.status === 'draft' && (
+              {canEdit && record.status === 'draft' && (
                 <>
                   <button
                     type="button"
@@ -296,28 +306,28 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
           <div className="modal-body" style={{ gap: '1.25rem' }}>
             {/* Digital Verification Seal Card if Confirmed */}
             {record.verification_code && (
-              <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 'var(--radius-md)', padding: '0.85rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <div style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="record-seal" style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 'var(--radius-md)', padding: '0.85rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0, flex: '1 1 260px' }}>
+                  <div style={{ width: '38px', height: '38px', flexShrink: 0, borderRadius: '50%', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <ShieldCheck size={22} color="var(--accent-emerald)" />
                   </div>
-                  <div>
-                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.25rem 0.5rem' }}>
                       <span>{t('verified_badge')}</span>
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', background: 'rgba(16, 185, 129, 0.2)', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)' }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', background: 'rgba(16, 185, 129, 0.2)', padding: '0.1rem 0.4rem', borderRadius: 'var(--radius-sm)', overflowWrap: 'anywhere' }}>
                         {record.verification_code}
                       </span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
-                      {t('signed_by')}: <strong>{record.confirmed_by_name}</strong> ({record.confirmed_by_role || 'Foreman'})
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.15rem', overflowWrap: 'anywhere' }}>
+                      {t('signed_by')}: <strong>{record.confirmed_by_name}</strong>{showSignerRole ? ` (${signerRole})` : ''}
                     </div>
                     {record.official_pdf_sha256 && (
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.15rem', overflowWrap: 'anywhere' }}>
                         Official PDF SHA-256: {record.official_pdf_sha256}
                       </div>
                     )}
                     {record.full_pdf_sha256 && (
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.1rem' }}>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '0.1rem', overflowWrap: 'anywhere' }}>
                         Full PDF SHA-256: {record.full_pdf_sha256}
                       </div>
                     )}
@@ -333,14 +343,30 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
             {/* TAB 1 & 2: LIVE PDF VIEWER (Official or Full) */}
             {(activeView === 'official_pdf' || activeView === 'full_pdf') ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                <div style={{ width: '100%', height: '620px', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-color)', background: '#fff' }}>
+                {/* Phones cannot render a PDF inside an iframe (Android shows nothing, iOS only page 1). */}
+                <div className="pdf-mobile-fallback">
+                  <FileSpreadsheet size={30} color="var(--accent-amber)" />
+                  <strong>{t('pdf_mobile_title')}</strong>
+                  <span>{t('pdf_mobile_hint')}</span>
+                  <div className="pdf-mobile-actions">
+                    <a href={currentActivePdfUrl} target="_blank" rel="noreferrer" className="btn-primary">
+                      <ExternalLink size={16} />
+                      <span>{t('pdf_open')}</span>
+                    </a>
+                    <a href={currentActivePdfUrl} download={`PTR_${record.record_number}_${activeView === 'full_pdf' ? 'Full' : 'Official'}.pdf`} className="filter-pill">
+                      <Download size={16} />
+                      <span>{t('file_download')}</span>
+                    </a>
+                  </div>
+                </div>
+                <div className="pdf-frame" style={{ width: '100%', height: '620px', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-color)', background: '#fff' }}>
                   <iframe
                     src={`${currentActivePdfUrl}#toolbar=1&navpanes=0`}
                     title={`ARDOR Pressure Test Record ${activeView === 'full_pdf' ? 'Full Composite' : 'Official'}`}
                     style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
                   />
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                <div className="pdf-frame-caption" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                   <span>
                     {activeView === 'full_pdf' ? 'Rendering Full Composite PDF (Record + All Log Sections + Full CSV Tables)' : 'Rendering Official ARDOR Blank (Official Multi-page compliant layout)'}
                   </span>

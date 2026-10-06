@@ -26,7 +26,7 @@ interface MobileNavigationProps {
   activeTab: AppTab;
   totalCount: number;
   onTabChange: (tab: AppTab) => void;
-  onNewTest: () => void;
+  onNewTest?: () => void;
   onLogin: () => void;
   onAudit: () => void;
   onOpenFaq: () => void;
@@ -60,9 +60,9 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
 
   return (
     <>
-      <button type="button" className="mobile-upload-fab" onClick={onNewTest} aria-label={t('btn_new_test')}>
+      {onNewTest && <button type="button" className="mobile-upload-fab" onClick={onNewTest} aria-label={t('btn_new_test')}>
         <Plus size={24} />
-      </button>
+      </button>}
 
       <nav className="mobile-bottom-nav" aria-label={t('mobile_main_navigation')}>
         <button type="button" className={activeTab === 'tests' ? 'active' : ''} onClick={() => selectTab('tests')} aria-current={activeTab === 'tests' ? 'page' : undefined}>
@@ -90,7 +90,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
               <button type="button" className="mobile-icon-button" onClick={() => setMoreOpen(false)} aria-label={t('modal_close')}><X size={22} /></button>
             </header>
 
-            <button type="button" className="mobile-sheet-primary" onClick={() => { setMoreOpen(false); onNewTest(); }}><Plus size={19} />{t('btn_new_test')}</button>
+            {onNewTest && <button type="button" className="mobile-sheet-primary" onClick={() => { setMoreOpen(false); onNewTest(); }}><Plus size={19} />{t('btn_new_test')}</button>}
 
             <div className="mobile-settings-group">
               <span>{t('mobile_language')}</span>

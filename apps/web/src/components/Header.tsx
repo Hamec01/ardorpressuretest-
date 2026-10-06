@@ -12,7 +12,7 @@ interface BeforeInstallPromptEvent extends Event {
 
 interface HeaderProps {
   totalCount: number;
-  onNewTestClick: () => void;
+  onNewTestClick?: () => void;
   onLoginClick: () => void;
   onAuditClick: () => void;
 }
@@ -177,14 +177,16 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          <button
-            className="btn-primary"
-            onClick={onNewTestClick}
-            style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem', fontWeight: 600 }}
-          >
-            <Plus size={15} />
-            <span>{t('btn_new_test')}</span>
-          </button>
+          {onNewTestClick && (
+            <button
+              className="btn-primary"
+              onClick={onNewTestClick}
+              style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem', fontWeight: 600 }}
+            >
+              <Plus size={15} />
+              <span>{t('btn_new_test')}</span>
+            </button>
+          )}
 
           {user ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', borderLeft: '1px solid var(--border-color)', paddingLeft: '0.85rem' }}>

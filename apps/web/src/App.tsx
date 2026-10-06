@@ -101,11 +101,15 @@ export const App: React.FC = () => {
     setSelectedTest(createdTest);
   };
 
+  // Uploading is for admin/foreman; a guest is sent to sign in, a viewer gets no upload button.
+  const canEdit = user?.role === 'admin' || user?.role === 'foreman';
+  const newTestAction = canEdit ? () => setIsNewTestOpen(true) : user ? undefined : () => setIsLoginOpen(true);
+
   return (
     <div className="app-container">
       <Header
         totalCount={tests.length}
-        onNewTestClick={() => setIsNewTestOpen(true)}
+        onNewTestClick={newTestAction}
         onLoginClick={() => setIsLoginOpen(true)}
         onAuditClick={() => setIsAuditOpen(true)}
       />
@@ -247,10 +251,11 @@ export const App: React.FC = () => {
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', marginTop: '-0.5rem' }}>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                Showing <strong>{filteredTests.length}</strong> of {tests.length} pressure tests
+                {t('showing_tests', { shown: filteredTests.length, total: tests.length })}
               </div>
 
               <button
+                className="list-refresh-button"
                 onClick={() => loadData(searchQuery)}
                 style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', padding: '0.4rem 0.8rem', borderRadius: 'var(--radius-md)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}
               >
@@ -307,7 +312,7 @@ export const App: React.FC = () => {
         activeTab={activeTab}
         totalCount={tests.length}
         onTabChange={setActiveTab}
-        onNewTest={() => setIsNewTestOpen(true)}
+        onNewTest={newTestAction}
         onLogin={() => setIsLoginOpen(true)}
         onAudit={() => setIsAuditOpen(true)}
         onOpenFaq={() => setActiveTab('faq')}
