@@ -199,3 +199,79 @@ def test_link_survives_log_rename():
         db.get(PressureTest, ids["test"]).log_no = "067FED-R"
         db.commit()
     assert TestClient(app).get(f"/api/v1/public/shares/{token}").json()["log_no"] == "067FED-R"
+
+
+def _real_images(ids_log_no="067FED"):
+    """Replace the placeholder bytes of the current revision with real PNG/JPEG files."""
+    from PIL import Image
+    base = Path(settings.storage_dir)
+    with SessionLocal() as db:
+        test = db.query(PressureTest).filter(PressureTest.log_no == ids_log_no).one()
+        rev = next(r for r in test.revisions if r.is_primary)
+        graph = rev.artifacts[0]
+        Image.new("RGB", (1600, 800), (255, 255, 255)).save(base / graph.storage_key, "PNG")
+        key = f"logs/{ids_log_no}/current/pipe.jpg"
+        Image.new("RGB", (900, 1200), (120, 90, 60)).save(base / key, "JPEG")
+        db.add(Artifact(test_revision_id=rev.id, name="pipe.jpg", relative_path="pipe.jpg", file_type="photo",
+                        category="pipe", size_bytes=1, sha256="1" * 64, storage_key=key))
+        db.commit()
+
+
+def test_preview_card_is_a_1200x630_jpeg_and_cached():
+    from PIL import Image
+    import io as _io
+    _user("fore", "foreman")
+    _log()
+    _real_images()
+    client = _client("fore")
+    share = client.post("/api/v1/shares", json={"log_no": "067FED"}, headers=_unsafe(client)).json()
+    token = share["url"].rsplit("/", 1)[1]
+    response = TestClient(app).get(f"/api/v1/public/shares/{token}/preview.jpg")
+    assert response.status_code == 200 and response.headers["content-type"] == "image/jpeg"
+    image = Image.open(_io.BytesIO(response.content))
+    assert image.size == (1200, 630)
+    assert len(response.content) < 300_000  # WhatsApp shows large previews only for small images
+    assert list((Path(settings.storage_dir) / "_share_previews").glob(f"{share['id']}-rev-current-v2.jpg"))
+
+
+def test_preview_page_has_open_graph_tags_for_messenger_bots():
+    _user("fore", "foreman")
+    _log()
+    client = _client("fore")
+    token = client.post("/api/v1/shares", json={"log_no": "067FED"}, headers=_unsafe(client)).json()["url"].rsplit("/", 1)[1]
+    page = TestClient(app).get(f"/api/v1/public/preview-page/s/{token}")
+    assert page.status_code == 200
+    text = page.text
+    assert 'property="og:title" content="Log 067FED · ARDOR Pressure Test"' in text
+    assert f'/api/v1/public/shares/{token}/preview.jpg' in text
+    assert 'property="og:image:width" content="1200"' in text
+    assert "8 bar" in text and "1 pipe" in text
+
+
+def test_preview_page_for_legacy_and_revoked_links():
+    _user("fore", "foreman")
+    _log("067FED", legacy=True)
+    guest = TestClient(app)
+    assert 'og:image' in guest.get("/api/v1/public/preview-page/share/067FED").text
+    missing = guest.get("/api/v1/public/preview-page/share/000NOPE")
+    assert missing.status_code == 404 and "og:image" not in missing.text
+    assert guest.get("/api/v1/public/preview-page/x/whatever").status_code == 404
+    client = _client("fore")
+    legacy = client.get("/api/v1/shares", params={"log_no": "067FED"}).json()[0]
+    client.delete(f"/api/v1/shares/{legacy['id']}", headers=_unsafe(client))
+    assert guest.get("/api/v1/public/preview-page/share/067FED").status_code == 404
+
+
+def test_nginx_routes_only_link_preview_bots_to_the_open_graph_page():
+    conf = (Path(__file__).resolve().parents[1] / "deploy" / "nginx.staging.conf").read_text()
+    assert "map $http_user_agent $ardor_link_preview_bot" in conf
+    assert "whatsapp" in conf and "telegrambot" in conf
+    assert "rewrite ^/(s|share)/([^/]+)/?$ /api/v1/public/preview-page/$1/$2 break;" in conf
+    assert "try_files $uri /index.html;" in conf  # people still get the app
+
+
+def test_preview_date_uses_site_timezone():
+    from types import SimpleNamespace
+    from services.api.share_preview import description
+    rev = SimpleNamespace(metadata_json={"test_pressure": "8 bar"}, created_at=datetime(2026, 9, 24, 22, 34, tzinfo=timezone.utc))
+    assert "25.09.2026" in description(SimpleNamespace(log_no="067FED"), rev)

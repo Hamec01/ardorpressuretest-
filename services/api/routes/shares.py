@@ -5,13 +5,14 @@ routes need no session: the link token is the authorisation and grants exactly o
 log - its current revision's data and files - and nothing else. Unknown, revoked and
 foreign requests all get the same 404.
 """
+import html
 import io
 import zipfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import update
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from services.api.auth import require_role
 from services.api.config import settings
 from services.api.database import get_db
 from services.api.models import Artifact, AuditEvent, PressureTest, PublicShare, TestRevision, User
+from services.api.share_preview import cached_preview, description
 from services.api.shares import legacy_share_url, share_id_from_token, share_token, share_url
 from services.api.storage import storage
 from wika_report.models import normalize_log_no
@@ -325,3 +327,77 @@ def resolve_legacy_share(log_no: str, response: Response, db: Session = Depends(
         raise _not_found()
     response.headers.update(PUBLIC_HEADERS)
     return LegacyShareResolution(token=share_token(share.id))
+
+
+# ---------- link previews (Open Graph for WhatsApp, Telegram, ...) ----------
+
+@router.get("/api/v1/public/shares/{token}/preview.jpg")
+def get_public_preview(token: str, db: Session = Depends(get_db)):
+    """1200x630 preview card of the shared log (graph, photo, log number)."""
+    share, test = _resolve_public(db, token)
+    rev = _current_revision(test)
+    if rev is None:
+        raise _not_found()
+    return Response(
+        content=cached_preview(share.id, test, rev),
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=3600", "X-Robots-Tag": "noindex, nofollow"},
+    )
+
+
+def _preview_html(title: str, desc: str, page_url: str, image_url: Optional[str]) -> str:
+    esc = html.escape
+    tags = [
+        '<meta property="og:type" content="website">',
+        '<meta property="og:site_name" content="ARDOR Pressure Test">',
+        f'<meta property="og:title" content="{esc(title)}">',
+        f'<meta property="og:description" content="{esc(desc)}">',
+        f'<meta property="og:url" content="{esc(page_url)}">',
+        f'<meta name="description" content="{esc(desc)}">',
+        '<meta name="robots" content="noindex, nofollow">',
+    ]
+    if image_url:
+        tags += [
+            f'<meta property="og:image" content="{esc(image_url)}">',
+            f'<meta property="og:image:secure_url" content="{esc(image_url)}">',
+            '<meta property="og:image:type" content="image/jpeg">',
+            '<meta property="og:image:width" content="1200">',
+            '<meta property="og:image:height" content="630">',
+            f'<meta property="og:image:alt" content="{esc(title)}">',
+            '<meta name="twitter:card" content="summary_large_image">',
+            f'<meta name="twitter:image" content="{esc(image_url)}">',
+        ]
+    return (
+        '<!doctype html><html><head><meta charset="utf-8">'
+        f'<title>{esc(title)}</title>' + "".join(tags) +
+        f'</head><body><a href="{esc(page_url)}">{esc(title)}</a></body></html>'
+    )
+
+
+@router.get("/api/v1/public/preview-page/{kind}/{ident}", response_class=HTMLResponse)
+def get_preview_page(kind: str, ident: str, db: Session = Depends(get_db)):
+    """Tiny HTML with Open Graph tags, served by nginx to link-preview bots only
+    (messengers do not run the SPA's JavaScript). People still get the normal app page."""
+    origin = settings.public_origin.rstrip("/")
+    try:
+        if kind == "s":
+            token = ident
+        elif kind == "share":
+            token = resolve_legacy_share(ident, Response(), db).token
+        else:
+            raise _not_found()
+        share, test = _resolve_public(db, token)
+    except HTTPException:
+        return HTMLResponse(
+            _preview_html("ARDOR Pressure Test", "This link is no longer available.", f"{origin}/{kind}/{ident}", None),
+            status_code=404,
+            headers={"Cache-Control": "no-store"},
+        )
+    rev = _current_revision(test)
+    page_url = f"{origin}/{kind}/{ident}"
+    image_url = f"{origin}/api/v1/public/shares/{token}/preview.jpg" if rev is not None else None
+    title = f"Log {test.log_no} · ARDOR Pressure Test"
+    return HTMLResponse(
+        _preview_html(title, description(test, rev), page_url, image_url),
+        headers={"Cache-Control": "public, max-age=600", "X-Robots-Tag": "noindex, nofollow"},
+    )
