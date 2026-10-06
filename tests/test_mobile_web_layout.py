@@ -111,14 +111,15 @@ def test_detail_modal_responsive_header_and_close_button_isolated() -> None:
     assert ".test-detail-actions > :last-child:nth-child(odd)" in css
 
 
-def test_share_buttons_use_direct_public_staging_links() -> None:
-    helper = read("shareLinks.ts")
+def test_share_buttons_create_token_links_through_the_api() -> None:
+    """Token share links (docs/ACCESS_PLAN_R4-R7.md stage 2) replace /share/{log_no} URLs."""
     card = read("components/TestCard.tsx")
     detail = read("components/TestDetailModal.tsx")
 
-    assert "http://84.247.130.242:8080" in helper
-    assert "encodeURIComponent(logNo)" in helper
-    assert "getPublicShareUrl(test.log_no)" in card
-    assert "getPublicShareUrl(currentTest.log_no)" in detail
-    assert "window.location.origin}/share/" not in card
-    assert "window.location.origin}/share/" not in detail
+    assert "await createShare(test.log_no)" in card
+    assert "await createShare(currentTest.log_no)" in detail
+    assert "{canShare && <button" in card
+    for source in (card, detail):
+        assert "getPublicShareUrl" not in source
+        assert "/share/" not in source
+        assert "84.247.130.242" not in source

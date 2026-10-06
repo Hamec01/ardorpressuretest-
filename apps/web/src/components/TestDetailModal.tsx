@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PressureTest, TestRevision, Artifact } from '../types';
-import { getRevisionZipUrl, getArtifactFileUrl, deleteArtifact, deletePressureTest, deleteTestRevision, permanentlyDeletePressureTest, restorePressureTest, updatePipeCloudStatus } from '../api';
+import { createShare, getRevisionZipUrl, getArtifactFileUrl, deleteArtifact, deletePressureTest, deleteTestRevision, permanentlyDeletePressureTest, restorePressureTest, updatePipeCloudStatus } from '../api';
 import { copyToClipboard } from '../clipboard';
-import { getPublicShareUrl } from '../shareLinks';
 import { useI18n } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { ImageViewer } from './ImageViewer';
+import { SharePanel } from './SharePanel';
 import { authFetch } from '../authFetch';
 import { sortPipeIdentifiers, sortPipeInput } from '../pipeOrdering';
 import {
@@ -73,6 +73,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   const [deletingArtifactId, setDeletingArtifactId] = useState<string | null>(null);
   const [deletingRevisionId, setDeletingRevisionId] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState<boolean>(false);
+  const [shareRefresh, setShareRefresh] = useState<number>(0);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -83,13 +84,17 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   }, [onClose]);
 
   const handleShareLink = async () => {
-    const url = getPublicShareUrl(currentTest.log_no);
-    const ok = await copyToClipboard(url);
-    if (ok) {
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2000);
-    } else {
-      window.prompt('Скопируйте ссылку на лог:', url);
+    try {
+      const { url } = await createShare(currentTest.log_no);
+      setShareRefresh((value) => value + 1);
+      if (await copyToClipboard(url)) {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      } else {
+        window.prompt(t('share_copy_prompt'), url);
+      }
+    } catch {
+      setErrorMsg(t('share_failed'));
     }
   };
 
@@ -484,7 +489,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               </button>
             )}
 
-            <button
+            {canEdit && <button
               type="button"
               onClick={handleShareLink}
               className="filter-pill"
@@ -499,7 +504,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
             >
               {linkCopied ? <Check size={15} /> : <Share2 size={15} />}
               <span>{linkCopied ? t('share_copied') : t('share_link')}</span>
-            </button>
+            </button>}
 
             {currentRev && (
               <a
@@ -984,6 +989,8 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               </div>
             </>
           )}
+
+          {canEdit && !currentTest.is_archived && <SharePanel logNo={currentTest.log_no} refreshKey={shareRefresh} />}
 
           {/* Actionable Artifacts & Files */}
           <div>

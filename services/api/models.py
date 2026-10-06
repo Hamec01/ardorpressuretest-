@@ -56,6 +56,35 @@ class PasswordLink(Base):
     revoked_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class PublicShare(Base):
+    """Public read-only link to one pressure test log (ADR-005 §10, docs/ACCESS_PLAN_R4-R7.md stage 2).
+
+    The link token is derived as HMAC(ARDOR_SHARE_SECRET, id) and is never stored.
+    legacy_log_no_access marks the compatibility record that keeps an old
+    /share/{log_no} URL working for a log that existed before token links.
+    Revocation is logical (revoked_at); rows are never deleted.
+    """
+    __tablename__ = "public_shares"
+    __table_args__ = (
+        CheckConstraint("resource_type IN ('log')", name="ck_public_shares_resource_type"),
+        CheckConstraint(
+            "(revoked_at IS NULL AND revoked_by_user_id IS NULL) OR revoked_at IS NOT NULL",
+            name="ck_public_shares_revoked_by_requires_revoked_at",
+        ),
+    )
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    resource_type = Column(String(16), default="log", nullable=False)
+    pressure_test_id = Column(String(36), ForeignKey("pressure_tests.id"), index=True, nullable=False)
+    legacy_log_no_access = Column(Boolean, default=False, nullable=False)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    last_accessed_at = Column(DateTime(timezone=True), nullable=True)
+    access_count = Column(Integer, default=0, nullable=False)
+
+
 class Gauge(Base):
     __tablename__ = "gauges"
 

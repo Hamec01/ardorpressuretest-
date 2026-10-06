@@ -4,6 +4,8 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, model_validator
 
 INSECURE_DEFAULT_SECRET = "ardor-local-secret-key-change-in-prod"
+INSECURE_DEFAULT_SHARE_SECRET = "ardor-local-share-secret-change-in-prod"
+MIN_SHARE_SECRET_LENGTH = 32
 LOCAL_ENVIRONMENTS = ("local", "dev", "development", "test", "testing")
 DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"
 DEFAULT_PUBLIC_ORIGIN = "http://localhost:5173"
@@ -36,6 +38,13 @@ class Settings(BaseModel):
     # Comma-separated browser origins allowed to call the API with credentials.
     cors_allowed_origins: str = os.getenv("ARDOR_CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
     public_origin: str = os.getenv("ARDOR_PUBLIC_ORIGIN", DEFAULT_PUBLIC_ORIGIN)
+
+    # HMAC key that turns a public share id into its link token (ADR-005 §10,
+    # docs/ACCESS_PLAN_R4-R7.md stage 2). Rotating it invalidates every share link at once.
+    share_secret: str = os.getenv("ARDOR_SHARE_SECRET", INSECURE_DEFAULT_SHARE_SECRET)
+    # Old /share/{log_no} links of logs that existed before token links (owner decision
+    # 2026-10-06). "off" closes all of them at once.
+    legacy_share_links: bool = os.getenv("ARDOR_LEGACY_SHARE_LINKS", "on").strip().lower() not in ("off", "false", "0", "no")
 
     @property
     def is_local_environment(self) -> bool:
@@ -72,6 +81,10 @@ class Settings(BaseModel):
         if self.secret_key == INSECURE_DEFAULT_SECRET:
             problems.append(
                 "SECRET_KEY is not set (falls back to the insecure development default)"
+            )
+        if self.share_secret == INSECURE_DEFAULT_SHARE_SECRET or len(self.share_secret) < MIN_SHARE_SECRET_LENGTH:
+            problems.append(
+                f"ARDOR_SHARE_SECRET is not set or shorter than {MIN_SHARE_SECRET_LENGTH} characters"
             )
         if self.database_url.startswith("sqlite"):
             problems.append(

@@ -11,6 +11,7 @@ from services.api.config import DEFAULT_CORS_ORIGINS, INSECURE_DEFAULT_SECRET, S
 GOOD_SECRET = "a-real-randomly-generated-secret-value"
 GOOD_DB_URL = "postgresql://ardor_user:x@postgres:5432/ardor_pressure_test"
 GOOD_PUBLIC_ORIGIN = "https://84-247-130-242.sslip.io"
+GOOD_SHARE_SECRET = "a-real-randomly-generated-share-secret-value-0123456789"
 
 
 def _server_settings(**overrides):
@@ -21,6 +22,7 @@ def _server_settings(**overrides):
         seed_default_users=False,
         cors_allowed_origins="https://example.ardor.internal",
         public_origin=GOOD_PUBLIC_ORIGIN,
+        share_secret=GOOD_SHARE_SECRET,
     )
     kwargs.update(overrides)
     return Settings(**kwargs)
@@ -135,3 +137,9 @@ def test_local_environments_allow_insecure_defaults(env_name):
 def test_cors_origin_list_parses_comma_separated_values():
     s = Settings(environment="local", cors_allowed_origins=" http://a.test , http://b.test ")
     assert s.cors_origin_list == ["http://a.test", "http://b.test"]
+
+
+@pytest.mark.parametrize("share_secret", ["", "short", "ardor-local-share-secret-change-in-prod"])
+def test_server_mode_rejects_missing_or_weak_share_secret(share_secret):
+    with pytest.raises(Exception):
+        _server_settings(share_secret=share_secret)

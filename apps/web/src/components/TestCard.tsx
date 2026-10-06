@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { PressureTest, TestRevision } from '../types';
-import { getArtifactFileUrl } from '../api';
+import { createShare, getArtifactFileUrl } from '../api';
 import { copyToClipboard } from '../clipboard';
-import { getPublicShareUrl } from '../shareLinks';
 import { sortPipeIdentifiers } from '../pipeOrdering';
 import { Calendar, User, Gauge, Pipette, Image as ImageIcon, Share2, Check } from 'lucide-react';
 import { useI18n } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 
 interface TestCardProps {
   test: PressureTest;
@@ -14,17 +14,23 @@ interface TestCardProps {
 
 export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
   const { t } = useI18n();
+  const { user } = useAuth();
+  // Creating a public link is for admin/foreman (ADR-005 §3).
+  const canShare = user?.role === 'admin' || user?.role === 'foreman';
   const [linkCopied, setLinkCopied] = useState(false);
 
   const handleShare = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const url = getPublicShareUrl(test.log_no);
-    const ok = await copyToClipboard(url);
-    if (ok) {
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2000);
-    } else {
-      window.prompt('Скопируйте ссылку на лог:', url);
+    try {
+      const { url } = await createShare(test.log_no);
+      if (await copyToClipboard(url)) {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      } else {
+        window.prompt(t('share_copy_prompt'), url);
+      }
+    } catch {
+      window.alert(t('share_failed'));
     }
   };
 
@@ -218,7 +224,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
             <Calendar size={14} />
             <span>{createdDate}</span>
           </div>
-          <button
+          {canShare && <button
             type="button"
             className="card-share-button"
             onClick={handleShare}
@@ -240,7 +246,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
           >
             {linkCopied ? <Check size={12} /> : <Share2 size={12} />}
             <span>{linkCopied ? t('card_copied') : t('card_share')}</span>
-          </button>
+          </button>}
         </div>
       </div>
     </div>

@@ -39,6 +39,7 @@ def _docs_urls_for(environment):
         env["SECRET_KEY"] = "subprocess-probe-secret-value"
         env["ARDOR_CORS_ORIGINS"] = "https://example.ardor.internal"
         env["ARDOR_PUBLIC_ORIGIN"] = "https://example.ardor.internal"
+        env["ARDOR_SHARE_SECRET"] = "subprocess-probe-share-secret-value-0123456789"
 
         result = subprocess.run(
             [sys.executable, "-c", _PROBE_CODE],

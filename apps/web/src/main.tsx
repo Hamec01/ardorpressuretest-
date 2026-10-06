@@ -11,6 +11,8 @@ import './index.css';
 // Apply the persisted theme before first paint to avoid a dark->light flash.
 applyStoredThemeSync();
 
+const shareTokenMatch = window.location.pathname.match(/^\/s\/([A-Za-z0-9_-]+)\/?$/);
+// Old number links keep working for logs that existed before token links.
 const shareMatch = window.location.pathname.match(/^\/share\/([^/]+)\/?$/);
 const setPasswordMatch = window.location.pathname.match(/^\/set-password\/([A-Za-z0-9_-]+)\/?$/);
 const root = ReactDOM.createRoot(document.getElementById('root')!);
@@ -25,13 +27,14 @@ if (setPasswordMatch) {
       </ThemeProvider>
     </React.StrictMode>,
   );
-} else if (shareMatch) {
-  const logNo = decodeURIComponent(shareMatch[1]);
+} else if (shareTokenMatch || shareMatch) {
   root.render(
     <React.StrictMode>
       <ThemeProvider>
         <LanguageProvider>
-          <PublicLogView logNo={logNo} />
+          {shareTokenMatch
+            ? <PublicLogView token={shareTokenMatch[1]} />
+            : <PublicLogView legacyLogNo={decodeURIComponent(shareMatch![1])} />}
         </LanguageProvider>
       </ThemeProvider>
     </React.StrictMode>,

@@ -216,3 +216,39 @@ export interface PasswordLinkInfo {
   purpose: 'invite' | 'reset';
   expires_at: string;
 }
+
+// Public share links (docs/ACCESS_PLAN_R4-R7.md stage 2)
+export interface PublicArtifact {
+  id: string;
+  name: string;
+  file_type: string;
+  category: string | null;
+  size_bytes: number;
+  sha256: string;
+}
+
+export interface PublicRevision {
+  revision_id: string;
+  status: string;
+  operator: string | null;
+  created_at: string;
+  metadata: Record<string, any>;
+  metrics: Record<string, any>;
+  artifacts: PublicArtifact[];
+}
+
+export interface PublicLog {
+  log_no: string;
+  pipecloud_added: boolean;
+  revision: PublicRevision | null;
+}
+
+export interface ShareLink {
+  id: string;
+  url: string;
+  legacy: boolean;
+  created_at: string;
+  created_by_name: string | null;
+  last_accessed_at: string | null;
+  access_count: number;
+}

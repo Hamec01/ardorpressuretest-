@@ -13,6 +13,8 @@ services:
       - SECRET_KEY=${ARDOR_JWT_SECRET:?ARDOR_JWT_SECRET must be set}
       - ARDOR_CORS_ORIGINS=${ARDOR_CORS_ORIGINS:?ARDOR_CORS_ORIGINS must be set}
       - ARDOR_PUBLIC_ORIGIN=${ARDOR_PUBLIC_ORIGIN:?ARDOR_PUBLIC_ORIGIN must be set}
+      - ARDOR_SHARE_SECRET=${ARDOR_SHARE_SECRET:?ARDOR_SHARE_SECRET must be set}
+      - ARDOR_LEGACY_SHARE_LINKS=${ARDOR_LEGACY_SHARE_LINKS:-on}
     volumes:
       - ardor_storage:/data/storage
     ports:

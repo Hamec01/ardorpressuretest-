@@ -1,4 +1,4 @@
-import { Account, AccountRole, IssuedPasswordLink, PasswordLinkInfo, PlannedTestList, PlannedTestListDetail, PlannedTestPriority, PressureTest, PressureTestRecord, RecordLogArtifact, TestRevision } from './types';
+import { Account, AccountRole, IssuedPasswordLink, PasswordLinkInfo, PublicLog, ShareLink, PlannedTestList, PlannedTestListDetail, PlannedTestPriority, PressureTest, PressureTestRecord, RecordLogArtifact, TestRevision } from './types';
 import { authFetch, publicFetch } from './authFetch';
 
 const API_BASE = '/api/v1';
@@ -376,4 +376,39 @@ export async function submitPasswordLink(token: string, newPassword: string): Pr
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ new_password: newPassword }),
   }));
+}
+
+
+// ---- Public share links (docs/ACCESS_PLAN_R4-R7.md stage 2) ----
+
+export async function createShare(logNo: string): Promise<ShareLink> {
+  return jsonOrThrow(await authFetch(`${API_BASE}/shares`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ log_no: logNo }),
+  }));
+}
+
+export async function fetchShares(logNo: string): Promise<ShareLink[]> {
+  return jsonOrThrow(await authFetch(`${API_BASE}/shares?log_no=${encodeURIComponent(logNo)}`));
+}
+
+export async function revokeShare(id: string): Promise<ShareLink> {
+  return jsonOrThrow(await authFetch(`${API_BASE}/shares/${encodeURIComponent(id)}`, { method: 'DELETE' }));
+}
+
+export async function fetchPublicShare(token: string): Promise<PublicLog> {
+  return jsonOrThrow(await publicFetch(`${API_BASE}/public/shares/${encodeURIComponent(token)}`));
+}
+
+export async function resolveLegacyShare(logNo: string): Promise<{ token: string }> {
+  return jsonOrThrow(await publicFetch(`${API_BASE}/public/legacy/${encodeURIComponent(logNo)}`));
+}
+
+export function publicArtifactUrl(token: string, artifactId: string): string {
+  return `${API_BASE}/public/shares/${encodeURIComponent(token)}/artifacts/${encodeURIComponent(artifactId)}`;
+}
+
+export function publicZipUrl(token: string): string {
+  return `${API_BASE}/public/shares/${encodeURIComponent(token)}/zip`;
 }
