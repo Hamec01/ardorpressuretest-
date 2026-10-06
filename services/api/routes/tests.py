@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from services.api.database import get_db
+from services.api.permissions import require_reader, require_writer
 from services.api.models import Artifact, Bundle, Pipe, PlannedTestPipe, PressureTest, PressureTestRecordLog, TestRevision, User
 from services.api.routes.planned_tests import canonicalize_pipecloud_source_data
 from services.api.schemas import (
@@ -37,7 +38,7 @@ def _normalize_ptr_identifier(value: str) -> str:
 def list_ptr_source_identifiers(
     q: str = "",
     limit: int = 50,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), access_user=Depends(require_reader),
 ):
     """List pipe and bundle identifiers available for a PTR from active primary revisions."""
     search = f"%{q.strip()}%"
@@ -72,7 +73,7 @@ def list_ptr_source_identifiers(
 
 
 @router.post("/resolve-ptr-sources")
-def resolve_ptr_sources(payload: PtrSourceResolveRequest, db: Session = Depends(get_db)):
+def resolve_ptr_sources(payload: PtrSourceResolveRequest, db: Session = Depends(get_db), access_user=Depends(require_reader)):
     """Find log revisions by an exact pipe or bundle number without changing source data."""
     requested = {
         _normalize_ptr_identifier(identifier)
@@ -227,7 +228,7 @@ def list_or_search_pressure_tests(
     pipecloud_filter: Optional[str] = Query(None, description="Фильтр: all, added, not_added"),
     skip: int = 0,
     limit: int = 50,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), access_user=Depends(require_reader)
 ):
     """
     Возвращает список всех неархивированных испытаний с поддержкой интеллектуального поиска по:
@@ -324,7 +325,7 @@ def list_or_search_pressure_tests(
     return tests
     
 @router.get("/trash", response_model=List[PressureTestResponse])
-def list_trash(db: Session = Depends(get_db)):
+def list_trash(db: Session = Depends(get_db), access_user=Depends(require_reader)):
     return (
         db.query(PressureTest)
         .filter(PressureTest.is_archived == True)
@@ -335,7 +336,7 @@ def list_trash(db: Session = Depends(get_db)):
 
 
 @router.get("/{log_no}", response_model=PressureTestResponse)
-def get_pressure_test_by_log(log_no: str, db: Session = Depends(get_db)):
+def get_pressure_test_by_log(log_no: str, db: Session = Depends(get_db), access_user=Depends(require_reader)):
     """Возвращает карточку испытания и историю ревизий по Log No."""
     normalized = normalize_log_no(log_no)
     test = (
@@ -356,7 +357,7 @@ def get_pressure_test_by_log(log_no: str, db: Session = Depends(get_db)):
 def update_pipecloud_status(
     log_no: str,
     payload: PipeCloudUpdateRequest,
-    current_user: User = Depends(require_authenticated_user),
+    current_user: User = Depends(require_writer),
     db: Session = Depends(get_db)
 ):
     """
@@ -413,7 +414,7 @@ def update_pipecloud_status(
 
 
 @router.get("/artifacts/{artifact_id}/file")
-def get_artifact_file(artifact_id: str, db: Session = Depends(get_db)):
+def get_artifact_file(artifact_id: str, db: Session = Depends(get_db), access_user=Depends(require_reader)):
     """Отдаёт бинарное содержимое артефакта (график PNG, XLSX, PDF, фото, CSV)."""
     artifact = db.query(Artifact).filter(Artifact.id == artifact_id).first()
     if not artifact:
@@ -466,7 +467,7 @@ def delete_artifact(
 
 
 @router.get("/{log_no}/revisions/{revision_id}/zip")
-def download_revision_zip(log_no: str, revision_id: str, db: Session = Depends(get_db)):
+def download_revision_zip(log_no: str, revision_id: str, db: Session = Depends(get_db), access_user=Depends(require_reader)):
     """Генерирует и отдаёт ZIP-архив со всеми артефактами указанной ревизии."""
     norm_log = normalize_log_no(log_no)
     rev = (
@@ -512,7 +513,7 @@ def update_revision_metadata(
     log_no: str,
     revision_id: str,
     payload: TestMetadataUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), access_user=Depends(require_writer)
 ):
     """
     Редактирование метаданных испытания (Log No., оператор, проект, система, инспекционный номер, трубы):
@@ -800,7 +801,7 @@ async def attach_photos_to_test(
     log_no: str,
     photos: List[UploadFile] = File(..., description="Фотографии манометра или труб"),
     category: str = Form("other", description="Категория: gauge, pipe, other"),
-    current_user: User = Depends(require_authenticated_user),
+    current_user: User = Depends(require_writer),
     db: Session = Depends(get_db)
 ):
     """

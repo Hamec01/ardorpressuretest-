@@ -12,6 +12,7 @@ from services.api.auth import get_current_user, require_role
 from services.api.audit import log_audit_event
 from services.api.config import settings
 from services.api.database import get_db
+from services.api.permissions import require_reader, require_writer
 from services.api.models import (
     Artifact,
     PressureTest,
@@ -214,7 +215,7 @@ def list_records(
     status: Optional[str] = Query(None, description="Filter by status"),
     skip: int = 0,
     limit: int = 50,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), access_user=Depends(require_reader)
 ):
     """Возвращает список всех документов Pressure Test Record."""
     query = (
@@ -363,7 +364,7 @@ def create_record(
 
 
 @router.get("/{id}", response_model=RecordResponse)
-def get_record(id: str, db: Session = Depends(get_db)):
+def get_record(id: str, db: Session = Depends(get_db), access_user=Depends(require_reader)):
     """Возвращает детальную информацию по Pressure Test Record."""
     record = (
         db.query(PressureTestRecord)
@@ -854,7 +855,7 @@ async def upload_signed_copy(
 
 
 @router.get("/{id}/pdf")
-def export_official_record_pdf(id: str, db: Session = Depends(get_db)):
+def export_official_record_pdf(id: str, db: Session = Depends(get_db), access_user=Depends(require_reader)):
     """Генерирует и отдаёт официальный ARDOR Pressure Test Record (Official PDF)."""
     record = (
         db.query(PressureTestRecord)
@@ -879,7 +880,7 @@ def export_official_record_pdf(id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{id}/full-pdf")
-def export_full_composite_record_pdf(id: str, db: Session = Depends(get_db)):
+def export_full_composite_record_pdf(id: str, db: Session = Depends(get_db), access_user=Depends(require_reader)):
     """Генерирует и отдаёт полный составной документ (Official + Logs + Graphs + Photos + CSV Tables)."""
     record = (
         db.query(PressureTestRecord)
@@ -904,7 +905,7 @@ def export_full_composite_record_pdf(id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{id}/estimate-pages")
-def estimate_record_pages(id: str, db: Session = Depends(get_db)):
+def estimate_record_pages(id: str, db: Session = Depends(get_db), access_user=Depends(require_reader)):
     """Возвращает приблизительную / точную структуру страниц Official и Full Composite PDF."""
     record = (
         db.query(PressureTestRecord)
@@ -923,7 +924,7 @@ def estimate_record_pages(id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/verify/{verification_code}", response_model=VerificationResult)
-def verify_record_code(verification_code: str, db: Session = Depends(get_db)):
+def verify_record_code(verification_code: str, db: Session = Depends(get_db), access_user=Depends(require_reader)):
     """Внутренняя верификация подлинности документа по коду подтверждения."""
     record = db.query(PressureTestRecord).filter(
         PressureTestRecord.verification_code == verification_code,

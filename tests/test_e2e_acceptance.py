@@ -15,6 +15,9 @@ from wika_report.models import TestInput, CustomMetadata
 from wika_report.sync_queue import SyncQueue
 from wika_report.sync_client import SyncClient
 
+# Business-behaviour tests: run as a signed-in admin (access control is tested separately).
+pytestmark = pytest.mark.usefixtures("signed_in_admin")
+
 
 SAMPLE_CSV_CONTENT = """Date;Time;Pressure [bar];Temperature [°C];
 19.08.2026;10:00:00;15,20;21,5;

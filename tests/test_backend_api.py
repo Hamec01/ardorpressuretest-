@@ -10,6 +10,9 @@ from pathlib import Path
 from services.api.config import settings
 from services.api.storage import storage
 
+# Business-behaviour tests: run as a signed-in admin (access control is tested separately).
+pytestmark = pytest.mark.usefixtures("signed_in_admin")
+
 
 @pytest.fixture(autouse=True)
 def setup_db():

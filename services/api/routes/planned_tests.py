@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from services.api.audit import log_audit_event
 from services.api.auth import require_role
 from services.api.database import get_db
+from services.api.permissions import require_reader, require_writer
 from services.api.models import Pipe, PlannedTestList, PlannedTestPipe, PressureTest, TestRevision, User
 
 
@@ -214,7 +215,7 @@ def _get_active_list(list_id: str, db: Session) -> PlannedTestList:
 
 
 @router.get("/lists")
-def list_planned_lists(q: str = "", db: Session = Depends(get_db)):
+def list_planned_lists(q: str = "", db: Session = Depends(get_db), access_user=Depends(require_reader)):
     query = db.query(PlannedTestList).filter(PlannedTestList.is_archived == False)
     if q.strip():
         search = f"%{q.strip()}%"
@@ -293,7 +294,7 @@ def list_planned_pipes(
     list_id: str,
     q: str = "",
     bundle: str = "",
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db), access_user=Depends(require_reader),
 ):
     planned_list = _get_active_list(list_id, db)
     pipes = db.query(PlannedTestPipe).filter(PlannedTestPipe.planned_test_list_id == planned_list.id).all()

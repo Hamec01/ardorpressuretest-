@@ -412,6 +412,13 @@ export const translations = {
     share_panel_revoke_confirm: 'Revoke this link? Whoever has it will no longer be able to open the log.',
     share_failed: 'Could not create the link. Please try again.',
     share_copy_prompt: 'Copy the link:',
+    // Sign-in page (2026-10-06)
+    login_subtitle: 'Pressure test documentation for ARDOR employees.',
+    login_error_credentials: 'Wrong username or password.',
+    login_error_rate: 'Too many attempts. Try again in {minutes} min.',
+    login_error_generic: 'Sign-in failed. Check the connection and try again.',
+    login_no_account: 'No account or forgot the password? Ask your administrator.',
+    login_loading: 'Loading…',
   },
 
   fi: {
@@ -825,6 +832,13 @@ export const translations = {
     share_panel_revoke_confirm: 'Perutaanko linkki? Linkin saaneet eivät voi enää avata lokia.',
     share_failed: 'Linkin luonti epäonnistui. Yritä uudelleen.',
     share_copy_prompt: 'Kopioi linkki:',
+    // Sign-in page (2026-10-06)
+    login_subtitle: 'Painekoedokumentaatio ARDORin työntekijöille.',
+    login_error_credentials: 'Väärä käyttäjätunnus tai salasana.',
+    login_error_rate: 'Liian monta yritystä. Yritä uudelleen {minutes} min kuluttua.',
+    login_error_generic: 'Kirjautuminen epäonnistui. Tarkista yhteys ja yritä uudelleen.',
+    login_no_account: 'Ei tunnusta tai unohtuiko salasana? Ota yhteyttä ylläpitäjään.',
+    login_loading: 'Ladataan…',
   },
 
   ru: {
@@ -1238,5 +1252,12 @@ export const translations = {
     share_panel_revoke_confirm: 'Отозвать ссылку? Те, у кого она есть, больше не смогут открыть лог.',
     share_failed: 'Не удалось создать ссылку. Попробуйте ещё раз.',
     share_copy_prompt: 'Скопируйте ссылку:',
+    // Sign-in page (2026-10-06)
+    login_subtitle: 'Документация опрессовки для сотрудников ARDOR.',
+    login_error_credentials: 'Неверный логин или пароль.',
+    login_error_rate: 'Слишком много попыток. Повторите через {minutes} мин.',
+    login_error_generic: 'Не удалось войти. Проверьте связь и попробуйте ещё раз.',
+    login_no_account: 'Нет аккаунта или забыли пароль? Обратитесь к администратору.',
+    login_loading: 'Загрузка…',
   }
 };

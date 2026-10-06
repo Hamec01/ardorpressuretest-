@@ -102,9 +102,9 @@ export const App: React.FC = () => {
     setSelectedTest(createdTest);
   };
 
-  // Uploading is for admin/foreman; a guest is sent to sign in, a viewer gets no upload button.
+  // Uploading is for admin/foreman; a viewer gets no upload button (guests never reach App: AuthGate).
   const canEdit = user?.role === 'admin' || user?.role === 'foreman';
-  const newTestAction = canEdit ? () => setIsNewTestOpen(true) : user ? undefined : () => setIsLoginOpen(true);
+  const newTestAction = canEdit ? () => setIsNewTestOpen(true) : undefined;
 
   return (
     <div className="app-container">

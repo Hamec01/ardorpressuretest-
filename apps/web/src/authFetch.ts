@@ -1,4 +1,5 @@
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+export const SESSION_EXPIRED_EVENT = 'ardor-session-expired';
 let transitionalBearerToken: string | null = null;
 
 // HTTP staging cannot receive the production-only Secure browser cookie. Keep the
@@ -35,11 +36,19 @@ export async function authFetch(
     const csrfToken = readCsrfToken();
     if (csrfToken) headers.set('X-CSRF-Token', csrfToken);
   }
-  return window.fetch(input, {
+  const response = await window.fetch(input, {
     ...init,
     headers,
     credentials: 'same-origin',
   });
+  // A business request answered 401 means the session ended (expired, revoked, signed out
+  // elsewhere): the AuthGate shows the sign-in page again. Login and change-password use
+  // 401 for a wrong password, which is not an ended session.
+  const url = String(input);
+  if (response.status === 401 && !url.includes('/api/v1/auth/login') && !url.includes('/api/v1/auth/change-password')) {
+    window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+  }
+  return response;
 }
 
 /**

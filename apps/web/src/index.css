@@ -1521,6 +1521,23 @@ body {
   color: var(--text-muted);
 }
 
+.auth-form input[type='text'] {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset-40);
+  color: var(--text-primary);
+  font-size: 16px;
+}
+
+.auth-footnote {
+  margin-top: 0.4rem;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
 .auth-form .btn-primary {
   margin-top: 0.6rem;
   min-height: 48px;

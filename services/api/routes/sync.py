@@ -2,6 +2,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 from services.api.database import get_db
+from services.api.permissions import require_reader, require_writer
 from services.api.models import Artifact, Bundle, Pipe, PressureTest, TestRevision
 from services.api.schemas import SyncSessionRequest, SyncSessionResponse
 from services.api.storage import storage
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/api/v1/sync", tags=["Synchronization"])
 
 
 @router.post("/sessions", response_model=SyncSessionResponse)
-def create_sync_session(req: SyncSessionRequest, db: Session = Depends(get_db)):
+def create_sync_session(req: SyncSessionRequest, db: Session = Depends(get_db), access_user=Depends(require_writer)):
     """
     Шаг 1 протокола синхронизации:
     - Проверяет существование лога и ревизии;
@@ -63,7 +64,7 @@ async def upload_sync_artifact(
     log_no: str = Form(...),
     relative_path: str = Form(...),
     sha256: str = Form(...),
-    file: UploadFile = File(...)
+    file: UploadFile = File(...), access_user=Depends(require_writer)
 ):
     """
     Шаг 2 протокола синхронизации:
@@ -79,7 +80,7 @@ async def upload_sync_artifact(
 def complete_sync_session(
     revision_id: str,
     req: SyncSessionRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), access_user=Depends(require_writer)
 ):
     """
     Шаг 3 протокола синхронизации (Атомарная фиксация):

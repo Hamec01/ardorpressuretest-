@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import { PublicLogView } from './components/PublicLogView';
 import { SetPasswordPage } from './components/SetPasswordPage';
+import { AuthGate } from './components/AuthGate';
 import { AuthProvider } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { ThemeProvider, applyStoredThemeSync } from './context/ThemeContext';
@@ -45,7 +46,9 @@ if (setPasswordMatch) {
       <ThemeProvider>
         <AuthProvider>
           <LanguageProvider>
-            <App />
+            <AuthGate>
+              <App />
+            </AuthGate>
           </LanguageProvider>
         </AuthProvider>
       </ThemeProvider>

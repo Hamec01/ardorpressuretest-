@@ -10,6 +10,9 @@ from services.api.main import app
 from services.api.auth import seed_default_users
 from wika_report.ptr_generator import generate_ptr_pdf
 
+# Business-behaviour tests: run as a signed-in admin (access control is tested separately).
+pytestmark = pytest.mark.usefixtures("signed_in_admin")
+
 
 @pytest.fixture(autouse=True)
 def setup_db():

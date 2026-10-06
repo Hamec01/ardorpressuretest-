@@ -1,5 +1,16 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authFetch, setTransitionalBearerToken } from '../authFetch';
+import { authFetch, SESSION_EXPIRED_EVENT, setTransitionalBearerToken } from '../authFetch';
+
+/** Sign-in failure with the HTTP status (401 wrong credentials, 429 too many attempts). */
+export class LoginError extends Error {
+  status: number;
+  retryAfterSeconds: number | null;
+  constructor(status: number, message: string, retryAfterSeconds: number | null) {
+    super(message);
+    this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
 
 export interface AuthUser {
   id: string;
@@ -42,6 +53,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     checkAuth();
+
+    const onExpired = () => {
+      setTransitionalBearerToken(null);
+      setUser(null);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -56,7 +74,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Login failed');
+      const retryAfter = Number(res.headers.get('Retry-After'));
+      throw new LoginError(res.status, err.detail || 'Login failed', Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null);
     }
 
     const data = await res.json();

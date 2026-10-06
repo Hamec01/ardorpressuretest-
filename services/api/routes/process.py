@@ -10,6 +10,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session, joinedload
 from services.api.database import get_db
+from services.api.permissions import require_reader, require_writer
 from services.api.models import Artifact, Bundle, Pipe, PressureTest, TestRevision
 from services.api.schemas import PressureTestResponse
 from services.api.storage import storage
@@ -154,7 +155,7 @@ async def process_csv_web(
     pipe_photos: List[UploadFile] = File([], description="Фотографии труб"),
     gauge_photos: List[UploadFile] = File([], description="Фотографии манометра"),
     other_photos: List[UploadFile] = File([], description="Прочие фотографии"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), access_user=Depends(require_writer)
 ):
     """
     Веб-обработка CSV через единое каноническое ядро WIKA CPG1500:
@@ -385,7 +386,7 @@ async def process_csv_web(
 async def upload_package_or_zip(
     package_file: Optional[UploadFile] = File(None, description="ZIP-архив с логом или ревизией"),
     files: List[UploadFile] = File([], description="Файлы из загруженной папки"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db), access_user=Depends(require_writer)
 ):
     """
     Универсальная загрузка испытания целой папкой или ZIP-архивом:

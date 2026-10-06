@@ -76,7 +76,9 @@ def test_mutating_controls_are_only_shown_to_admin_and_foreman():
     plans = _read("components", "PlannedTestsTab.tsx")
     assert "{canEdit && <form onSubmit={handleCreatePlan}" in plans
     app = _read("App.tsx")
-    assert "const newTestAction = canEdit ? () => setIsNewTestOpen(true) : user ? undefined : () => setIsLoginOpen(true);" in app
+    # Guests never reach App since stage 3 (AuthGate); viewers get no upload button.
+    assert "const newTestAction = canEdit ? () => setIsNewTestOpen(true) : undefined;" in app
+    assert "<AuthGate>" in _read("main.tsx")
 
 
 def test_file_actions_are_finger_sized_on_phones():
