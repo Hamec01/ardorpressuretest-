@@ -12,6 +12,7 @@ interface NewTestModalProps {
    * ZIP tab is hidden, and the CSV file becomes required. Photos already attached to the draft
    * are carried forward automatically by the backend — nothing to re-upload here. */
   existingTest?: PressureTest;
+  existingCsvMode?: 'attach' | 'replace';
 }
 
 function draftMetadataFor(test?: PressureTest) {
@@ -20,8 +21,9 @@ function draftMetadataFor(test?: PressureTest) {
   return { rev, meta: rev?.metadata_json || {} };
 }
 
-export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, existingTest }) => {
+export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, existingTest, existingCsvMode = 'attach' }) => {
   const isAttachMode = Boolean(existingTest);
+  const isReplacementMode = isAttachMode && existingCsvMode === 'replace';
   const { rev: draftRev, meta: draftMeta } = draftMetadataFor(existingTest);
 
   const [uploadMode, setUploadMode] = useState<'package' | 'form'>(isAttachMode ? 'form' : 'package');
@@ -125,6 +127,9 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
       setErrorMsg('Выберите CSV-файл, чтобы завершить черновик. Метаданные и фото уже сохранены и никуда не денутся.');
       return;
     }
+    if (isReplacementMode && !window.confirm('Новый CSV создаст новую ревизию и новый график. Предыдущая ревизия останется в истории. Продолжить?')) {
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -198,7 +203,11 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
             <div className="brand-logo-icon" style={{ width: '32px', height: '32px', fontSize: '1rem' }}>+</div>
             <span style={{ fontSize: '1.25rem', fontWeight: 700 }}>
-              {isAttachMode ? `Прикрепить CSV к черновику (Log ${existingTest?.log_no})` : 'Upload & Process Test Log (Загрузка лога)'}
+              {isReplacementMode
+                ? `Заменить CSV (Log ${existingTest?.log_no})`
+                : isAttachMode
+                  ? `Прикрепить CSV к черновику (Log ${existingTest?.log_no})`
+                  : 'Upload & Process Test Log (Загрузка лога)'}
             </span>
             {showDraftFrame && (
               <span
@@ -277,7 +286,9 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
 
         {isAttachMode && (
           <div style={{ margin: '1rem 1.5rem 0', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid var(--accent-cyan)', color: 'var(--text-secondary)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', fontSize: '0.85rem' }}>
-            Метаданные и уже прикреплённые фото подтянуты из черновика — можно поправить при необходимости. Осталось выбрать CSV-файл измерений.
+            {isReplacementMode
+              ? 'Выберите правильный CSV. После обработки будет создана новая ревизия с новым графиком; текущая ревизия останется в истории.'
+              : 'Метаданные и уже прикреплённые фото подтянуты из черновика — можно поправить при необходимости. Осталось выбрать CSV-файл измерений.'}
           </div>
         )}
 
@@ -370,7 +381,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
               }}
             >
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--accent-cyan)' }}>
-                1. WIKA CPG1500 CSV File {isAttachMode ? '(обязательно, чтобы завершить черновик)' : '(необязательно для черновика)'}
+                1. WIKA CPG1500 CSV File {isReplacementMode ? '(обязательно для замены)' : isAttachMode ? '(обязательно, чтобы завершить черновик)' : '(необязательно для черновика)'}
               </label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                 <label className="btn-primary" style={{ cursor: 'pointer', fontSize: '0.85rem', padding: '0.5rem 1rem' }}>
@@ -382,7 +393,9 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
                   {csvFile
                     ? `Selected: ${csvFile.name} (${(csvFile.size / 1024).toFixed(1)} KB)`
                     : isAttachMode
-                      ? 'Выберите CSV-файл измерений для этого лога'
+                      ? isReplacementMode
+                        ? 'Выберите правильный CSV-файл измерений для этого лога'
+                        : 'Выберите CSV-файл измерений для этого лога'
                       : 'CSV не выбран — можно сохранить как черновик и добавить его позже'}
                 </span>
               </div>
@@ -403,7 +416,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
                     placeholder="e.g. 014FED"
                     value={logNo}
                     readOnly={isAttachMode}
-                    title={isAttachMode ? 'Log No. нельзя менять при прикреплении CSV к существующему черновику' : undefined}
+                    title={isAttachMode ? 'Log No. нельзя менять при обработке CSV существующего лога' : undefined}
                     onChange={(e) => !isAttachMode && setLogNo(e.target.value)}
                     required
                   />
@@ -519,7 +532,7 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
             {/* Section 4: Photo Attachments */}
             <div style={{ background: 'var(--bg-inset-60)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--accent-cyan)' }}>
-                4. Evidence Photos {isAttachMode ? '(необязательно — фото из черновика уже сохранены)' : ''}
+                4. Evidence Photos {isAttachMode ? '(необязательно — ранее добавленные фото будут сохранены)' : ''}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
@@ -569,12 +582,17 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
                 {isSubmitting ? (
                   <>
                     <div className="animate-spin" style={{ width: '16px', height: '16px', border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                    <span>{isDraftMode ? 'Сохранение черновика...' : isAttachMode ? 'Прикрепление CSV и обработка...' : 'Processing CSV & Generating Artifacts...'}</span>
+                    <span>{isDraftMode ? 'Сохранение черновика...' : isReplacementMode ? 'Создание новой ревизии и графика...' : isAttachMode ? 'Прикрепление CSV и обработка...' : 'Processing CSV & Generating Artifacts...'}</span>
                   </>
                 ) : isDraftMode ? (
                   <>
                     <PenSquare size={16} />
                     <span>Сохранить как черновик (без CSV)</span>
+                  </>
+                ) : isReplacementMode ? (
+                  <>
+                    <Check size={16} />
+                    <span>Заменить CSV и создать новый график</span>
                   </>
                 ) : isAttachMode ? (
                   <>

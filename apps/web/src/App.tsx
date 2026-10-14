@@ -39,7 +39,7 @@ export const App: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [selectedTest, setSelectedTest] = useState<PressureTest | null>(null);
   const [isNewTestOpen, setIsNewTestOpen] = useState<boolean>(false);
-  const [attachCsvTarget, setAttachCsvTarget] = useState<PressureTest | null>(null);
+  const [existingCsvTarget, setExistingCsvTarget] = useState<{ test: PressureTest; mode: 'attach' | 'replace' } | null>(null);
   const [isLoginOpen, setIsLoginOpen] = useState<boolean>(false);
   const [isAuditOpen, setIsAuditOpen] = useState<boolean>(false);
 
@@ -352,7 +352,11 @@ export const App: React.FC = () => {
             loadData(searchQuery);
           }}
           onAttachCsv={(t) => {
-            setAttachCsvTarget(t);
+            setExistingCsvTarget({ test: t, mode: 'attach' });
+            setSelectedTest(null);
+          }}
+          onReplaceCsv={(t) => {
+            setExistingCsvTarget({ test: t, mode: 'replace' });
             setSelectedTest(null);
           }}
         />
@@ -365,12 +369,13 @@ export const App: React.FC = () => {
         />
       )}
 
-      {attachCsvTarget && (
+      {existingCsvTarget && (
         <NewTestModal
-          existingTest={attachCsvTarget}
-          onClose={() => setAttachCsvTarget(null)}
+          existingTest={existingCsvTarget.test}
+          existingCsvMode={existingCsvTarget.mode}
+          onClose={() => setExistingCsvTarget(null)}
           onSuccess={(created) => {
-            setAttachCsvTarget(null);
+            setExistingCsvTarget(null);
             loadData(searchQuery);
             setSelectedTest(created);
           }}

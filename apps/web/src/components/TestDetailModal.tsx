@@ -37,9 +37,10 @@ interface TestDetailModalProps {
   /** Opens the "attach CSV" flow (NewTestModal in attach mode) for this test — only ever called
    * for a draft's primary revision, see the button below. */
   onAttachCsv?: (test: PressureTest) => void;
+  onReplaceCsv?: (test: PressureTest) => void;
 }
 
-export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose, onUpdate, onAttachCsv }) => {
+export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose, onUpdate, onAttachCsv, onReplaceCsv }) => {
   const [currentTest, setCurrentTest] = useState<PressureTest>(test);
   const [selectedRevIndex, setSelectedRevIndex] = useState<number>(0);
   const [copiedSha, setCopiedSha] = useState<string | null>(null);
@@ -68,6 +69,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   const { user } = useAuth();
   // Guests and viewers only read and download; mutations are for admin/foreman (ADR-005).
   const canEdit = user?.role === 'admin' || user?.role === 'foreman';
+  const isAdmin = user?.role === 'admin';
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isTogglingPipeCloud, setIsTogglingPipeCloud] = useState<boolean>(false);
   const [deletingArtifactId, setDeletingArtifactId] = useState<string | null>(null);
@@ -707,6 +709,18 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.5rem' }}>
+                {isAdmin && onReplaceCsv && (
+                  <button
+                    type="button"
+                    onClick={() => onReplaceCsv(currentTest)}
+                    disabled={isSaving}
+                    className="filter-pill"
+                    style={{ background: 'rgba(245, 158, 11, 0.14)', color: 'var(--accent-amber)', border: '1px solid var(--accent-amber)', padding: '0.5rem 1.2rem', cursor: 'pointer' }}
+                    title="Создать новую ревизию с правильным CSV и графиком"
+                  >
+                    Заменить CSV
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}

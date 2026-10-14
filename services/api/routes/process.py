@@ -196,10 +196,8 @@ async def process_csv_web(
             other_photos=other_photos,
         )
 
-    # Attach-CSV-to-draft support: look up any existing draft revision BEFORE building the
-    # TestInput DTO below, so a carried-forward pipe/bundle list (when the caller didn't
-    # resupply one) is already baked into the core pipeline's own manifest/metadata_json —
-    # not just into the Pipe/Bundle DB rows added afterwards. Explicit input still always wins.
+    # Look up the active revision before building TestInput, so carried-forward data is
+    # included in the new revision's manifest as well as its database rows.
     existing_test_for_log = db.query(PressureTest).filter(
         PressureTest.log_no == norm_log,
         PressureTest.is_archived == False,
@@ -212,9 +210,20 @@ async def process_csv_web(
             .first()
         )
     was_draft = bool(prior_primary_rev and prior_primary_rev.status == "draft")
-    prior_photo_artifacts = list(prior_primary_rev.artifacts) if was_draft else []
-    prior_pipe_numbers = [p.pipe_number for p in prior_primary_rev.pipes] if was_draft else []
-    prior_bundle_numbers = [b.bundle_number for b in prior_primary_rev.bundles] if was_draft else []
+    is_csv_replacement = bool(prior_primary_rev and not was_draft)
+    if is_csv_replacement and access_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can replace the CSV of an existing completed log.",
+        )
+
+    carries_forward = was_draft or is_csv_replacement
+    prior_photo_artifacts = (
+        [artifact for artifact in prior_primary_rev.artifacts if artifact.file_type == "photo"]
+        if carries_forward else []
+    )
+    prior_pipe_numbers = [p.pipe_number for p in prior_primary_rev.pipes] if carries_forward else []
+    prior_bundle_numbers = [b.bundle_number for b in prior_primary_rev.bundles] if carries_forward else []
 
     effective_pipe_numbers = pipe_numbers or prior_pipe_numbers
     effective_bundle_numbers = bundle_numbers or prior_bundle_numbers
@@ -330,11 +339,11 @@ async def process_csv_web(
         for b in effective_bundle_numbers:
             db.add(Bundle(test_revision_id=rev.id, bundle_number=b))
 
-        # Carry forward the draft's photo artifacts (physical copy into this revision's own
-        # storage location, new Artifact row) — new photos submitted in this same request are
-        # unaffected and simply added alongside them.
+        # Carry forward photo evidence into this revision's own storage location. The original
+        # revision remains intact, and photos newly submitted with this request are added by the
+        # processing pipeline alongside the copied evidence.
         carried_photo_count = 0
-        if was_draft:
+        if carries_forward:
             for old_art in prior_photo_artifacts:
                 old_path = storage.get_file_path(old_art.storage_key)
                 if not old_path or not old_path.exists():
@@ -365,6 +374,24 @@ async def process_csv_web(
                 details={
                     "log_no": norm_log,
                     "draft_revision_id": prior_primary_rev.revision_id,
+                    "new_revision_id": rev.revision_id,
+                    "carried_forward_photos": carried_photo_count,
+                    "carried_forward_pipe_numbers": bool(not pipe_numbers and prior_pipe_numbers),
+                    "carried_forward_bundle_numbers": bool(not bundle_numbers and prior_bundle_numbers),
+                    "source": "web",
+                },
+            )
+        elif is_csv_replacement:
+            log_audit_event(
+                db,
+                action="csv_replaced",
+                entity_type="test_revision",
+                entity_id=rev.id,
+                actor_id=access_user.id,
+                actor_name=access_user.full_name or access_user.username,
+                details={
+                    "log_no": norm_log,
+                    "replaced_revision_id": prior_primary_rev.revision_id,
                     "new_revision_id": rev.revision_id,
                     "carried_forward_photos": carried_photo_count,
                     "carried_forward_pipe_numbers": bool(not pipe_numbers and prior_pipe_numbers),

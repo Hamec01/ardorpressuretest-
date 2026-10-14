@@ -183,6 +183,55 @@ def test_attach_csv_records_audit_event():
         db.close()
 
 
+def test_admin_csv_replacement_creates_new_revision_and_graph():
+    client = TestClient(app)
+    original = _attach_csv(client, "REPLACE001", extra_form={"pipe_numbers_raw": "122153/41"})
+    assert original.status_code == 200, original.text
+    original_data = original.json()
+    original_revision = original_data["revisions"][0]
+
+    replacement = _attach_csv(client, "REPLACE001")
+    assert replacement.status_code == 200, replacement.text
+    data = replacement.json()
+
+    assert len(data["revisions"]) == 2, "replacing a CSV must retain the original revision"
+    primary_revision = next(revision for revision in data["revisions"] if revision["is_primary"])
+    previous_revision = next(revision for revision in data["revisions"] if not revision["is_primary"])
+    assert primary_revision["revision_id"] != original_revision["revision_id"]
+    assert previous_revision["revision_id"] == original_revision["revision_id"]
+    assert any(artifact["file_type"] == "source_csv" for artifact in primary_revision["artifacts"])
+    assert any(artifact["file_type"] == "graph_png" for artifact in primary_revision["artifacts"])
+
+    db = SessionLocal()
+    try:
+        event = db.query(AuditEvent).filter(AuditEvent.action == "csv_replaced").one()
+        assert event.details_json["log_no"] == "REPLACE001"
+        assert event.details_json["replaced_revision_id"] == original_revision["revision_id"]
+        assert event.details_json["new_revision_id"] == primary_revision["revision_id"]
+        assert event.actor_name == "Test Admin"
+    finally:
+        db.close()
+
+
+def test_foreman_cannot_replace_csv_of_completed_log():
+    from services.api.models import User
+    from services.api.permissions import require_writer
+
+    client = TestClient(app)
+    created = _attach_csv(client, "REPLACE002")
+    assert created.status_code == 200, created.text
+
+    def foreman() -> User:
+        return User(id="foreman-id", username="test-foreman", full_name="Test Foreman", hashed_password="!", role="foreman", is_active=True)
+
+    app.dependency_overrides[require_writer] = foreman
+    res = _attach_csv(client, "REPLACE002")
+    assert res.status_code == 403, res.text
+
+    app.dependency_overrides.pop(require_writer, None)
+    assert len(client.get("/api/v1/tests/REPLACE002").json()["revisions"]) == 1
+
+
 def test_new_test_from_scratch_with_csv_unaffected_no_audit_event():
     """A brand-new Log No. going straight to a complete revision (no prior draft) must behave
     exactly as before this feature — no carry-forward, no csv_attached_to_draft audit event."""

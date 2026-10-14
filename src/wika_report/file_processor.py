@@ -72,7 +72,7 @@ def process_test_input(
     """
     csv_file = test_input.csv_path
     normalized_log = normalize_log_no(test_input.log_no, fallback_name=csv_file.stem)
-    revision_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    revision_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
     warnings: List[str] = []
 
     log_dir = output_base_dir / normalized_log
