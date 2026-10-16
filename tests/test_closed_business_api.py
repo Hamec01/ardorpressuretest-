@@ -85,3 +85,28 @@ def test_public_share_links_still_work_without_a_session():
     guest = TestClient(app)
     token = guest.get("/api/v1/public/legacy/067FED").json()["token"]
     assert guest.get(f"/api/v1/public/shares/{token}").status_code == 200
+
+
+def test_list_returns_every_log_when_asked_and_bounds_the_limit():
+    """Statistics showed only 50 logs: the web app must be able to load all of them."""
+    with SessionLocal() as db:
+        for i in range(60):
+            test = PressureTest(log_no=f"{i:03d}BULK")
+            db.add(test)
+            db.flush()
+            db.add(TestRevision(pressure_test_id=test.id, revision_id="r1", metadata_json={"pipe_numbers": [f"9{i:03d}/1"]}, metrics_json={}))
+        db.commit()
+    client = _viewer()
+    assert len(client.get("/api/v1/tests").json()) == 50  # default for other clients
+    assert len(client.get("/api/v1/tests", params={"limit": 10000}).json()) == 61
+    assert client.get("/api/v1/tests", params={"limit": 10001}).status_code == 422
+    assert client.get("/api/v1/tests", params={"limit": 0}).status_code == 422
+
+
+def test_web_app_requests_all_logs():
+    from pathlib import Path
+    api = (Path(__file__).resolve().parents[1] / "apps" / "web" / "src" / "api.ts").read_text(encoding="utf-8")
+    body = api[api.index("export async function fetchPressureTests"):]
+    body = body[:body.index("\n}\n")]
+    assert "params.append('limit', String(ALL_TESTS_LIMIT));" in body
+    assert "export const ALL_TESTS_LIMIT = 10000;" in api

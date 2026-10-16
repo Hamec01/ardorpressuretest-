@@ -23,6 +23,9 @@ from services.api.auth import require_role, require_authenticated_user
 from services.api.audit import log_audit_event
 from wika_report.models import normalize_log_no
 
+# Upper bound for one list request; the web app asks for all logs at once.
+MAX_LIST_LIMIT = 10000
+
 router = APIRouter(prefix="/api/v1/tests", tags=["Pressure Tests"])
 
 
@@ -226,8 +229,9 @@ def list_or_search_pressure_tests(
     bundle: Optional[str] = Query(None, description="Фильтр по номеру bundle"),
     pipe: Optional[str] = Query(None, description="Фильтр по номеру трубы"),
     pipecloud_filter: Optional[str] = Query(None, description="Фильтр: all, added, not_added"),
-    skip: int = 0,
-    limit: int = 50,
+    skip: int = Query(0, ge=0),
+    # The web app loads every log (list + statistics); 50 stays the default for other clients.
+    limit: int = Query(50, ge=1, le=MAX_LIST_LIMIT),
     db: Session = Depends(get_db), access_user=Depends(require_reader)
 ):
     """

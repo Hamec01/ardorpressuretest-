@@ -49,6 +49,9 @@ export const EMPTY_PRESSURE_TEST_FILTERS: PressureTestFilters = {
   pipe: '',
 };
 
+/** Matches MAX_LIST_LIMIT in services/api/routes/tests.py. */
+export const ALL_TESTS_LIMIT = 10000;
+
 export async function fetchPressureTests(query?: string, pipecloudFilter?: string, filters: PressureTestFilters = EMPTY_PRESSURE_TEST_FILTERS): Promise<PressureTest[]> {
   const params = new URLSearchParams();
   if (query && query.trim()) params.append('q', query.trim());
@@ -58,6 +61,8 @@ export async function fetchPressureTests(query?: string, pipecloudFilter?: strin
   if (filters.operator.trim()) params.append('operator', filters.operator.trim());
   if (filters.bundle.trim()) params.append('bundle', filters.bundle.trim());
   if (filters.pipe.trim()) params.append('pipe', filters.pipe.trim());
+  // Load every log: the list and the statistics must not stop at the API default of 50.
+  params.append('limit', String(ALL_TESTS_LIMIT));
 
   const qs = params.toString();
   const url = qs ? `${API_BASE}/tests?${qs}` : `${API_BASE}/tests`;
