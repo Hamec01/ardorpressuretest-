@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from services.api.database import get_db
+from services.api.image_thumbnails import ThumbnailProcessingError, create_webp_thumbnail
 from services.api.permissions import require_reader, require_writer
 from services.api.models import Artifact, Bundle, Pipe, PlannedTestPipe, PressureTest, PressureTestRecordLog, TestRevision, User
 from services.api.routes.planned_tests import canonicalize_pipecloud_source_data
@@ -442,6 +443,34 @@ def get_artifact_file(artifact_id: str, db: Session = Depends(get_db), access_us
         media_type=media_type,
         filename=artifact.name,
         content_disposition_type="inline" if is_inline else "attachment"
+    )
+
+
+@router.get("/artifacts/{artifact_id}/thumbnail")
+def get_artifact_thumbnail(artifact_id: str, db: Session = Depends(get_db), access_user=Depends(require_reader)):
+    artifact = db.query(Artifact).filter(Artifact.id == artifact_id).first()
+    if not artifact or artifact.file_type != "photo":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo artifact not found.")
+
+    file_path = storage.get_file_path(artifact.storage_key)
+    if not file_path or not file_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Photo file missing from storage.")
+
+    try:
+        thumbnail = create_webp_thumbnail(file_path)
+    except ThumbnailProcessingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="This photo cannot be previewed.",
+        ) from exc
+
+    return Response(
+        content=thumbnail,
+        media_type="image/webp",
+        headers={
+            "Cache-Control": "private, max-age=3600",
+            "Vary": "Cookie",
+        },
     )
 
 

@@ -15,7 +15,7 @@ import {
   Moon
 } from 'lucide-react';
 import { PublicLog } from '../types';
-import { fetchPublicShare, publicArtifactUrl, publicZipUrl, resolveLegacyShare } from '../api';
+import { fetchPublicShare, publicArtifactThumbnailUrl, publicArtifactUrl, publicZipUrl, resolveLegacyShare } from '../api';
 import { useTheme } from '../context/ThemeContext';
 import { useI18n } from '../context/LanguageContext';
 import { Language } from '../i18n';
@@ -230,7 +230,7 @@ export const PublicLogView: React.FC<PublicLogViewProps> = ({ token, legacyLogNo
                         title={t('image_open_full')}
                         style={{ position: 'relative', display: 'block', height: '130px', padding: 0, borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-color)', background: 'var(--bg-inset-80)', cursor: 'zoom-in' }}
                       >
-                        <img src={fileUrl(photo.id)} alt={photo.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+                        <img src={publicArtifactThumbnailUrl(linkToken || '', photo.id)} alt={photo.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
                         <span style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'var(--bg-inset-85)', padding: '3px 6px', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                           {isGauge ? <Gauge size={12} color="var(--accent-cyan)" /> : isPipe ? <Pipette size={12} color="var(--accent-cyan)" /> : null}
                           <span style={{ fontSize: '12px', color: 'var(--accent-cyan)', fontWeight: 600 }}>

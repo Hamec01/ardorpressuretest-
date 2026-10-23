@@ -223,6 +223,10 @@ export function getArtifactFileUrl(artifactId: string): string {
   return `${API_BASE}/tests/artifacts/${encodeURIComponent(artifactId)}/file`;
 }
 
+export function getArtifactThumbnailUrl(artifactId: string): string {
+  return `${API_BASE}/tests/artifacts/${encodeURIComponent(artifactId)}/thumbnail`;
+}
+
 export async function deleteArtifact(artifactId: string): Promise<PressureTest> {
   const res = await authFetch(`${API_BASE}/tests/artifacts/${encodeURIComponent(artifactId)}`, {
     method: 'DELETE',
@@ -412,6 +416,10 @@ export async function resolveLegacyShare(logNo: string): Promise<{ token: string
 
 export function publicArtifactUrl(token: string, artifactId: string): string {
   return `${API_BASE}/public/shares/${encodeURIComponent(token)}/artifacts/${encodeURIComponent(artifactId)}`;
+}
+
+export function publicArtifactThumbnailUrl(token: string, artifactId: string): string {
+  return `${API_BASE}/public/shares/${encodeURIComponent(token)}/artifacts/${encodeURIComponent(artifactId)}/thumbnail`;
 }
 
 export function publicZipUrl(token: string): string {

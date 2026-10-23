@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from services.api.auth import require_role
 from services.api.config import settings
 from services.api.database import get_db
+from services.api.image_thumbnails import ThumbnailProcessingError, create_webp_thumbnail
 from services.api.models import Artifact, AuditEvent, PressureTest, PublicShare, TestRevision, User
 from services.api.share_preview import cached_preview, description
 from services.api.shares import legacy_share_url, share_id_from_token, share_token, share_url
@@ -283,6 +284,36 @@ def get_public_artifact(token: str, artifact_id: str, db: Session = Depends(get_
         content_disposition_type="inline" if inline else "attachment",
         headers=PUBLIC_HEADERS,
     )
+
+
+@router.get("/api/v1/public/shares/{token}/artifacts/{artifact_id}/thumbnail")
+def get_public_artifact_thumbnail(token: str, artifact_id: str, db: Session = Depends(get_db)):
+    """A small preview of a photo in the shared log's current revision."""
+    _, test = _resolve_public(db, token)
+    revision = _current_revision(test)
+    artifact = next(
+        (
+            item for item in (revision.artifacts if revision else [])
+            if item.id == artifact_id and item.file_type == "photo"
+        ),
+        None,
+    )
+    if artifact is None:
+        raise _not_found()
+
+    file_path = storage.get_file_path(artifact.storage_key)
+    if not file_path or not file_path.exists():
+        raise _not_found()
+
+    try:
+        thumbnail = create_webp_thumbnail(file_path)
+    except ThumbnailProcessingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="This photo cannot be previewed.",
+        ) from exc
+
+    return Response(content=thumbnail, media_type="image/webp", headers=PUBLIC_HEADERS)
 
 
 @router.get("/api/v1/public/shares/{token}/zip")

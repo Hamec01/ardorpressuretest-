@@ -183,6 +183,9 @@ Project остаётся необязательной сущностью до у
 - `photo_metadata`: category `pipe|gauge|installation|other`.
 - `manifests`: schema version and generator versions.
 
+Web photo previews are generated as WebP images with a maximum edge of 300 pixels.
+The original artifact remains unchanged and is requested only when the user opens or downloads it.
+
 ### Pressure Test Records
 
 - `pressure_test_records`
