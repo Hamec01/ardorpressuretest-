@@ -67,17 +67,6 @@ export const RecordsTab: React.FC<RecordsTabProps> = ({ onSelectRecord, onNewRec
             </div>
           </div>
         </div>
-
-        {canEdit && (
-          <button
-            className="btn-primary"
-            onClick={onNewRecordClick}
-            style={{ background: 'var(--accent-amber)', color: '#0F172A', fontWeight: 700, padding: '0.5rem 1.1rem', fontSize: '0.85rem' }}
-          >
-            <Plus size={16} />
-            <span>{t('btn_create_ptr')}</span>
-          </button>
-        )}
       </div>
 
       {/* Search & Actions Bar */}

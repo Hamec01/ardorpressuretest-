@@ -2278,8 +2278,7 @@ body {
     margin-bottom: 0.85rem !important;
   }
 
-  .records-banner-desc,
-  .records-banner .btn-primary {
+  .records-banner-desc {
     display: none;
   }
 
