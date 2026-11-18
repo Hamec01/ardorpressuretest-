@@ -80,7 +80,11 @@ export const PublicLogView: React.FC<PublicLogViewProps> = ({ token, legacyLogNo
   const photoArtifacts = artifacts.filter((a) => a.file_type === 'photo');
   const otherArtifacts = artifacts.filter((a) => a !== graphArtifact && !photoArtifacts.includes(a));
   const subtitle = [meta.system, meta.project].filter(Boolean).join(' — ');
-  const evaluation = metrics.evaluation_status === 'PASS' || metrics.evaluation_status === 'FAIL' ? metrics.evaluation_status : t('not_evaluated');
+  const manualEvaluation = (meta as { manual_evaluation?: string }).manual_evaluation;
+  const evaluationValue = manualEvaluation === 'PASS' || manualEvaluation === 'FAIL'
+    ? manualEvaluation
+    : metrics.evaluation_status === 'PASS' || metrics.evaluation_status === 'FAIL' ? metrics.evaluation_status : '';
+  const evaluation = evaluationValue || t('not_evaluated');
   const dateLocale = lang === 'fi' ? 'fi-FI' : lang === 'ru' ? 'ru-RU' : 'en-GB';
 
   return (
@@ -163,7 +167,7 @@ export const PublicLogView: React.FC<PublicLogViewProps> = ({ token, legacyLogNo
                 </div>
                 <div className="public-metric">
                   <div className="detail-metric-label">{t('metric_evaluation')}</div>
-                  <div style={{ fontWeight: 700, color: metrics.evaluation_status === 'PASS' ? 'var(--accent-emerald)' : 'var(--text-primary)' }}>{evaluation}</div>
+                  <div style={{ fontWeight: 700, color: evaluationValue === 'PASS' ? 'var(--accent-emerald)' : evaluationValue === 'FAIL' ? 'var(--accent-rose)' : 'var(--text-primary)' }}>{evaluation}</div>
                 </div>
               </div>
 

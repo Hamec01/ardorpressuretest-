@@ -219,8 +219,10 @@ export function getRevisionZipUrl(logNo: string, revisionId: string): string {
   return `${API_BASE}/tests/${encodeURIComponent(logNo)}/revisions/${encodeURIComponent(revisionId)}/zip`;
 }
 
-export function getArtifactFileUrl(artifactId: string): string {
-  return `${API_BASE}/tests/artifacts/${encodeURIComponent(artifactId)}/file`;
+export function getArtifactFileUrl(artifactId: string, version?: string): string {
+  // version (the file's SHA-256) makes the browser reload a graph that was re-rendered.
+  const query = version ? `?v=${encodeURIComponent(version.slice(0, 16))}` : '';
+  return `${API_BASE}/tests/artifacts/${encodeURIComponent(artifactId)}/file${query}`;
 }
 
 export function getArtifactThumbnailUrl(artifactId: string): string {
@@ -256,6 +258,32 @@ export function getRecordPdfUrl(recordId: string): string {
 
 export function getRecordFullPdfUrl(recordId: string): string {
   return `${API_BASE}/records/${encodeURIComponent(recordId)}/full-pdf`;
+}
+
+/** Live preview of a PTR draft with unsaved form values (nothing is saved). */
+export async function previewRecordPdf(
+  recordId: string,
+  kind: 'full' | 'official',
+  payload: Record<string, unknown>,
+  signal?: AbortSignal,
+): Promise<{ blob: Blob; logPages: Record<string, number> }> {
+  const res = await authFetch(`${API_BASE}/records/${encodeURIComponent(recordId)}/preview-pdf?kind=${kind}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Preview failed (${res.status})`);
+  }
+  let logPages: Record<string, number> = {};
+  try {
+    logPages = JSON.parse(res.headers.get('X-PTR-Log-Pages') || '{}');
+  } catch {
+    logPages = {};
+  }
+  return { blob: await res.blob(), logPages };
 }
 
 export async function estimateRecordPages(recordId: string): Promise<any> {

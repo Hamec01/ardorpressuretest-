@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import io
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,6 +16,7 @@ from services.api.database import get_db
 from services.api.permissions import require_reader, require_writer
 from services.api.models import (
     Artifact,
+    PlannedTestPipe,
     PressureTest,
     PressureTestRecord,
     PressureTestRecordItem,
@@ -23,7 +25,9 @@ from services.api.models import (
     TestRevision,
     User,
 )
+from services.api.routes.planned_tests import canonicalize_pipecloud_source_data
 from services.api.storage import storage
+from wika_report.models import normalize_log_no
 from wika_report.ptr_generator import (
     estimate_composite_ptr_pages,
     generate_full_composite_ptr_pdf,
@@ -103,6 +107,7 @@ class RecordLogResponse(BaseModel):
     record_id: str
     pressure_test_id: str
     test_revision_id: str
+    log_no: Optional[str] = None
     position: int
     include_measurement_table: bool
     selected_pipe_numbers: List[str] = []
@@ -152,6 +157,9 @@ class RecordUpdateRequest(BaseModel):
     custom_fields: Optional[List[RecordCustomField]] = None
     items: Optional[List[RecordItemCreate]] = None
     logs: Optional[List[RecordLogCreate]] = None
+    # PTR-only corrections of a log's attachment page, keyed by record log id.
+    # Stored in metadata_snapshot["attachment_overrides"]; the log itself is not changed.
+    log_overrides: Optional[Dict[str, Dict[str, str]]] = None
 
 
 class SignatureUploadRequest(BaseModel):
@@ -380,6 +388,25 @@ def get_record(id: str, db: Session = Depends(get_db), access_user=Depends(requi
     return record
 
 
+ATTACHMENT_OVERRIDE_FIELDS = ("ins_no", "system", "project", "operator", "test_pressure", "wika_nr", "evaluation_status", "note")
+
+
+def _clean_attachment_overrides(overrides: Dict[str, Any]) -> Dict[str, str]:
+    cleaned: Dict[str, str] = {}
+    for key in ATTACHMENT_OVERRIDE_FIELDS:
+        value = overrides.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()[:1000]
+        if key == "evaluation_status":
+            text = text.upper()
+            if text not in ("", "PASS", "FAIL", "NOT EVALUATED"):
+                raise HTTPException(status_code=422, detail="evaluation_status must be PASS, FAIL, NOT EVALUATED or empty.")
+        if text:
+            cleaned[key] = text
+    return cleaned
+
+
 @router.put("/{id}", response_model=RecordResponse)
 def update_record(
     id: str,
@@ -401,6 +428,7 @@ def update_record(
     update_fields = req.model_dump(exclude_unset=True)
     items_to_update = update_fields.pop("items", None)
     logs_to_update = update_fields.pop("logs", None)
+    log_overrides = update_fields.pop("log_overrides", None)
 
     for k, v in update_fields.items():
         setattr(record, k, v)
@@ -422,6 +450,11 @@ def update_record(
             ))
 
     if logs_to_update is not None:
+        # Keep PTR attachment corrections when the log list is re-saved.
+        previous_overrides = {
+            existing.test_revision_id: (existing.metadata_snapshot or {}).get("attachment_overrides") or {}
+            for existing in db.query(PressureTestRecordLog).filter(PressureTestRecordLog.record_id == id).all()
+        }
         db.query(PressureTestRecordLog).filter(PressureTestRecordLog.record_id == id).delete()
         for l_idx, l_req in enumerate(logs_to_update):
             rev = db.query(TestRevision).filter(TestRevision.id == l_req["test_revision_id"]).first()
@@ -431,6 +464,8 @@ def update_record(
                 "metrics": rev.metrics_json if rev else {},
                 "created_at": rev.created_at.isoformat() if rev and rev.created_at else ""
             }
+            if previous_overrides.get(l_req["test_revision_id"]):
+                meta_snap["attachment_overrides"] = previous_overrides[l_req["test_revision_id"]]
             rec_log = PressureTestRecordLog(
                 record_id=id,
                 pressure_test_id=l_req["pressure_test_id"],
@@ -462,8 +497,23 @@ def update_record(
                 )
                 db.add(rec_art)
 
+    if log_overrides is not None:
+        db.flush()
+        record_logs = {
+            rec_log.id: rec_log
+            for rec_log in db.query(PressureTestRecordLog).filter(PressureTestRecordLog.record_id == id).all()
+        }
+        for record_log_id, overrides in log_overrides.items():
+            rec_log = record_logs.get(record_log_id)
+            if rec_log is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Log {record_log_id} is not part of this record.")
+            snapshot = dict(rec_log.metadata_snapshot or {})
+            snapshot["attachment_overrides"] = _clean_attachment_overrides(overrides)
+            rec_log.metadata_snapshot = snapshot
+
     db.commit()
 
+    audit_fields = list(update_fields.keys()) + (["log_overrides"] if log_overrides is not None else [])
     log_audit_event(
         db,
         entity_type="pressure_test_record",
@@ -471,7 +521,11 @@ def update_record(
         action="updated",
         actor_id=str(current_user.id),
         actor_name=current_user.full_name,
-        details={"status": record.status, "updated_fields": list(update_fields.keys())}
+        details={
+            "status": record.status,
+            "updated_fields": audit_fields,
+            **({"log_overrides": log_overrides} if log_overrides is not None else {}),
+        }
     )
 
     return (
@@ -511,6 +565,15 @@ def delete_record(
     )
 
     return {"status": "success", "message": f"Record {rec_num} archived successfully."}
+
+
+def _item_results_for_log(items_list: List[Dict[str, Any]], log_no: Any) -> List[str]:
+    """Results of the PTR rows that belong to ``log_no`` (used for the attachment evaluation)."""
+    target = normalize_log_no(str(log_no))
+    return [
+        str(it.get("result") or "").upper() for it in items_list
+        if it.get("log_no") and normalize_log_no(str(it["log_no"])) == target
+    ]
 
 
 def _build_ptr_data_payloads(record: PressureTestRecord, db: Session) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -591,11 +654,29 @@ def _build_ptr_data_payloads(record: PressureTestRecord, db: Session) -> Tuple[D
                 "is_included_in_pdf": p_art.is_included_in_pdf
             })
 
+        log_no_value = p_test.log_no if p_test else "N/A"
+        selected = [str(p) for p in (log_rel.selected_pipe_numbers or [])]
+        pipecloud_by_pipe: Dict[str, Dict[str, str]] = {}
+        if selected:
+            for planned_pipe in (
+                db.query(PlannedTestPipe)
+                .filter(PlannedTestPipe.pipe_number.in_(selected))
+                .order_by(PlannedTestPipe.updated_at.desc())
+                .all()
+            ):
+                pipecloud_by_pipe.setdefault(
+                    planned_pipe.pipe_number,
+                    canonicalize_pipecloud_source_data(planned_pipe.source_data or {}),
+                )
         logs_list.append({
-            "log_no": p_test.log_no if p_test else "N/A",
+            "log_no": log_no_value,
             "revision_id": t_rev.revision_id if t_rev else "1",
             "metadata": t_rev.metadata_json if t_rev else {},
             "metrics": t_rev.metrics_json if t_rev else {},
+            "record_log_id": log_rel.id,
+            "attachment_overrides": (log_rel.metadata_snapshot or {}).get("attachment_overrides") or {},
+            "item_results": _item_results_for_log(items_list, log_no_value),
+            "pipecloud_data": pipecloud_by_pipe,
             "selected_pipe_numbers": log_rel.selected_pipe_numbers,
             "include_measurement_table": log_rel.include_measurement_table,
             "csv_path": csv_file_path,
@@ -901,6 +982,62 @@ def export_full_composite_record_pdf(id: str, db: Session = Depends(get_db), acc
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f'inline; filename="PTR_{record.record_number}_Full.pdf"'}
+    )
+
+
+@router.post("/{id}/preview-pdf")
+def preview_record_pdf(
+    id: str,
+    req: RecordUpdateRequest,
+    kind: str = Query("full", pattern="^(full|official)$"),
+    current_user: User = Depends(require_role(["foreman", "admin"])),
+    db: Session = Depends(get_db),
+):
+    """Live preview of a PTR draft with unsaved form values. Nothing is written to the DB.
+
+    The full preview leaves out the measurement tables (they do not depend on the form and
+    take most of the rendering time). Header ``X-PTR-Log-Pages`` maps record log id to the
+    page where that log's attachment starts, so the viewer can open the edited page.
+    """
+    record = (
+        db.query(PressureTestRecord)
+        .options(
+            joinedload(PressureTestRecord.items),
+            joinedload(PressureTestRecord.logs).joinedload(PressureTestRecordLog.artifacts)
+        )
+        .filter(PressureTestRecord.id == id, PressureTestRecord.is_archived == False)
+        .first()
+    )
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found.")
+    if record.status in ("confirmed", "signed"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Confirmed or Signed Pressure Test Records cannot be modified.")
+
+    rec_dict, items_list, logs_list = _build_ptr_data_payloads(record, db)
+    rec_dict.update(req.model_dump(exclude_unset=True, exclude={"items", "logs", "log_overrides", "status"}))
+    if req.items is not None:
+        items_list = sorted((item.model_dump() for item in req.items), key=lambda item: item["item_no"])
+    for log_entry in logs_list:
+        log_entry["item_results"] = _item_results_for_log(items_list, log_entry["log_no"])
+        if req.log_overrides is not None and log_entry["record_log_id"] in req.log_overrides:
+            log_entry["attachment_overrides"] = _clean_attachment_overrides(req.log_overrides[log_entry["record_log_id"]])
+
+    page_map: Dict[str, int] = {}
+    if kind == "official":
+        pdf_bytes = generate_ptr_pdf(rec_dict, items_list)
+    else:
+        for log_entry in logs_list:
+            log_entry["include_measurement_table"] = False
+        pdf_bytes = generate_full_composite_ptr_pdf(rec_dict, items_list, logs_list, page_map=page_map)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="PTR_{record.record_number}_Preview.pdf"',
+            "Cache-Control": "no-store",
+            "X-PTR-Log-Pages": json.dumps(page_map),
+        },
     )
 
 

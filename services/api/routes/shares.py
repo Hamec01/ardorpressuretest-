@@ -37,7 +37,7 @@ PUBLIC_HEADERS = {
 # Metadata a guest may see - an explicit list, never the whole internal metadata_json.
 PUBLIC_METADATA_FIELDS = (
     "test_pressure", "system", "project", "ins_no", "wika_nr", "note", "date",
-    "pipe_numbers", "bundle_numbers",
+    "pipe_numbers", "bundle_numbers", "manual_evaluation",
 )
 
 writer = require_role(["admin", "foreman"])

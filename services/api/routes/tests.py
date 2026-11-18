@@ -38,6 +38,8 @@ from services.api.auth import require_role, require_authenticated_user
 from services.api.audit import log_audit_event
 from wika_report.models import normalize_log_no
 
+MANUAL_EVALUATION_VALUES = {"", "PASS", "FAIL"}
+
 # Upper bound for one list request; the web app asks for all logs at once.
 MAX_LIST_LIMIT = 10000
 
@@ -654,6 +656,8 @@ class TestMetadataUpdate(BaseModel):
     test_pressure: Optional[str] = None
     wika_nr: Optional[str] = None
     note: Optional[str] = None
+    # Human PASS/FAIL decision ("" clears it). The program's own result stays in metrics_json.
+    manual_evaluation: Optional[str] = None
     pipe_numbers: Optional[List[str]] = None
     bundle_numbers: Optional[List[str]] = None
 
@@ -685,6 +689,30 @@ def update_revision_metadata(
     )
     if not rev:
         raise HTTPException(status_code=404, detail="Revision not found.")
+
+    # A confirmed/signed PTR is an immutable document: its logs cannot change underneath it.
+    locked_record = (
+        db.query(PressureTestRecord)
+        .join(PressureTestRecordLog, PressureTestRecordLog.record_id == PressureTestRecord.id)
+        .filter(
+            PressureTestRecordLog.test_revision_id == rev.id,
+            PressureTestRecord.is_archived == False,
+            PressureTestRecord.status.in_(["confirmed", "signed"]),
+        )
+        .first()
+    )
+    if locked_record:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Log is part of confirmed record {locked_record.record_number}. Remove the confirmation first.",
+        )
+
+    if payload.manual_evaluation is not None:
+        manual_evaluation = payload.manual_evaluation.strip().upper()
+        if manual_evaluation not in MANUAL_EVALUATION_VALUES:
+            raise HTTPException(status_code=422, detail="manual_evaluation must be PASS, FAIL or empty.")
+
+    old_meta = dict(rev.metadata_json or {})
 
     # 0. Rename Log No. if requested (checked for uniqueness against other tests)
     old_log_no = None
@@ -725,6 +753,8 @@ def update_revision_metadata(
         meta["wika_nr"] = payload.wika_nr.strip()
     if payload.note is not None:
         meta["note"] = payload.note.strip()
+    if payload.manual_evaluation is not None:
+        meta["manual_evaluation"] = manual_evaluation
 
     if payload.pipe_numbers is not None:
         meta["pipe_numbers"] = payload.pipe_numbers
@@ -743,6 +773,9 @@ def update_revision_metadata(
                 db.add(Bundle(test_revision_id=rev.id, bundle_number=b.strip()))
 
     rev.metadata_json = meta
+
+    # The log's files (graph, XLSX, TXT, PDF) are evidence and are not re-rendered here.
+    # A PTR re-renders its own copy of the graph with the PTR values when its PDF is built.
 
     # 2. Update stored manifest file if present in storage
     manifest_art = db.query(Artifact).filter(
@@ -766,10 +799,16 @@ def update_revision_metadata(
         action="test_renamed" if old_log_no else "test_metadata_updated",
         entity_type="test_revision",
         entity_id=str(rev.id),
+        actor_id=getattr(access_user, "id", None),
+        actor_name=(getattr(access_user, "full_name", None) or getattr(access_user, "username", None)),
         details={
             "log_no": test.log_no,
             "revision_id": revision_id,
             "updated_by": rev.operator,
+            "changed_fields": sorted(
+                key for key in set(old_meta) | set(meta)
+                if key not in ("pipe_numbers", "bundle_numbers") and old_meta.get(key) != meta.get(key)
+            ),
             **({"old_log_no": old_log_no, "new_log_no": test.log_no} if old_log_no else {})
         }
     )

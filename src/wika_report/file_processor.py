@@ -55,6 +55,50 @@ def get_log_folder_name(custom_meta: Optional[object], fallback_stem: str) -> st
     return normalize_log_no(raw_log, fallback_name=fallback_stem)
 
 
+def render_graph_png(
+    csv_path: Path,
+    metadata: dict,
+    output_path: Path,
+    config: Optional[AppConfig] = None,
+) -> Path:
+    """Draw only the pressure graph of ``csv_path`` with the given header values.
+
+    Used by the PTR: the protocol prints its own copy of the graph with the protocol
+    values, the log's stored files are not touched. Empty values are printed as N/A.
+    """
+    config = config or AppConfig()
+    df_raw, meta = read_wika_csv(csv_path, default_unit=config.default_input_unit)
+    mapping = detect_columns(df_raw)
+    if not mapping.pressure_col or not meta.detected_unit:
+        raise ValueError("Pressure column or unit not found in the CSV.")
+    df_clean, stats = clean_and_normalize_data(df_raw, mapping, input_unit=meta.detected_unit, decimal_sep=meta.decimal_sep)
+    analysis = analyze_data(df_clean, stats, config.analysis)
+
+    def text(key: str) -> str:
+        return str(metadata.get(key) or "").strip()
+
+    analysis.custom_meta = CustomMetadata(
+        test_pressure=text("test_pressure"),
+        system=text("system"),
+        log_no=text("log_no"),
+        ins_no=text("ins_no"),
+        custom_date=text("custom_date"),
+        project=text("project"),
+        note=text("note"),
+        wika_nr=text("wika_nr"),
+        operator=text("operator"),
+        pipe_logs_text=text("pipe_logs_text"),
+    )
+    build_pressure_graph(
+        df=df_clean,
+        analysis=analysis,
+        graph_cfg=config.graph,
+        output_path=output_path,
+        filename_title=csv_path.name,
+    )
+    return output_path
+
+
 def process_test_input(
     test_input: TestInput,
     output_base_dir: Path,
@@ -130,17 +174,20 @@ def process_test_input(
         # 5. Статистический анализ
         analysis = analyze_data(df_clean, stats, config.analysis)
 
-        # Заполнение метаданных анализа
+        # Заполнение метаданных анализа.
+        # Пустое поле остаётся пустым (на графике будет N/A). Примерные значения
+        # config.graph.default_* (64700, NB1402PM-13388, 24bar, ...) — это только
+        # стартовые значения полей desktop-GUI; молча подставлять их в документы нельзя.
         pipe_logs_text = "\n".join(test_input.pipe_numbers) if test_input.pipe_numbers else ""
         analysis.custom_meta = CustomMetadata(
-            test_pressure=test_input.test_pressure or config.graph.default_test_pressure,
-            system=test_input.system or config.graph.default_system,
+            test_pressure=(test_input.test_pressure or "").strip(),
+            system=(test_input.system or "").strip(),
             log_no=normalized_log,
-            ins_no=test_input.ins_no or config.graph.default_ins_no,
+            ins_no=(test_input.ins_no or "").strip(),
             custom_date=test_input.custom_date,
-            project=test_input.project or config.graph.default_project,
-            note=test_input.note or config.graph.default_note,
-            wika_nr=test_input.wika_nr or config.graph.wika_nr_active,
+            project=(test_input.project or "").strip(),
+            note=(test_input.note or "").strip(),
+            wika_nr=(test_input.wika_nr or "").strip(),
             operator=test_input.operator,
             bundle_numbers=test_input.bundle_numbers,
             pipe_numbers=test_input.pipe_numbers,

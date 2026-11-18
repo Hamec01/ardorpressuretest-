@@ -24,6 +24,7 @@ export interface TestRevision {
     bundle_numbers?: string[];
     pipe_numbers?: string[];
     custom_date?: string;
+    manual_evaluation?: '' | 'PASS' | 'FAIL';
   };
   metrics_json: {
     start_time?: string | null;

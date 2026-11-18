@@ -1,11 +1,18 @@
 import io
+import logging
 import math
+import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 from PIL import Image
+
+logger = logging.getLogger("wika_report")
+# matplotlib's pyplot is not thread-safe; the API renders PDFs in a thread pool.
+_GRAPH_LOCK = threading.Lock()
 
 
 CYRILLIC_TO_LATIN = {
@@ -42,6 +49,110 @@ def clean_pdf_text(val: Any) -> str:
             chars.append(ch)
     text = "".join(chars)
     return text.encode("latin-1", errors="replace").decode("latin-1")
+
+
+NOT_EVALUATED = "NOT EVALUATED"
+
+
+def format_bar(value: Any, decimals: int = 3) -> str:
+    """Pressure for print: 18.601218439716313 -> '18.601'. Non-numbers are returned as-is."""
+    if value is None or value == "":
+        return "-"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    return f"{number:.{decimals}f}"
+
+
+def resolve_evaluation_status(log_entry: Dict[str, Any]) -> str:
+    """Evaluation printed in a PTR attachment. Always English, never invented.
+
+    Priority: PTR correction -> foreman's PASS/FAIL on the log -> results of this log's
+    rows in the PTR table -> the program's own PASS/FAIL -> NOT EVALUATED.
+    """
+    overrides = log_entry.get("attachment_overrides") or {}
+    meta = log_entry.get("metadata") or {}
+    metrics = log_entry.get("metrics") or {}
+
+    override = str(overrides.get("evaluation_status") or "").strip().upper()
+    if override:
+        return override
+    manual = str(meta.get("manual_evaluation") or "").strip().upper()
+    if manual in ("PASS", "FAIL"):
+        return manual
+    results = [str(r).strip().upper() for r in log_entry.get("item_results") or [] if str(r).strip()]
+    if results:
+        if "FAIL" in results:
+            return "FAIL"
+        if all(r == "PASS" for r in results):
+            return "PASS"
+    automatic = str(metrics.get("evaluation_status") or "").strip().upper()
+    if automatic in ("PASS", "FAIL"):
+        return automatic
+    return NOT_EVALUATED
+
+
+def resolve_attachment_fields(log_entry: Dict[str, Any], record_data: Dict[str, Any]) -> Dict[str, str]:
+    """Values of the attachment page: PTR correction first, then the log itself."""
+    overrides = log_entry.get("attachment_overrides") or {}
+    meta = log_entry.get("metadata") or {}
+
+    def pick(key: str, *fallbacks: Any) -> str:
+        for value in (overrides.get(key), *fallbacks):
+            if value is not None and str(value).strip():
+                return str(value).strip()
+        return ""
+
+    return {
+        "ins_no": pick("ins_no", record_data.get("ins_no"), meta.get("ins_no")),
+        "system": pick("system", meta.get("system")),
+        "project": pick("project", meta.get("project")),
+        "operator": pick("operator", meta.get("operator")),
+        "test_pressure": pick("test_pressure", meta.get("test_pressure")),
+        "wika_nr": pick("wika_nr", meta.get("wika_nr")),
+        "note": pick("note", meta.get("note")),
+        "evaluation_status": resolve_evaluation_status(log_entry),
+    }
+
+
+def render_ptr_graph(log_entry: Dict[str, Any], record_data: Dict[str, Any], output_path: Path) -> Optional[Path]:
+    """Draw the PTR copy of the log graph with the PTR values (corrections included).
+
+    The log's own graph file stays as it is. Returns None when the CSV is not available,
+    then the stored graph of the log is used.
+    """
+    csv_path = log_entry.get("csv_path")
+    if not csv_path or not Path(csv_path).exists():
+        return None
+    from wika_report.file_processor import render_graph_png
+
+    meta = log_entry.get("metadata") or {}
+    fields = resolve_attachment_fields(log_entry, record_data)
+    graph_meta = {
+        **fields,
+        "log_no": str(log_entry.get("log_no") or meta.get("log_no") or ""),
+        "custom_date": meta.get("custom_date") or "",
+    }
+    try:
+        with _GRAPH_LOCK:
+            return render_graph_png(Path(csv_path), graph_meta, output_path)
+    except Exception:
+        logger.exception("PTR graph of log %s could not be rendered, using the stored graph", log_entry.get("log_no"))
+        return None
+
+
+PIPECLOUD_PRINT_COLUMNS = (
+    ("drawing", "Drawing", 44),
+    ("spool_number", "Spool", 16),
+    ("order_number", "Order", 18),
+    ("revision", "Rev", 9),
+    ("pipeline", "Pipeline", 24),
+    ("size", "Size", 12),
+    ("wt", "WT", 12),
+    ("material", "Material", 15),
+    ("class", "Class", 12),
+)
 
 
 class OfficialARDORRecordPDF(FPDF):
@@ -543,9 +654,12 @@ def generate_full_composite_ptr_pdf(
     record_data: Dict[str, Any],
     items_data: List[Dict[str, Any]],
     logs_data: List[Dict[str, Any]],
-    output_path: Optional[Path] = None
+    output_path: Optional[Path] = None,
+    page_map: Optional[Dict[str, int]] = None,
 ) -> bytes:
     """
+    page_map (optional, filled in place): record log id (or log no) -> first page of its attachment.
+
     Генерирует полный составной документ: PTR_<RecordNumber>_Full.pdf
     Последовательность разделов:
     1. Официальный ARDOR Record (все страницы).
@@ -646,6 +760,8 @@ def generate_full_composite_ptr_pdf(
         # А. СТРАНИЦА ИНФОРМАЦИИ О ЛОГЕ (Log Information Page)
         # -------------------------------------------------------------
         pdf.add_page()
+        if page_map is not None:
+            page_map[str(log_entry.get("record_log_id") or log_no)] = pdf.page_no()
         pdf.set_draw_color(30, 41, 59)
         pdf.set_line_width(0.35)
 
@@ -667,14 +783,15 @@ def generate_full_composite_ptr_pdf(
         pdf.set_font("Helvetica", "B", 8)
         pdf.set_text_color(15, 23, 42)
         
+        fields = resolve_attachment_fields(log_entry, record_data)
         info_pairs = [
-            ("Log Number:", f"Log {log_no}", "Target Pressure:", str(meta.get("test_pressure") or "-")),
-            ("System / Drawing:", f"{meta.get('system') or '-'} / {meta.get('project') or '-'}", "Min / Max Pressure:", f"{metrics.get('min_pressure_bar', '-')} / {metrics.get('max_pressure_bar', '-')} bar"),
-            ("Inspection Number:", str(meta.get("ins_no") or record_data.get("ins_no") or "-"), "Mean Pressure:", f"{metrics.get('mean_pressure_bar', '-')} bar"),
-            ("Operator / Tester:", str(meta.get("operator") or "-"), "Pressure Delta:", f"{metrics.get('total_delta_bar', '-')} bar"),
-            ("WIKA Gauge S#:", str(meta.get("wika_nr") or "WIKA CPG1500"), "Duration:", str(metrics.get("duration_formatted") or "60 min")),
+            ("Log Number:", f"Log {log_no}", "Target Pressure:", fields["test_pressure"] or "-"),
+            ("System / Project:", f"{fields['system'] or '-'} / {fields['project'] or '-'}", "Min / Max Pressure:", f"{format_bar(metrics.get('min_pressure_bar'))} / {format_bar(metrics.get('max_pressure_bar'))} bar"),
+            ("Inspection Number:", fields["ins_no"] or "-", "Mean Pressure:", f"{format_bar(metrics.get('mean_pressure_bar'))} bar"),
+            ("Operator / Tester:", fields["operator"] or "-", "Pressure Delta:", f"{format_bar(metrics.get('total_delta_bar'))} bar"),
+            ("WIKA Gauge S#:", fields["wika_nr"] or "-", "Duration:", str(metrics.get("duration_formatted") or "-")),
             ("Start Time (UTC):", str(metrics.get("start_time") or "-"), "End Time (UTC):", str(metrics.get("end_time") or "-")),
-            ("Evaluation Status:", str(metrics.get("evaluation_status") or "PASS"), "Included in Record:", f"{len(selected_pipes)} pipe(s)"),
+            ("Evaluation Status:", fields["evaluation_status"], "Included in Record:", f"{len(selected_pipes)} pipe(s)"),
         ]
 
         row_y = grid_y + 7
@@ -713,9 +830,41 @@ def generate_full_composite_ptr_pdf(
         pdf.set_font("Helvetica", "B", 8)
         pdf.text(start_x + 4, notes_box_y + 6, "Log Notes & Observations:")
         pdf.set_font("Helvetica", "", 8)
-        note_str = str(meta.get("note") or "Pressure hold test executed according to ARDOR quality and inspection procedures. No leaks or pressure loss detected.")
+        note_str = fields["note"] or "Pressure hold test executed according to ARDOR quality and inspection procedures. No leaks or pressure loss detected."
         pdf.set_xy(start_x + 4, notes_box_y + 9)
         pdf.multi_cell(page_w - 8, 5, note_str)
+
+        # PipeCloud data of the pipes in this log (copied rows from the planned test list)
+        pipecloud_data = log_entry.get("pipecloud_data") or {}
+        pipecloud_rows = [(pipe, pipecloud_data[pipe]) for pipe in selected_pipes if pipe in pipecloud_data]
+        if pipecloud_rows:
+            table_y = notes_box_y + 49
+            max_rows = 11
+            pdf.set_draw_color(203, 213, 225)
+            pdf.set_font("Helvetica", "B", 8)
+            pdf.set_text_color(15, 23, 42)
+            pdf.text(start_x, table_y, "PipeCloud Data:")
+            header_y = table_y + 2
+            col_widths = [24] + [width for _, _, width in PIPECLOUD_PRINT_COLUMNS]
+            headers = ["Pipe"] + [title for _, title, _ in PIPECLOUD_PRINT_COLUMNS]
+            pdf.set_font("Helvetica", "B", 6.5)
+            pdf.set_fill_color(241, 245, 249)
+            pdf.set_xy(start_x, header_y)
+            for width, title in zip(col_widths, headers):
+                pdf.cell(width, 5, title, border=1, fill=True)
+            pdf.set_font("Helvetica", "", 6.5)
+            row_y = header_y + 5
+            for pipe, data in pipecloud_rows[:max_rows]:
+                pdf.set_xy(start_x, row_y)
+                values = [pipe] + [str(data.get(key) or "-") for key, _, _ in PIPECLOUD_PRINT_COLUMNS]
+                for width, value in zip(col_widths, values):
+                    max_chars = max(3, int(width / 1.45))
+                    shown = value if len(value) <= max_chars else value[:max_chars - 1] + "~"
+                    pdf.cell(width, 5, shown, border=1)
+                row_y += 5
+            if len(pipecloud_rows) > max_rows:
+                pdf.set_font("Helvetica", "I", 6.5)
+                pdf.text(start_x, row_y + 4, f"+ {len(pipecloud_rows) - max_rows} more pipe(s) - see the planned test list")
 
         # -------------------------------------------------------------
         # Б. СТРАНИЦА ГРАФИКА ДАВЛЕНИЯ (Pressure Graph Page)
@@ -728,12 +877,14 @@ def generate_full_composite_ptr_pdf(
             pdf.text(start_x, start_y + 6, f"LOG {log_no} - PRESSURE TEST GRAPH (0-160 bar)")
             pdf.set_font("Helvetica", "", 7.5)
             pdf.set_text_color(100, 116, 139)
-            pdf.text(start_x, start_y + 11, f"WIKA CPG1500 Digital Data Log  |  Target: {meta.get('test_pressure', 'N/A')}  |  Log {log_no}")
+            pdf.text(start_x, start_y + 11, clean_pdf_text(f"WIKA CPG1500 Digital Data Log  |  Target: {resolve_attachment_fields(log_entry, record_data)['test_pressure'] or 'N/A'}  |  Log {log_no}"))
 
             try:
-                pdf.image(str(graph_art["file_path"]), x=start_x, y=start_y + 15, w=page_w)
+                with tempfile.TemporaryDirectory(prefix="ardor-ptr-graph-") as tmp:
+                    graph_path = render_ptr_graph(log_entry, record_data, Path(tmp) / "graph.png") or Path(graph_art["file_path"])
+                    pdf.image(str(graph_path), x=start_x, y=start_y + 15, w=page_w)
             except Exception:
-                pass
+                logger.exception("PTR graph page of log %s could not be drawn", log_no)
 
         # -------------------------------------------------------------
         # В. СТРАНИЦЫ ФОТОГРАФИЙ (Selected Photographs)

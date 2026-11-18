@@ -58,6 +58,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
   const [editPressure, setEditPressure] = useState<string>('');
   const [editWikaNr, setEditWikaNr] = useState<string>('');
   const [editNote, setEditNote] = useState<string>('');
+  const [editEvaluation, setEditEvaluation] = useState<'' | 'PASS' | 'FAIL'>('');
   const [editPipes, setEditPipes] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
@@ -215,6 +216,13 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
 
   const meta = currentRev?.metadata_json || {};
   const metrics = currentRev?.metrics_json || {};
+  // The foreman's PASS/FAIL wins over the program's own (preliminary) result.
+  const evaluation: { value: string; source: 'manual' | 'auto' | 'none' } =
+    meta.manual_evaluation === 'PASS' || meta.manual_evaluation === 'FAIL'
+      ? { value: meta.manual_evaluation, source: 'manual' }
+      : metrics.evaluation_status === 'PASS' || metrics.evaluation_status === 'FAIL'
+        ? { value: metrics.evaluation_status, source: 'auto' }
+        : { value: '', source: 'none' };
   const artifacts = currentRev?.artifacts || [];
 
   const handleDeleteRevision = async (revision: TestRevision) => {
@@ -282,6 +290,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
     setEditPressure(meta.test_pressure || '');
     setEditWikaNr(meta.wika_nr || '');
     setEditNote(meta.note || '');
+    setEditEvaluation(meta.manual_evaluation || '');
     setEditPipes(sortPipeIdentifiers(meta.pipe_numbers || []).join('\n'));
     setIsEditing(true);
     setErrorMsg(null);
@@ -317,6 +326,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
         test_pressure: editPressure.trim(),
         wika_nr: editWikaNr.trim(),
         note: editNote.trim(),
+        manual_evaluation: editEvaluation,
         pipe_numbers: pipeList,
         bundle_numbers: bundleList,
       };
@@ -674,6 +684,22 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                     onChange={(e) => setEditWikaNr(e.target.value)}
                   />
                 </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.2rem' }}>
+                    {t('evaluation_field')}
+                  </label>
+                  <select
+                    className="search-input"
+                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.65rem', fontSize: '0.9rem', color: 'var(--text-primary)' }}
+                    value={editEvaluation}
+                    onChange={(e) => setEditEvaluation(e.target.value as '' | 'PASS' | 'FAIL')}
+                  >
+                    <option value="">{t('evaluation_option_none')}</option>
+                    <option value="PASS">PASS</option>
+                    <option value="FAIL">FAIL</option>
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -738,7 +764,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                   {isSaving ? (
                     <>
                       <div className="animate-spin" style={{ width: '14px', height: '14px', border: '2px solid white', borderTopColor: 'transparent', borderRadius: '50%' }} />
-                      <span>Сохранение...</span>
+                      <span>{t('ptr_saving')}</span>
                     </>
                   ) : (
                     <>
@@ -781,8 +807,11 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
 
                   <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                     <div className="detail-metric-label">{t('metric_evaluation')}</div>
-                    <div style={{ fontWeight: 700, color: metrics.evaluation_status === 'PASS' ? 'var(--accent-emerald)' : 'var(--text-primary)' }}>
-                      {metrics.evaluation_status === 'PASS' || metrics.evaluation_status === 'FAIL' ? metrics.evaluation_status : t('not_evaluated')}
+                    <div style={{ fontWeight: 700, color: evaluation.value === 'PASS' ? 'var(--accent-emerald)' : evaluation.value === 'FAIL' ? 'var(--accent-rose)' : 'var(--text-primary)' }}>
+                      {evaluation.value || t('not_evaluated')}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                      {evaluation.source === 'manual' ? t('evaluation_manual') : evaluation.source === 'auto' ? t('evaluation_auto') : (canEdit ? t('evaluation_not_set_hint') : '')}
                     </div>
                   </div>
                 </div>
@@ -799,7 +828,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                     <button
                       type="button"
                       className="detail-section-button"
-                      onClick={() => setPreviewImage({ url: getArtifactFileUrl(graphArtifact.id!), title: graphArtifact.name })}
+                      onClick={() => setPreviewImage({ url: getArtifactFileUrl(graphArtifact.id!, graphArtifact.sha256), title: graphArtifact.name })}
                       style={{ background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', padding: '0.25rem 0.6rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
                     >
                       <Maximize2 size={12} />
@@ -808,7 +837,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                   </div>
 
                   <div
-                    onClick={() => setPreviewImage({ url: getArtifactFileUrl(graphArtifact.id!), title: graphArtifact.name })}
+                    onClick={() => setPreviewImage({ url: getArtifactFileUrl(graphArtifact.id!, graphArtifact.sha256), title: graphArtifact.name })}
                     style={{
                       background: 'var(--bg-inset-80)',
                       borderRadius: 'var(--radius-md)',
@@ -821,7 +850,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                     title={t('image_open_full')}
                   >
                     <img
-                      src={getArtifactFileUrl(graphArtifact.id)}
+                      src={getArtifactFileUrl(graphArtifact.id, graphArtifact.sha256)}
                       alt="Pressure Graph"
                       style={{ maxWidth: '100%', maxHeight: '340px', objectFit: 'contain', display: 'block', margin: '0 auto' }}
                     />

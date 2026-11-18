@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { PressureTestRecord } from '../types';
-import { getRecordPdfUrl, getRecordFullPdfUrl, deleteRecord, updateRecord, unconfirmRecord } from '../api';
+import React, { useEffect, useRef, useState } from 'react';
+import { PressureTestRecord, RecordLog } from '../types';
+import { getRecordPdfUrl, getRecordFullPdfUrl, deleteRecord, previewRecordPdf, updateRecord, unconfirmRecord } from '../api';
 import {
   X,
   Download,
@@ -19,6 +19,79 @@ import { SignatureModal } from './SignatureModal';
 import { ConfirmRecordModal } from './ConfirmRecordModal';
 import { useI18n } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+
+type AttachmentOverrides = {
+  ins_no?: string;
+  system?: string;
+  project?: string;
+  operator?: string;
+  test_pressure?: string;
+  wika_nr?: string;
+  evaluation_status?: string;
+  note?: string;
+};
+
+const ATTACHMENT_TEXT_FIELDS: ReadonlyArray<readonly [keyof AttachmentOverrides, string]> = [
+  ['ins_no', 'Inspection No'],
+  ['system', 'System'],
+  ['project', 'Project'],
+  ['operator', 'Operator / Tester'],
+  ['test_pressure', 'Target pressure'],
+  ['wika_nr', 'WIKA S#'],
+];
+
+const inputStyle: React.CSSProperties = { background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '0.45rem 0.55rem' };
+
+const logLabel = (log: RecordLog, index: number): string => {
+  const raw = String(log.log_no || log.metadata_snapshot?.metadata?.log_no || '').trim();
+  const bare = raw.replace(/^log[\s_#-]*/i, '').trim();
+  return `Log ${bare || `#${index + 1}`}`;
+};
+
+const overridesFromRecord = (record: PressureTestRecord): Record<string, AttachmentOverrides> =>
+  Object.fromEntries(
+    (record.logs || [])
+      .filter((log) => log.id)
+      .map((log) => [log.id as string, { ...(log.metadata_snapshot?.attachment_overrides || {}) }]),
+  );
+
+type RecordDraft = {
+  project: string;
+  system: string;
+  ins_no: string;
+  test_medium: string;
+  design_pressure: string;
+  test_pressure: string;
+  duration_min: string;
+  foreman_name: string;
+  notes: string;
+};
+
+const draftFromRecord = (record: PressureTestRecord): RecordDraft => ({
+  project: record.project,
+  system: record.system,
+  ins_no: record.ins_no || '',
+  test_medium: record.test_medium,
+  design_pressure: record.design_pressure || '',
+  test_pressure: record.test_pressure || '',
+  duration_min: record.duration_min,
+  foreman_name: record.foreman_name || '',
+  notes: record.notes || '',
+});
+
+/** Body of PUT /records/{id} and of the live preview: same values, so the preview shows what Save would store. */
+const buildRecordPayload = (
+  record: PressureTestRecord,
+  draft: RecordDraft,
+  logOverrides: Record<string, AttachmentOverrides>,
+): Record<string, unknown> => {
+  const payload: Record<string, unknown> = { ...draft, items: record.items };
+  if ((record.logs || []).some((log) => log.id)) payload.log_overrides = logOverrides;
+  return payload;
+};
+
+// Phones do not show the embedded PDF at all (see .pdf-frame), so no live preview there.
+const isPhoneLayout = () => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 900px)').matches;
 
 interface RecordDetailModalProps {
   record: PressureTestRecord;
@@ -42,17 +115,34 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [draft, setDraft] = useState(() => ({
-    project: initialRecord.project,
-    system: initialRecord.system,
-    ins_no: initialRecord.ins_no || '',
-    test_medium: initialRecord.test_medium,
-    design_pressure: initialRecord.design_pressure || '',
-    test_pressure: initialRecord.test_pressure || '',
-    duration_min: initialRecord.duration_min,
-    foreman_name: initialRecord.foreman_name || '',
-    notes: initialRecord.notes || '',
-  }));
+  const [draft, setDraft] = useState<RecordDraft>(() => draftFromRecord(initialRecord));
+  const [logOverrides, setLogOverrides] = useState<Record<string, AttachmentOverrides>>(() => overridesFromRecord(initialRecord));
+  // Bumped after every save so the embedded PDF is re-rendered with the new values.
+  const [pdfVersion, setPdfVersion] = useState<number>(0);
+
+  // Live preview of the unsaved form (PDF next to the editor).
+  const [preview, setPreview] = useState<{ url: string; logPages: Record<string, number> } | null>(null);
+  const [previewState, setPreviewState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [previewError, setPreviewError] = useState('');
+  const [focusTarget, setFocusTarget] = useState<string>('record');
+  const [savedPayloadJson, setSavedPayloadJson] = useState('');
+  const previewUrlRef = useRef<string | null>(null);
+
+  const startEditing = () => {
+    const nextDraft = draftFromRecord(record);
+    const nextOverrides = overridesFromRecord(record);
+    setDraft(nextDraft);
+    setSavedPayloadJson(JSON.stringify(buildRecordPayload(record, nextDraft, nextOverrides)));
+    setFocusTarget('record');
+    setLogOverrides(overridesFromRecord(record));
+    // The full PDF contains page 1 and the log attachments: show it next to the form.
+    if (activeView === 'official_pdf') setActiveView('full_pdf');
+    setIsEditing(true);
+  };
+
+  const updateLogOverride = (logId: string, field: keyof AttachmentOverrides, value: string) => {
+    setLogOverrides((current) => ({ ...current, [logId]: { ...(current[logId] || {}), [field]: value } }));
+  };
 
   const handleDeleteRecord = async () => {
     const confirmed = window.confirm(t('delete_record_confirm', { record: record.record_number }));
@@ -73,9 +163,13 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   const handleSave = async () => {
     try {
       setIsSaving(true);
-      const updated = await updateRecord(record.id, { ...draft, items: record.items });
+      const updated = await updateRecord(record.id, buildRecordPayload(record, draft, logOverrides));
+      const savedOverrides = overridesFromRecord(updated);
       setRecord(updated);
-      setIsEditing(false);
+      setLogOverrides(savedOverrides);
+      setSavedPayloadJson(JSON.stringify(buildRecordPayload(updated, draft, savedOverrides)));
+      // The editor stays open: the PDF next to it is re-rendered, the next correction can follow.
+      setPdfVersion((value) => value + 1);
       onUpdate();
     } catch (err: any) {
       alert(err.message || 'Не удалось сохранить изменения');
@@ -122,9 +216,62 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
     onUpdate();
   };
 
-  const officialPdfUrl = getRecordPdfUrl(record.id);
-  const fullPdfUrl = getRecordFullPdfUrl(record.id);
+  const splitView = isEditing && activeView !== 'data';
+  const previewKind: 'full' | 'official' = activeView === 'official_pdf' ? 'official' : 'full';
+  const payloadJson = splitView ? JSON.stringify(buildRecordPayload(record, draft, logOverrides)) : '';
+  const isDirty = isEditing && Boolean(savedPayloadJson) && payloadJson !== '' && payloadJson !== savedPayloadJson;
+
+  const replacePreview = (next: { url: string; logPages: Record<string, number> } | null) => {
+    const old = previewUrlRef.current;
+    previewUrlRef.current = next?.url || null;
+    // The old iframe may still be reading the previous blob for a moment.
+    if (old) window.setTimeout(() => URL.revokeObjectURL(old), 10000);
+    setPreview(next);
+  };
+
+  // Every change of the form re-renders the PDF (debounced); nothing is saved until "Save".
+  useEffect(() => {
+    if (!splitView || isPhoneLayout()) {
+      if (previewUrlRef.current) replacePreview(null);
+      setPreviewState('idle');
+      return undefined;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setPreviewState('loading');
+      try {
+        const { blob, logPages } = await previewRecordPdf(record.id, previewKind, JSON.parse(payloadJson), controller.signal);
+        if (controller.signal.aborted) return;
+        replacePreview({ url: URL.createObjectURL(new Blob([blob], { type: 'application/pdf' })), logPages });
+        setPreviewState('idle');
+      } catch (err: any) {
+        if (controller.signal.aborted) return;
+        setPreviewError(err?.message || 'Preview failed');
+        setPreviewState('error');
+      }
+    }, previewUrlRef.current ? 700 : 0);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [splitView, previewKind, payloadJson, record.id]);
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+  }, []);
+
+  // Open the page that is being edited: page 1 for the blank, the log's attachment page for a log.
+  const previewPage = focusTarget === 'record' ? 1 : (preview?.logPages[focusTarget] || 1);
+  const pdfQuery = pdfVersion ? `?v=${pdfVersion}` : '';
+  const officialPdfUrl = `${getRecordPdfUrl(record.id)}${pdfQuery}`;
+  const fullPdfUrl = `${getRecordFullPdfUrl(record.id)}${pdfQuery}`;
   const currentActivePdfUrl = activeView === 'full_pdf' ? fullPdfUrl : officialPdfUrl;
+  const showPreview = splitView && preview !== null;
+  const iframeSrc = showPreview && preview
+    ? `${preview.url}#page=${previewPage}&toolbar=1&navpanes=0`
+    : `${currentActivePdfUrl}#toolbar=1&navpanes=0`;
+  const iframeKey = showPreview && preview ? `${preview.url}-${previewPage}` : `${activeView}-${pdfVersion}`;
   const subtitle = [record.ins_no, record.system, record.project].filter((part) => part && String(part).trim()).join(' — ');
   // confirmed_by_name may already contain the role, e.g. "Matti Meikäläinen (Foreman)".
   const signerRole = record.confirmed_by_role || '';
@@ -133,7 +280,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
   return (
     <>
       <div className="modal-overlay">
-        <div className="modal-content" style={{ maxWidth: '1020px', width: '95vw' }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-content" style={{ maxWidth: splitView ? '1640px' : '1020px', width: '96vw' }} onClick={(e) => e.stopPropagation()}>
           {/* Header */}
           {/* Header */}
           <div className="modal-header record-detail-header">
@@ -177,7 +324,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               {canEdit && record.status !== 'confirmed' && record.status !== 'signed' && (
                 <button
                   type="button"
-                  onClick={() => setIsEditing((value) => !value)}
+                  onClick={() => (isEditing ? setIsEditing(false) : startEditing())}
                   className="filter-pill"
                   style={{ background: isEditing ? 'rgba(245, 158, 11, 0.14)' : 'rgba(56, 189, 248, 0.12)', color: isEditing ? 'var(--accent-amber)' : 'var(--accent-cyan)', border: `1px solid ${isEditing ? 'var(--accent-amber)' : 'var(--accent-cyan)'}`, display: 'flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.8rem', fontSize: '0.85rem', cursor: 'pointer' }}
                   title={t('ptr_edit')}
@@ -340,9 +487,92 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
               </div>
             )}
 
+            <div className={`ptr-edit-layout${splitView ? ' is-split' : ''}`}>
+            {/* EDIT PANEL: on the PDF tabs it sits next to the PDF, which is re-rendered after each save */}
+            {isEditing && (
+              <div className="ptr-edit-panel" style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem', padding: '0.9rem', border: '1px solid var(--accent-cyan)', borderRadius: 'var(--radius-md)', background: 'rgba(56, 189, 248, 0.06)' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Бланк протокола (страница 1)
+                </div>
+                <div onFocusCapture={() => setFocusTarget('record')} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+                  {([
+                    ['project', 'Проект'], ['system', 'Система'], ['ins_no', 'Inspection No'], ['test_medium', 'Среда'],
+                    ['design_pressure', 'Design pressure'], ['test_pressure', 'Test pressure'], ['duration_min', 'Длительность'], ['foreman_name', 'Прораб'],
+                  ] as const).map(([field, label]) => (
+                    <label key={field} style={{ display: 'grid', gap: '0.25rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      {label}
+                      <input value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} style={inputStyle} />
+                    </label>
+                  ))}
+                  <label style={{ display: 'grid', gap: '0.25rem', gridColumn: '1 / -1', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Примечания
+                    <textarea value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
+                  </label>
+                </div>
+
+                {(record.logs || []).filter((log) => log.id).map((log, logIndex) => {
+                  const logId = log.id as string;
+                  const values = logOverrides[logId] || {};
+                  const source = (log.metadata_snapshot?.metadata || {}) as Record<string, any>;
+                  return (
+                    <div key={logId} onFocusCapture={() => setFocusTarget(logId)} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.8rem' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Приложение: {logLabel(log, logIndex)}
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        Пустое поле = значение из самого лога (показано серым). Изменения действуют только в этом протоколе.
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+                        {ATTACHMENT_TEXT_FIELDS.map(([field, label]) => (
+                          <label key={field} style={{ display: 'grid', gap: '0.25rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {label}
+                            <input
+                              value={values[field] || ''}
+                              placeholder={String((field === 'ins_no' ? (draft.ins_no || source.ins_no) : field === 'operator' ? (source.operator || log.metadata_snapshot?.operator) : source[field]) || '—')}
+                              onChange={(event) => updateLogOverride(logId, field, event.target.value)}
+                              style={inputStyle}
+                            />
+                          </label>
+                        ))}
+                        <label style={{ display: 'grid', gap: '0.25rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          Evaluation Status
+                          <select value={values.evaluation_status || ''} onChange={(event) => updateLogOverride(logId, 'evaluation_status', event.target.value)} style={inputStyle}>
+                            <option value="">Авто (по результатам строк протокола)</option>
+                            <option value="PASS">PASS</option>
+                            <option value="FAIL">FAIL</option>
+                            <option value="NOT EVALUATED">NOT EVALUATED</option>
+                          </select>
+                        </label>
+                        <label style={{ display: 'grid', gap: '0.25rem', gridColumn: '1 / -1', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          Log Notes &amp; Observations
+                          <textarea
+                            value={values.note || ''}
+                            placeholder={String(source.note || '—')}
+                            onChange={(event) => updateLogOverride(logId, 'note', event.target.value)}
+                            rows={2}
+                            style={{ ...inputStyle, resize: 'vertical' }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button type="button" onClick={() => setIsEditing(false)} className="filter-pill" style={{ padding: '0.45rem 0.9rem', cursor: 'pointer' }}>
+                    {t('ptr_close_editor')}
+                  </button>
+                  <button type="button" onClick={() => void handleSave()} disabled={isSaving} className="btn-primary" style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}>
+                    <Check size={14} />
+                    <span>{isSaving ? t('ptr_saving') : t('ptr_save')}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* TAB 1 & 2: LIVE PDF VIEWER (Official or Full) */}
             {(activeView === 'official_pdf' || activeView === 'full_pdf') ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <div className="ptr-pdf-pane" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {/* Phones cannot render a PDF inside an iframe (Android shows nothing, iOS only page 1). */}
                 <div className="pdf-mobile-fallback">
                   <FileSpreadsheet size={30} color="var(--accent-amber)" />
@@ -359,9 +589,18 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                     </a>
                   </div>
                 </div>
+                {splitView && (
+                  <div className="pdf-frame-caption ptr-preview-status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    <span>{t('ptr_live_preview_hint')}{previewKind === 'full' ? ` ${t('ptr_live_preview_no_tables')}` : ''}</span>
+                    <span style={{ fontWeight: 700, color: previewState === 'error' ? 'var(--accent-rose)' : isDirty ? 'var(--accent-amber)' : 'var(--accent-emerald)' }}>
+                      {previewState === 'loading' ? t('ptr_live_preview_updating') : previewState === 'error' ? `${t('ptr_live_preview_error')}: ${previewError}` : isDirty ? t('ptr_live_preview_unsaved') : t('ptr_live_preview_saved')}
+                    </span>
+                  </div>
+                )}
                 <div className="pdf-frame" style={{ width: '100%', height: '620px', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-color)', background: '#fff' }}>
                   <iframe
-                    src={`${currentActivePdfUrl}#toolbar=1&navpanes=0`}
+                    key={iframeKey}
+                    src={iframeSrc}
                     title={`ARDOR Pressure Test Record ${activeView === 'full_pdf' ? 'Full Composite' : 'Official'}`}
                     style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
                   />
@@ -376,23 +615,6 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
             ) : (
               /* TAB 3: DATA & PIPES TABLE */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  {isEditing && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', padding: '0.9rem', border: '1px solid var(--accent-cyan)', borderRadius: 'var(--radius-md)', background: 'rgba(56, 189, 248, 0.06)' }}>
-                      {([
-                        ['project', 'Проект'], ['system', 'Система'], ['ins_no', 'Inspection No'], ['test_medium', 'Среда'],
-                        ['design_pressure', 'Design pressure'], ['test_pressure', 'Test pressure'], ['duration_min', 'Длительность'], ['foreman_name', 'Прораб'],
-                      ] as const).map(([field, label]) => (
-                        <label key={field} style={{ display: 'grid', gap: '0.25rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          {label}
-                          <input value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '0.45rem 0.55rem' }} />
-                        </label>
-                      ))}
-                      <label style={{ display: 'grid', gap: '0.25rem', gridColumn: '1 / -1', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        Примечания
-                        <textarea value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} rows={2} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', padding: '0.45rem 0.55rem', resize: 'vertical' }} />
-                      </label>
-                    </div>
-                  )}
                 {/* Meta Summary Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
                   <div style={{ background: 'var(--bg-inset-60)', padding: '0.85rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
@@ -457,9 +679,17 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                                 <td style={{ padding: '0.65rem 0.85rem', fontFamily: 'var(--font-mono)' }}>{isEditing ? <input value={it.hold_start_bar || ''} onChange={(event) => updateItem(itemIndex, 'hold_start_bar', event.target.value)} /> : (it.hold_start_bar || '—')}</td>
                                 <td style={{ padding: '0.65rem 0.85rem', fontFamily: 'var(--font-mono)' }}>{isEditing ? <input value={it.hold_end_bar || ''} onChange={(event) => updateItem(itemIndex, 'hold_end_bar', event.target.value)} /> : (it.hold_end_bar || '—')}</td>
                               <td style={{ padding: '0.65rem 0.85rem' }}>
-                                <span className={`status-badge ${it.result === 'PASS' ? 'complete' : 'pending'}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem' }}>
-                                  {it.result}
-                                </span>
+                                {isEditing ? (
+                                  <select value={it.result || 'PENDING'} onChange={(event) => updateItem(itemIndex, 'result', event.target.value)}>
+                                    <option value="PASS">PASS</option>
+                                    <option value="FAIL">FAIL</option>
+                                    <option value="PENDING">PENDING</option>
+                                  </select>
+                                ) : (
+                                  <span className={`status-badge ${it.result === 'PASS' ? 'complete' : 'pending'}`} style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem' }}>
+                                    {it.result}
+                                  </span>
+                                )}
                               </td>
                                 {isEditing && <td><button type="button" onClick={() => removeItem(itemIndex)} title="Удалить строку" style={{ color: 'var(--accent-rose)', background: 'transparent', border: 'none', cursor: 'pointer' }}><Trash2 size={15} /></button></td>}
                             </tr>
@@ -471,6 +701,7 @@ export const RecordDetailModal: React.FC<RecordDetailModalProps> = ({
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       </div>

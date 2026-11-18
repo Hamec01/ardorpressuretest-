@@ -325,6 +325,11 @@ class PressureTestRecordLog(Base):
     artifacts = relationship("PressureTestRecordLogArtifact", back_populates="record_log", cascade="all, delete-orphan", order_by="PressureTestRecordLogArtifact.position")
     items = relationship("PressureTestRecordItem", back_populates="record_log")
 
+    @property
+    def log_no(self):
+        """Log number of the linked pressure test (as printed in the PTR attachment)."""
+        return self.pressure_test.log_no if self.pressure_test is not None else None
+
 
 class PressureTestRecordLogArtifact(Base):
     __tablename__ = "pressure_test_record_log_artifacts"
