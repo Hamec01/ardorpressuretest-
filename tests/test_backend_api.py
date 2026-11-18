@@ -1,8 +1,13 @@
 import io
+import hashlib
+import uuid
 import pytest
+from PIL import Image
 from fastapi.testclient import TestClient
 from services.api.main import app
-from services.api.database import Base, engine
+from services.api.database import Base, engine, SessionLocal
+from services.api.models import Artifact, PressureTest, PublicShare, TestRevision as PressureTestRevision
+from services.api.shares import share_token
 
 
 import shutil
@@ -122,6 +127,94 @@ def test_sync_flow_and_query():
     assert len(list_res.json()) >= 1
 
 
+def test_photo_thumbnails_preserve_original_and_public_share_scope():
+    client = TestClient(app)
+    image = Image.effect_noise((1600, 1200), 100).convert("RGB")
+    source = io.BytesIO()
+    image.save(source, format="JPEG", quality=95)
+    original_bytes = source.getvalue()
+
+    test_id = str(uuid.uuid4())
+    revision_id = str(uuid.uuid4())
+    artifact_id = str(uuid.uuid4())
+    broken_artifact_id = str(uuid.uuid4())
+    share_id = str(uuid.uuid4())
+    storage_key = f"logs/{test_id}/revisions/{revision_id}/photo.jpg"
+    broken_storage_key = f"logs/{test_id}/revisions/{revision_id}/broken.jpg"
+
+    with SessionLocal() as db:
+        pressure_test = PressureTest(id=test_id, log_no="THUMBNAIL-TEST")
+        revision = PressureTestRevision(
+            id=revision_id,
+            pressure_test_id=test_id,
+            revision_id="thumbnail-test-revision",
+            operator="Test",
+            metadata_json={},
+            metrics_json={},
+        )
+        artifact = Artifact(
+            id=artifact_id,
+            test_revision_id=revision_id,
+            name="photo.jpg",
+            relative_path="photo.jpg",
+            file_type="photo",
+            category="pipe",
+            size_bytes=len(original_bytes),
+            sha256=hashlib.sha256(original_bytes).hexdigest(),
+            storage_key=storage_key,
+        )
+        broken_artifact = Artifact(
+            id=broken_artifact_id,
+            test_revision_id=revision_id,
+            name="broken.jpg",
+            relative_path="broken.jpg",
+            file_type="photo",
+            category="other",
+            size_bytes=len(b"not an image"),
+            sha256=hashlib.sha256(b"not an image").hexdigest(),
+            storage_key=broken_storage_key,
+        )
+        share = PublicShare(id=share_id, pressure_test_id=test_id)
+        db.add_all([pressure_test, revision, artifact, broken_artifact, share])
+        db.commit()
+
+    storage.store_file(storage_key, io.BytesIO(original_bytes))
+    storage.store_file(broken_storage_key, io.BytesIO(b"not an image"))
+    stored_path = storage.get_file_path(storage_key)
+    assert stored_path is not None
+    original_hash = hashlib.sha256(stored_path.read_bytes()).hexdigest()
+
+    thumbnail_response = client.get(f"/api/v1/tests/artifacts/{artifact_id}/thumbnail")
+    assert thumbnail_response.status_code == 200
+    assert thumbnail_response.headers["content-type"] == "image/webp"
+    assert thumbnail_response.headers["cache-control"] == "private, max-age=3600"
+    with Image.open(io.BytesIO(thumbnail_response.content)) as thumbnail:
+        assert thumbnail.format == "WEBP"
+        assert max(thumbnail.size) <= 300
+    assert len(thumbnail_response.content) <= len(original_bytes) // 4
+
+    broken_thumbnail = client.get(f"/api/v1/tests/artifacts/{broken_artifact_id}/thumbnail")
+    assert broken_thumbnail.status_code == 415
+
+    original_response = client.get(f"/api/v1/tests/artifacts/{artifact_id}/file")
+    assert original_response.status_code == 200
+    assert original_response.content == original_bytes
+    assert hashlib.sha256(stored_path.read_bytes()).hexdigest() == original_hash
+
+    token = share_token(share_id)
+    public_thumbnail = client.get(
+        f"/api/v1/public/shares/{token}/artifacts/{artifact_id}/thumbnail"
+    )
+    assert public_thumbnail.status_code == 200
+    assert public_thumbnail.headers["cache-control"] == "no-store"
+    assert public_thumbnail.content == thumbnail_response.content
+
+    foreign_artifact = client.get(
+        f"/api/v1/public/shares/{token}/artifacts/{uuid.uuid4()}/thumbnail"
+    )
+    assert foreign_artifact.status_code == 404
+
+
 def test_web_process_endpoint():
     client = TestClient(app)
     csv_sample_path = Path("samples/sample_1_semicolon_comma.csv")
@@ -149,4 +242,3 @@ def test_web_process_endpoint():
     rev = data["revisions"][0]
     assert rev["operator"] == "Pekka"
     assert len(rev["artifacts"]) >= 3  # CSV, PNG, XLSX, TXT
-

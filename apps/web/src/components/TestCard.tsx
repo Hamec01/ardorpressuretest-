@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PressureTest, TestRevision } from '../types';
-import { createShare, getArtifactFileUrl } from '../api';
+import { createShare, getArtifactThumbnailUrl } from '../api';
 import { copyToClipboard } from '../clipboard';
 import { sortPipeIdentifiers } from '../pipeOrdering';
 import { Calendar, User, Gauge, Pipette, Image as ImageIcon, Share2, Check } from 'lucide-react';
@@ -159,7 +159,7 @@ export const TestCard: React.FC<TestCardProps> = ({ test, onSelect }) => {
                 title={label}
               >
                 <img
-                  src={getArtifactFileUrl(photo.id || '')}
+                  src={getArtifactThumbnailUrl(photo.id || '')}
                   alt={label}
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   loading="lazy"

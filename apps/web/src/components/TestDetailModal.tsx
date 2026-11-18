@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PressureTest, TestRevision, Artifact } from '../types';
-import { createShare, getRevisionZipUrl, getArtifactFileUrl, deleteArtifact, deletePressureTest, deleteTestRevision, permanentlyDeletePressureTest, restorePressureTest, updatePipeCloudStatus } from '../api';
+import { createShare, getRevisionZipUrl, getArtifactFileUrl, getArtifactThumbnailUrl, deleteArtifact, deletePressureTest, deleteTestRevision, permanentlyDeletePressureTest, restorePressureTest, updatePipeCloudStatus } from '../api';
 import { copyToClipboard } from '../clipboard';
 import { useI18n } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -881,6 +881,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                     {photoArtifacts.map((photo, idx) => {
                       if (!photo.id) return null;
                       const photoUrl = getArtifactFileUrl(photo.id);
+                      const thumbnailUrl = getArtifactThumbnailUrl(photo.id);
                       const isGauge = photo.category === 'gauge' || photo.name.toLowerCase().includes('gauge');
                       const isPipe = photo.category === 'pipe' || photo.name.toLowerCase().includes('pipe');
                       const badgeLabel = isGauge ? t('photo_gauge') : isPipe ? t('photo_pipe') : t('photo_other');
@@ -901,7 +902,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                           title={t('image_open_full')}
                         >
                           <img
-                            src={photoUrl}
+                            src={thumbnailUrl}
                             alt={photo.name}
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                             loading="lazy"

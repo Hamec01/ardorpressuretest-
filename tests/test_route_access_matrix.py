@@ -21,6 +21,7 @@ PUBLIC_ROUTES = {
     ("POST", "/api/v1/auth/password-links/{token}"),
     ("GET", "/api/v1/public/shares/{token}"),
     ("GET", "/api/v1/public/shares/{token}/artifacts/{artifact_id}"),
+    ("GET", "/api/v1/public/shares/{token}/artifacts/{artifact_id}/thumbnail"),
     ("GET", "/api/v1/public/shares/{token}/zip"),
     ("GET", "/api/v1/public/shares/{token}/preview.jpg"),
     ("GET", "/api/v1/public/legacy/{log_no}"),
