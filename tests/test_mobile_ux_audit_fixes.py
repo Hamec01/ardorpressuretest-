@@ -71,7 +71,8 @@ def test_mutating_controls_are_only_shown_to_admin_and_foreman():
         source = _read("components", name)
         assert "const canEdit = user?.role === 'admin' || user?.role === 'foreman';" in source, name
     detail = _read("components", "TestDetailModal.tsx")
-    assert "{canEdit && <button\n                          type=\"button\"\n                          className=\"artifact-action artifact-action-danger\"" in detail
+    assert "{isAdmin && !currentTest.is_archived && art.file_type === 'photo' && <button\n                          type=\"button\"\n                          className=\"artifact-action artifact-action-danger\"" in detail
+    assert "{isAdmin && currentTest.is_archived && (" in detail
     assert "{canEdit && !isEditing && (" in detail
     plans = _read("components", "PlannedTestsTab.tsx")
     assert "{canEdit && <form onSubmit={handleCreatePlan}" in plans

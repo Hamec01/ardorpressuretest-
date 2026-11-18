@@ -243,8 +243,8 @@ export const App: React.FC = () => {
             <button
               type="button"
               onClick={() => setActiveTab('trash')}
-              aria-label="Открыть корзину"
-              title="Корзина, хранение 14 дней"
+              aria-label={t('mobile_trash')}
+              title={t('mobile_trash')}
               style={{
                 background: activeTab === 'trash' ? 'rgba(244, 63, 94, 0.12)' : 'transparent',
                 border: 'none',

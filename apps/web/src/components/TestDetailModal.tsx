@@ -200,7 +200,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
 
     try {
       setIsDeleting(true);
-      await permanentlyDeletePressureTest(currentTest.log_no);
+      await permanentlyDeletePressureTest(currentTest.log_no, currentTest.id);
       onUpdate?.(currentTest);
       onClose();
     } catch (err: any) {
@@ -259,7 +259,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
 
   const handleDeleteArtifact = async (art: Artifact, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!art.id || !window.confirm(`Удалить файл «${art.name}»?`)) return;
+    if (!art.id || !window.confirm(t('photo_delete_confirm', { name: art.name }))) return;
 
     try {
       setDeletingArtifactId(art.id);
@@ -267,7 +267,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
       setCurrentTest(updatedTest);
       onUpdate?.(updatedTest);
     } catch (err: any) {
-      alert(err.message || 'Не удалось удалить файл');
+      alert(err.message || t('photo_delete_failed'));
     } finally {
       setDeletingArtifactId(null);
     }
@@ -424,7 +424,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
             </button>
             )}
 
-            {canEdit && currentTest.is_archived && (
+            {isAdmin && currentTest.is_archived && (
               <button
                 type="button"
                 onClick={handlePermanentDeleteTest}
@@ -1064,7 +1064,7 @@ export const TestDetailModal: React.FC<TestDetailModalProps> = ({ test, onClose,
                       >
                         {copiedSha === art.sha256 ? <CheckCircle2 size={15} /> : <Copy size={15} />}
                       </button>
-                        {canEdit && <button
+                        {isAdmin && !currentTest.is_archived && art.file_type === 'photo' && <button
                           type="button"
                           className="artifact-action artifact-action-danger"
                           onClick={(e) => handleDeleteArtifact(art, e)}

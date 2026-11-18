@@ -89,8 +89,8 @@ export async function restorePressureTest(logNo: string): Promise<PressureTest> 
   return res.json();
 }
 
-export async function permanentlyDeletePressureTest(logNo: string): Promise<void> {
-  const res = await authFetch(`${API_BASE}/tests/${encodeURIComponent(logNo)}/permanent`, { method: 'DELETE' });
+export async function permanentlyDeletePressureTest(logNo: string, testId: string): Promise<void> {
+  const res = await authFetch(`${API_BASE}/tests/${encodeURIComponent(logNo)}/permanent?test_id=${encodeURIComponent(testId)}`, { method: 'DELETE' });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Failed to permanently delete test (${res.status})`);

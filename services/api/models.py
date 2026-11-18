@@ -62,7 +62,8 @@ class PublicShare(Base):
     The link token is derived as HMAC(ARDOR_SHARE_SECRET, id) and is never stored.
     legacy_log_no_access marks the compatibility record that keeps an old
     /share/{log_no} URL working for a log that existed before token links.
-    Revocation is logical (revoked_at); rows are never deleted.
+    Revocation is logical (revoked_at); rows are removed only when an Admin permanently
+    deletes the associated archived pressure test.
     """
     __tablename__ = "public_shares"
     __table_args__ = (

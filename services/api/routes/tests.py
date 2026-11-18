@@ -13,14 +13,27 @@ from sqlalchemy.orm import Session, joinedload
 from services.api.database import get_db
 from services.api.image_thumbnails import ThumbnailProcessingError, create_webp_thumbnail
 from services.api.permissions import require_reader, require_writer
-from services.api.models import Artifact, Bundle, Pipe, PlannedTestPipe, PressureTest, PressureTestRecordLog, TestRevision, User
+from services.api.models import (
+    Artifact,
+    AuditEvent,
+    Bundle,
+    Pipe,
+    PlannedTestPipe,
+    PressureTest,
+    PressureTestRecord,
+    PressureTestRecordLog,
+    PressureTestRecordLogArtifact,
+    PublicShare,
+    TestRevision,
+    User,
+)
 from services.api.routes.planned_tests import canonicalize_pipecloud_source_data
 from services.api.schemas import (
     PipeCloudUpdateRequest,
     PipeCloudUpdateResponse,
     PressureTestResponse,
 )
-from services.api.storage import storage
+from services.api.storage import StagedFileDeletion, storage
 from services.api.auth import require_role, require_authenticated_user
 from services.api.audit import log_audit_event
 from wika_report.models import normalize_log_no
@@ -29,6 +42,72 @@ from wika_report.models import normalize_log_no
 MAX_LIST_LIMIT = 10000
 
 router = APIRouter(prefix="/api/v1/tests", tags=["Pressure Tests"])
+
+
+def _stage_storage_file_deletions(storage_keys: List[str]) -> List[StagedFileDeletion]:
+    staged: List[StagedFileDeletion] = []
+    try:
+        for storage_key in dict.fromkeys(storage_keys):
+            deletion = storage.stage_file_deletion(storage_key)
+            if deletion is not None:
+                staged.append(deletion)
+    except Exception:
+        _restore_storage_file_deletions(staged)
+        raise
+    return staged
+
+
+def _restore_storage_file_deletions(staged: List[StagedFileDeletion]) -> None:
+    errors: list[Exception] = []
+    for deletion in reversed(staged):
+        try:
+            storage.restore_file_deletion(deletion)
+        except Exception as exc:
+            errors.append(exc)
+    if errors:
+        raise ExceptionGroup("Some staged files could not be restored; retain their deletion receipts.", errors)
+
+
+def _finalize_storage_file_deletions(staged: List[StagedFileDeletion]) -> None:
+    cleanup_error: Optional[OSError] = None
+    for deletion in staged:
+        try:
+            storage.finalize_file_deletion(deletion)
+        except OSError as exc:
+            cleanup_error = exc
+    if cleanup_error is not None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="The item was deleted, but stored-file cleanup did not complete. Refresh the list and contact an administrator.",
+        ) from cleanup_error
+
+
+def _check_file_references(db: Session, artifacts: List[Artifact]) -> None:
+    """Protect PTR snapshots (including legacy key-only links) and shared files."""
+    if not artifacts:
+        return
+    artifact_ids = [artifact.id for artifact in artifacts]
+    storage_keys = [artifact.storage_key for artifact in artifacts]
+    if db.query(PressureTestRecordLogArtifact.id).filter(or_(
+        PressureTestRecordLogArtifact.artifact_id.in_(artifact_ids),
+        PressureTestRecordLogArtifact.storage_key.in_(storage_keys),
+    )).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A file is attached to a pressure-test record and cannot be deleted.",
+        )
+    if db.query(Artifact.id).filter(
+        Artifact.storage_key.in_(storage_keys), Artifact.id.notin_(artifact_ids),
+    ).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A stored file is shared with another attachment and cannot be deleted.",
+        )
+
+
+def _deletion_file_details(staged: List[StagedFileDeletion]) -> List[Dict[str, str]]:
+    """Keep recovery keys in the same durable audit transaction as the deletion."""
+    return [{"original_key": item.original_key, "staged_key": item.staged_key} for item in staged]
 
 
 class PtrSourceResolveRequest(BaseModel):
@@ -478,25 +557,62 @@ def get_artifact_thumbnail(artifact_id: str, db: Session = Depends(get_db), acce
 @router.delete("/artifacts/{artifact_id}", response_model=PressureTestResponse)
 def delete_artifact(
     artifact_id: str,
-    current_user: User = Depends(require_role(["foreman", "admin"])),
+    current_user: User = Depends(require_role(["admin"])),
     db: Session = Depends(get_db),
-):
-    """Physical deletion of artifacts is disabled pending a separate retention policy
-    decision (AGENTS.md / ADR-005). This handler never unlinks files or deletes rows:
-    it only confirms the artifact exists, then refuses the operation."""
+) -> PressureTest:
+    """Admins may permanently delete an individual photo that is not used by a PTR."""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can delete photo attachments.",
+        )
+
     artifact = (
         db.query(Artifact)
         .join(TestRevision, Artifact.test_revision_id == TestRevision.id)
         .join(PressureTest, TestRevision.pressure_test_id == PressureTest.id)
         .filter(Artifact.id == artifact_id, PressureTest.is_archived == False)
+        .with_for_update(of=Artifact)
         .first()
     )
     if not artifact:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found.")
 
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Physical deletion of artifacts is disabled pending a separate retention policy decision.",
+    if artifact.file_type != "photo":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only photo attachments can be deleted individually.",
+        )
+
+    _check_file_references(db, [artifact])
+
+    test = artifact.revision.pressure_test
+    staged_files = _stage_storage_file_deletions([artifact.storage_key])
+    try:
+        db.delete(artifact)
+        db.add(AuditEvent(
+            entity_type="artifact",
+            entity_id=str(artifact.id),
+            action="photo_deleted",
+            user_id=str(current_user.id),
+            actor_name=current_user.full_name or current_user.username,
+            details_json={
+                "log_no": test.log_no, "name": artifact.name, "sha256": artifact.sha256,
+                "files": _deletion_file_details(staged_files),
+            },
+        ))
+        db.commit()
+    except Exception:
+        db.rollback()
+        _restore_storage_file_deletions(staged_files)
+        raise
+
+    _finalize_storage_file_deletions(staged_files)
+    return (
+        db.query(PressureTest)
+        .options(joinedload(PressureTest.revisions).joinedload(TestRevision.artifacts))
+        .filter(PressureTest.id == test.id)
+        .first()
     )
 
 
@@ -810,24 +926,77 @@ def restore_test(
 @router.delete("/{log_no}/permanent")
 def permanently_delete_test(
     log_no: str,
-    current_user: User = Depends(require_role(["foreman", "admin"])),
+    current_user: User = Depends(require_role(["admin"])),
     db: Session = Depends(get_db),
-):
-    """Permanent deletion is disabled pending a separate retention policy decision
-    (AGENTS.md / ADR-005). This handler never mutates the database or storage: it only
-    confirms the archived log exists, then refuses the operation."""
+    test_id: Optional[str] = None,
+) -> None:
+    """Admins may permanently delete an archived log that is not referenced by a PTR."""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can permanently delete archived logs.",
+        )
+
     norm_log = normalize_log_no(log_no)
-    test = db.query(PressureTest).filter(
+    query = db.query(PressureTest).filter(
         PressureTest.log_no == norm_log,
         PressureTest.is_archived == True,
-    ).first()
-    if not test:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Test Log_{norm_log} not found in trash.")
-
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Permanent deletion is disabled pending a separate retention policy decision.",
     )
+    if test_id is not None:
+        query = query.filter(PressureTest.id == test_id)
+    matches = query.with_for_update().limit(2).all()
+    if not matches:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Test Log_{norm_log} not found in trash.")
+    if len(matches) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Several archived logs have this Log No. Specify test_id to select the log to delete.",
+        )
+    test = matches[0]
+
+    if db.query(PressureTestRecordLog.id).filter(
+        PressureTestRecordLog.pressure_test_id == test.id
+    ).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This log is linked to a pressure-test record and cannot be permanently deleted.",
+        )
+
+    artifacts = (
+        db.query(Artifact)
+        .join(TestRevision, Artifact.test_revision_id == TestRevision.id)
+        .filter(TestRevision.pressure_test_id == test.id)
+        .with_for_update(of=Artifact)
+        .all()
+    )
+    _check_file_references(db, artifacts)
+
+    shares = db.query(PublicShare).filter(PublicShare.pressure_test_id == test.id).all()
+    staged_files = _stage_storage_file_deletions([artifact.storage_key for artifact in artifacts])
+    try:
+        for share in shares:
+            db.delete(share)
+        db.delete(test)
+        db.add(AuditEvent(
+            entity_type="pressure_test",
+            entity_id=str(test.id),
+            action="test_permanently_deleted",
+            user_id=str(current_user.id),
+            actor_name=current_user.full_name or current_user.username,
+            details_json={
+                "log_no": norm_log,
+                "artifact_count": len(artifacts),
+                "share_count": len(shares),
+                "files": _deletion_file_details(staged_files),
+            },
+        ))
+        db.commit()
+    except Exception:
+        db.rollback()
+        _restore_storage_file_deletions(staged_files)
+        raise
+
+    _finalize_storage_file_deletions(staged_files)
 
 
 @router.post("/{log_no}/photos", response_model=PressureTestResponse)
