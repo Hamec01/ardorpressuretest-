@@ -56,6 +56,10 @@ class GraphConfig:
     show_pipe_logs: bool = False
     pipe_logs_text: str = ""
     plot_temperature: bool = True
+    # Header lines left out of the graph: any of "system", "ins_no", "project", "note".
+    hidden_header_fields: List[str] = field(default_factory=list)
+    # Mark the pressure this many minutes after the start (None or 0 = no mark).
+    checkpoint_minutes: Optional[float] = 40.0
     wika_nr_list: List[str] = field(default_factory=lambda: ["S# 1A01JFDQ12E"])
     wika_nr_active: str = "S# 1A01JFDQ12E"
     

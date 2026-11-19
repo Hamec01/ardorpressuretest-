@@ -1,6 +1,7 @@
 import logging
 import shutil
 import traceback
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -55,6 +56,49 @@ def get_log_folder_name(custom_meta: Optional[object], fallback_stem: str) -> st
     return normalize_log_no(raw_log, fallback_name=fallback_stem)
 
 
+GRAPH_HIDEABLE_HEADER_FIELDS = ("system", "ins_no", "project", "note")
+
+
+def normalize_hidden_header_fields(values) -> List[str]:
+    """Keep only known header fields, in a fixed order; accepts a list or a comma-separated string."""
+    if values is None:
+        return []
+    if isinstance(values, str):
+        values = values.split(",")
+    wanted = {str(v).strip().lower() for v in values}
+    return [name for name in GRAPH_HIDEABLE_HEADER_FIELDS if name in wanted]
+
+
+def graph_config_for_log(
+    config: AppConfig,
+    plot_temperature: Optional[bool] = None,
+    hidden_header_fields: Optional[List[str]] = None,
+):
+    """Graph settings with the per-log choices applied (None keeps the config value)."""
+    changes = {}
+    if plot_temperature is not None:
+        changes["plot_temperature"] = bool(plot_temperature)
+    if hidden_header_fields is not None:
+        changes["hidden_header_fields"] = normalize_hidden_header_fields(hidden_header_fields)
+    return replace(config.graph, **changes) if changes else config.graph
+
+
+def metadata_hidden_header_fields(metadata: dict) -> Optional[List[str]]:
+    """Stored header fields hidden on the graph of a log; None for logs made before the choice existed."""
+    value = (metadata or {}).get("graph_hidden_fields")
+    return None if value is None else normalize_hidden_header_fields(value)
+
+
+def metadata_plot_temperature(metadata: dict) -> Optional[bool]:
+    """Read the stored temperature choice of a log; logs made before the choice existed give None."""
+    value = (metadata or {}).get("plot_temperature")
+    if value is None or value == "":
+        return None
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
+
+
 def render_graph_png(
     csv_path: Path,
     metadata: dict,
@@ -92,7 +136,11 @@ def render_graph_png(
     build_pressure_graph(
         df=df_clean,
         analysis=analysis,
-        graph_cfg=config.graph,
+        graph_cfg=graph_config_for_log(
+            config,
+            plot_temperature=metadata_plot_temperature(metadata),
+            hidden_header_fields=metadata_hidden_header_fields(metadata),
+        ),
         output_path=output_path,
         filename_title=csv_path.name,
     )
@@ -207,10 +255,15 @@ def process_test_input(
 
         # 7. Генерация графика PNG
         graph_file = log_dir / f"{csv_file.stem}.png"
+        graph_cfg = graph_config_for_log(
+            config,
+            plot_temperature=test_input.plot_temperature,
+            hidden_header_fields=test_input.graph_hidden_fields,
+        )
         build_pressure_graph(
             df=df_clean,
             analysis=analysis,
-            graph_cfg=config.graph,
+            graph_cfg=graph_cfg,
             output_path=graph_file,
             filename_title=csv_file.name
         )
@@ -301,6 +354,8 @@ def process_test_input(
             "operator": analysis.custom_meta.operator,
             "bundle_numbers": analysis.custom_meta.bundle_numbers,
             "pipe_numbers": analysis.custom_meta.pipe_numbers,
+            "plot_temperature": bool(graph_cfg.plot_temperature),
+            "graph_hidden_fields": list(graph_cfg.hidden_header_fields or []),
         }
         manifest_metrics = {
             "start_time": analysis.start_time.isoformat() if analysis.start_time else None,

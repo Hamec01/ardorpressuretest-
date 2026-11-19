@@ -13,6 +13,16 @@ from wika_report.config import GraphConfig
 from wika_report.models import AnalysisResult
 
 
+def checkpoint_index(x_min, minutes: Optional[float]) -> Optional[int]:
+    """Index of the reading closest to ``minutes`` after the start, None when the test is shorter."""
+    if not minutes or minutes <= 0 or len(x_min) == 0:
+        return None
+    x = np.asarray(x_min, dtype=float)
+    if x[-1] < minutes:
+        return None
+    return int(np.argmin(np.abs(x - minutes)))
+
+
 def build_pressure_graph(
     df: pd.DataFrame,
     analysis: AnalysisResult,
@@ -63,14 +73,22 @@ def build_pressure_graph(
     if len(y_press) > 0:
         idx_min = np.argmin(y_press)
         idx_max = np.argmax(y_press)
+        x_span = float(x_min[-1] - x_min[0]) or 1.0
+
+        def label_side(idx):
+            """Labels of points near the right edge go to the left so they stay inside the plot."""
+            near_right = (x_min[idx] - x_min[0]) / x_span > 0.85
+            return (-10, "right") if near_right else (10, "left")
         
         # Draw Min point and text
         ax.plot(x_min[idx_min], y_press[idx_min], 'ro', markersize=5)
+        min_dx, min_ha = label_side(idx_min)
         ax.annotate(
             f"Min: {y_press[idx_min]:.3f} bar",
             xy=(x_min[idx_min], y_press[idx_min]),
-            xytext=(10, -10),
+            xytext=(min_dx, -10),
             textcoords="offset points",
+            horizontalalignment=min_ha,
             fontsize=8,
             color="red",
             weight="bold",
@@ -79,16 +97,35 @@ def build_pressure_graph(
         
         # Draw Max point and text
         ax.plot(x_min[idx_max], y_press[idx_max], 'go', markersize=5)
+        max_dx, max_ha = label_side(idx_max)
         ax.annotate(
             f"Max: {y_press[idx_max]:.3f} bar",
             xy=(x_min[idx_max], y_press[idx_max]),
-            xytext=(10, 10),
+            xytext=(max_dx, 10),
             textcoords="offset points",
+            horizontalalignment=max_ha,
             fontsize=8,
             color="green",
             weight="bold",
             bbox=dict(boxstyle="round,pad=0.2", fc="yellow", alpha=0.6, ec="green")
         )
+
+        # Pressure at the checkpoint (40 min after the start by default)
+        checkpoint = checkpoint_index(x_min, graph_cfg.checkpoint_minutes)
+        if checkpoint is not None:
+            ax.plot(x_min[checkpoint], y_press[checkpoint], 'o', color="#6f2dbd", markersize=5)
+            ax.annotate(
+                f"{graph_cfg.checkpoint_minutes:g} min: {y_press[checkpoint]:.3f} bar",
+                xy=(x_min[checkpoint], y_press[checkpoint]),
+                xytext=(0, 18),
+                textcoords="offset points",
+                horizontalalignment="center",
+                fontsize=8,
+                color="#6f2dbd",
+                weight="bold",
+                bbox=dict(boxstyle="round,pad=0.2", fc="yellow", alpha=0.6, ec="#6f2dbd"),
+                arrowprops=dict(arrowstyle="-", color="#6f2dbd", lw=0.8),
+            )
 
     # Secondary Y-axis for Temperature if enabled & data exists
     ax_temp = None
@@ -167,13 +204,18 @@ def build_pressure_graph(
     
     meta = analysis.custom_meta
     
-    col1_text = (
-        f"Test period:  {test_period}\n"
-        f"Test pressure: {meta.test_pressure or 'N/A'}\n"
-        f"System:        {meta.system or 'N/A'}\n"
-        f"Log.No:        {meta.log_no or 'N/A'}\n"
-        f"Ins.No:        {meta.ins_no or 'N/A'}"
-    )
+    hidden = set(graph_cfg.hidden_header_fields or [])
+
+    def header_lines(rows):
+        return "\n".join(line for key, line in rows if key not in hidden)
+
+    col1_text = header_lines([
+        ("", f"Test period:  {test_period}"),
+        ("", f"Test pressure: {meta.test_pressure or 'N/A'}"),
+        ("system", f"System:        {meta.system or 'N/A'}"),
+        ("", f"Log.No:        {meta.log_no or 'N/A'}"),
+        ("ins_no", f"Ins.No:        {meta.ins_no or 'N/A'}"),
+    ])
     
     # Auto-extract date if not manually overridden
     date_val = meta.custom_date
@@ -183,21 +225,26 @@ def build_pressure_graph(
         else:
             date_val = datetime.now().strftime("%d.%m.%Y")
 
-    col2_text = (
-        f"Date:     {date_val}\n"
-        f"Project:  {meta.project or 'N/A'}\n"
-        f"Note:     {meta.note or 'N/A'}\n"
-        f"Wika nr:  {meta.wika_nr or 'N/A'}"
-    )
+    col2_text = header_lines([
+        ("", f"Date:     {date_val}"),
+        ("project", f"Project:  {meta.project or 'N/A'}"),
+        ("note", f"Note:     {meta.note or 'N/A'}"),
+        ("", f"Wika nr:  {meta.wika_nr or 'N/A'}"),
+    ])
 
-    fig.text(0.09, 0.83, col1_text, fontsize=9.5, family="monospace", verticalalignment="bottom")
-    fig.text(0.36, 0.83, col2_text, fontsize=9.5, family="monospace", verticalalignment="bottom")
-    
-    # Title in the header block
+    # Both columns hang from the top edge of the header box (Y 0.82..0.97)
+    fig.text(0.09, 0.955, col1_text, fontsize=9.5, family="monospace", verticalalignment="top")
+    fig.text(0.36, 0.955, col2_text, fontsize=9.5, family="monospace", verticalalignment="top")
+
+    # Title in the header block, kept inside the box
     diagram_title = "PRESSURE TEST DIAGRAM"
     if meta.project and meta.project != "N/A":
         diagram_title = f"{meta.project}\n{diagram_title}"
-    fig.text(0.60, 0.93, diagram_title, fontsize=12, fontweight="bold", horizontalalignment="center")
+    fig.text(
+        0.60, 0.955, diagram_title,
+        fontsize=12, fontweight="bold",
+        horizontalalignment="center", verticalalignment="top", multialignment="center",
+    )
 
 
 

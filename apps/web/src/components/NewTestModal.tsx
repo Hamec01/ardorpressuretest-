@@ -15,6 +15,13 @@ interface NewTestModalProps {
   existingCsvMode?: 'attach' | 'replace';
 }
 
+const GRAPH_HEADER_FIELDS: { key: string; label: string }[] = [
+  { key: 'system', label: 'System' },
+  { key: 'ins_no', label: 'Ins.No' },
+  { key: 'project', label: 'Project' },
+  { key: 'note', label: 'Note' },
+];
+
 function draftMetadataFor(test?: PressureTest) {
   const revisions = test?.revisions || [];
   const rev = revisions.find((r) => r.is_primary) || revisions[0];
@@ -45,6 +52,10 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
   const [pipeRaw, setPipeRaw] = useState<string>((draftMeta.pipe_numbers || []).join('\n'));
   const [pipePhotos, setPipePhotos] = useState<File[]>([]);
   const [gaugePhotos, setGaugePhotos] = useState<File[]>([]);
+  const [plotTemperature, setPlotTemperature] = useState<boolean>(draftMeta.plot_temperature !== false);
+  const [hiddenGraphFields, setHiddenGraphFields] = useState<string[]>(draftMeta.graph_hidden_fields || []);
+  const toggleGraphField = (key: string) =>
+    setHiddenGraphFields((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -158,6 +169,8 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
       formData.append('pipe_numbers_raw', sortedPipes.join('\n'));
       formData.append('bundle_numbers_raw', autoBundles);
       formData.append('create_pdf', 'true');
+      formData.append('plot_temperature', plotTemperature ? 'true' : 'false');
+      formData.append('graph_hidden_fields', hiddenGraphFields.join(','));
 
       for (const pf of pipePhotos) {
         formData.append('pipe_photos', pf);
@@ -398,6 +411,43 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
                         : 'Выберите CSV-файл измерений для этого лога'
                       : 'CSV не выбран — можно сохранить как черновик и добавить его позже'}
                 </span>
+              </div>
+
+              <div className="graph-temperature-choice" role="radiogroup" aria-label="График">
+                <span className="graph-temperature-choice-label">График:</span>
+                <label className={`graph-temperature-option${plotTemperature ? ' selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="plot-temperature"
+                    checked={plotTemperature}
+                    onChange={() => setPlotTemperature(true)}
+                  />
+                  <span>С температурой</span>
+                </label>
+                <label className={`graph-temperature-option${!plotTemperature ? ' selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="plot-temperature"
+                    checked={!plotTemperature}
+                    onChange={() => setPlotTemperature(false)}
+                  />
+                  <span>Без температуры</span>
+                </label>
+                <small>Кривая температуры рисуется, только если она есть в CSV.</small>
+              </div>
+
+              <div className="graph-temperature-choice" role="group" aria-label="Шапка графика">
+                <span className="graph-temperature-choice-label">Показывать в шапке графика:</span>
+                {GRAPH_HEADER_FIELDS.map(({ key, label }) => {
+                  const shown = !hiddenGraphFields.includes(key);
+                  return (
+                    <label key={key} className={`graph-temperature-option${shown ? ' selected' : ''}`}>
+                      <input type="checkbox" checked={shown} onChange={() => toggleGraphField(key)} />
+                      <span>{label}</span>
+                    </label>
+                  );
+                })}
+                <small>Снятые строки не попадут в шапку графика. Test period, Test pressure, Log.No, Date и Wika nr показываются всегда.</small>
               </div>
             </div>
 

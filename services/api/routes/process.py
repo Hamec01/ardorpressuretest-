@@ -16,7 +16,7 @@ from services.api.schemas import PressureTestResponse
 from services.api.storage import storage
 from services.api.audit import log_audit_event
 from wika_report.config import AppConfig
-from wika_report.file_processor import process_test_input
+from wika_report.file_processor import normalize_hidden_header_fields, process_test_input
 from wika_report.models import PhotoAttachment, TestInput, normalize_log_no
 
 logger = logging.getLogger("ardor_api")
@@ -78,6 +78,8 @@ async def _create_draft_revision(
     pipe_photos: List[UploadFile],
     gauge_photos: List[UploadFile],
     other_photos: List[UploadFile],
+    plot_temperature: bool = True,
+    graph_hidden_fields: Optional[List[str]] = None,
 ) -> PressureTest:
     """
     Создаёт черновик испытания (Log No. + метаданные) без CSV-файла измерений.
@@ -113,6 +115,8 @@ async def _create_draft_revision(
             "wika_nr": wika_nr,
             "pipe_numbers": pipe_numbers,
             "bundle_numbers": bundle_numbers,
+            "plot_temperature": plot_temperature,
+            "graph_hidden_fields": graph_hidden_fields or [],
         },
         metrics_json={}
     )
@@ -152,6 +156,8 @@ async def process_csv_web(
     pipe_numbers_raw: str = Form("", description="Список номеров труб"),
     bundle_numbers_raw: str = Form("", description="Список номеров бандлов"),
     create_pdf: bool = Form(True, description="Создавать PDF-отчёт"),
+    plot_temperature: bool = Form(True, description="Рисовать кривую температуры на графике (если она есть в CSV)"),
+    graph_hidden_fields: str = Form("", description="Строки шапки графика, которые не показывать: system, ins_no, project, note (через запятую)"),
     pipe_photos: List[UploadFile] = File([], description="Фотографии труб"),
     gauge_photos: List[UploadFile] = File([], description="Фотографии манометра"),
     other_photos: List[UploadFile] = File([], description="Прочие фотографии"),
@@ -168,6 +174,7 @@ async def process_csv_web(
     (Log No. + введённые метаданные + фото) со статусом ревизии "draft", без запуска
     конвейера обработки и без графика/метрик давления.
     """
+    hidden_header_fields = normalize_hidden_header_fields(graph_hidden_fields)
     norm_log = normalize_log_no(log_no, fallback_name=Path(csv_file.filename or "report").stem if csv_file and csv_file.filename else log_no)
 
     # Парсинг списков труб и бандлов
@@ -194,6 +201,8 @@ async def process_csv_web(
             pipe_photos=pipe_photos,
             gauge_photos=gauge_photos,
             other_photos=other_photos,
+            plot_temperature=plot_temperature,
+            graph_hidden_fields=hidden_header_fields,
         )
 
     # Look up the active revision before building TestInput, so carried-forward data is
@@ -269,7 +278,9 @@ async def process_csv_web(
             bundle_numbers=effective_bundle_numbers,
             pipe_numbers=effective_pipe_numbers,
             create_pdf=create_pdf,
-            photos=photos
+            photos=photos,
+            plot_temperature=plot_temperature,
+            graph_hidden_fields=hidden_header_fields,
         )
 
         config = AppConfig()

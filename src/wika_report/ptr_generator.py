@@ -133,6 +133,8 @@ def render_ptr_graph(log_entry: Dict[str, Any], record_data: Dict[str, Any], out
         **fields,
         "log_no": str(log_entry.get("log_no") or meta.get("log_no") or ""),
         "custom_date": meta.get("custom_date") or "",
+        "plot_temperature": meta.get("plot_temperature"),
+        "graph_hidden_fields": meta.get("graph_hidden_fields"),
     }
     try:
         with _GRAPH_LOCK:

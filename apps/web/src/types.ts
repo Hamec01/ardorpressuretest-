@@ -25,6 +25,10 @@ export interface TestRevision {
     pipe_numbers?: string[];
     custom_date?: string;
     manual_evaluation?: '' | 'PASS' | 'FAIL';
+    /** Graph drawn with the temperature curve. Missing on logs made before the choice existed (they have it). */
+    plot_temperature?: boolean;
+    /** Header lines left out of the graph: system, ins_no, project, note. */
+    graph_hidden_fields?: string[];
   };
   metrics_json: {
     start_time?: string | null;

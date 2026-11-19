@@ -2506,3 +2506,43 @@ body {
     flex-direction: column;
   }
 }
+
+.graph-temperature-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.graph-temperature-choice-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.graph-temperature-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.graph-temperature-option.selected {
+  border-color: var(--accent-cyan);
+  background: color-mix(in srgb, var(--accent-cyan) 10%, transparent);
+}
+
+.graph-temperature-option input {
+  accent-color: var(--accent-cyan);
+  margin: 0;
+}
+
+.graph-temperature-choice small {
+  flex-basis: 100%;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}

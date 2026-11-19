@@ -104,6 +104,10 @@ class TestInput:
     pipe_numbers: List[str] = field(default_factory=list)
     create_pdf: bool = False
     photos: List[PhotoAttachment] = field(default_factory=list)
+    # Draw the temperature curve on the graph. None keeps config.graph.plot_temperature.
+    plot_temperature: Optional[bool] = None
+    # Header lines left out of the graph ("system", "ins_no", "project", "note"). None keeps the config.
+    graph_hidden_fields: Optional[List[str]] = None
 
 
 @dataclass
