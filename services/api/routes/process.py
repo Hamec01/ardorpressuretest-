@@ -80,6 +80,8 @@ async def _create_draft_revision(
     other_photos: List[UploadFile],
     plot_temperature: bool = True,
     graph_hidden_fields: Optional[List[str]] = None,
+    graph_start_from_zero: bool = False,
+    graph_zero_ramp_seconds: float = 30.0,
 ) -> PressureTest:
     """
     Создаёт черновик испытания (Log No. + метаданные) без CSV-файла измерений.
@@ -117,6 +119,8 @@ async def _create_draft_revision(
             "bundle_numbers": bundle_numbers,
             "plot_temperature": plot_temperature,
             "graph_hidden_fields": graph_hidden_fields or [],
+            "graph_start_from_zero": graph_start_from_zero,
+            "graph_zero_ramp_seconds": graph_zero_ramp_seconds,
         },
         metrics_json={}
     )
@@ -158,6 +162,8 @@ async def process_csv_web(
     create_pdf: bool = Form(True, description="Создавать PDF-отчёт"),
     plot_temperature: bool = Form(True, description="Рисовать кривую температуры на графике (если она есть в CSV)"),
     graph_hidden_fields: str = Form("", description="Строки шапки графика, которые не показывать: system, ins_no, project, note (через запятую)"),
+    graph_start_from_zero: bool = Form(False, description="Добавить плавный старт с 0 перед первой точкой CSV, только на графике"),
+    graph_zero_ramp_seconds: float = Form(30.0, ge=10, le=50, description="Длительность добавленного подъёма, 10–50 секунд"),
     pipe_photos: List[UploadFile] = File([], description="Фотографии труб"),
     gauge_photos: List[UploadFile] = File([], description="Фотографии манометра"),
     other_photos: List[UploadFile] = File([], description="Прочие фотографии"),
@@ -203,6 +209,8 @@ async def process_csv_web(
             other_photos=other_photos,
             plot_temperature=plot_temperature,
             graph_hidden_fields=hidden_header_fields,
+            graph_start_from_zero=graph_start_from_zero,
+            graph_zero_ramp_seconds=graph_zero_ramp_seconds,
         )
 
     # Look up the active revision before building TestInput, so carried-forward data is
@@ -281,6 +289,8 @@ async def process_csv_web(
             photos=photos,
             plot_temperature=plot_temperature,
             graph_hidden_fields=hidden_header_fields,
+            graph_start_from_zero=graph_start_from_zero,
+            graph_zero_ramp_seconds=graph_zero_ramp_seconds,
         )
 
         config = AppConfig()

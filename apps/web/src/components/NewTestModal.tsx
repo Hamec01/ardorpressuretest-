@@ -54,6 +54,8 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
   const [gaugePhotos, setGaugePhotos] = useState<File[]>([]);
   const [plotTemperature, setPlotTemperature] = useState<boolean>(draftMeta.plot_temperature !== false);
   const [hiddenGraphFields, setHiddenGraphFields] = useState<string[]>(draftMeta.graph_hidden_fields || []);
+  const [startFromZero, setStartFromZero] = useState<boolean>(draftMeta.graph_start_from_zero === true);
+  const [zeroRampSeconds, setZeroRampSeconds] = useState<number>(draftMeta.graph_zero_ramp_seconds ?? 30);
   const toggleGraphField = (key: string) =>
     setHiddenGraphFields((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
 
@@ -171,6 +173,8 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
       formData.append('create_pdf', 'true');
       formData.append('plot_temperature', plotTemperature ? 'true' : 'false');
       formData.append('graph_hidden_fields', hiddenGraphFields.join(','));
+      formData.append('graph_start_from_zero', String(startFromZero));
+      formData.append('graph_zero_ramp_seconds', String(zeroRampSeconds));
 
       for (const pf of pipePhotos) {
         formData.append('pipe_photos', pf);
@@ -434,6 +438,29 @@ export const NewTestModal: React.FC<NewTestModalProps> = ({ onClose, onSuccess, 
                   <span>Без температуры</span>
                 </label>
                 <small>Кривая температуры рисуется, только если она есть в CSV.</small>
+              </div>
+
+              <div className="graph-temperature-choice" role="group" aria-label="Начало графика">
+                <label className={`graph-temperature-option${startFromZero ? ' selected' : ''}`}>
+                  <input type="checkbox" checked={startFromZero} onChange={(e) => setStartFromZero(e.target.checked)} />
+                  <span>Начинать график с 0</span>
+                </label>
+                {startFromZero && (
+                  <label className="graph-zero-duration">
+                    <span>Плавный подъём: <strong>{zeroRampSeconds} сек.</strong></span>
+                    <input
+                      type="range"
+                      min={10}
+                      max={50}
+                      step={1}
+                      value={zeroRampSeconds}
+                      onChange={(e) => setZeroRampSeconds(Number(e.target.value))}
+                      aria-label="Длительность подъёма от 0, секунды"
+                    />
+                    <span>10–50 сек.</span>
+                  </label>
+                )}
+                <small>Перед первым значением CSV добавляется плавный подъём от 0. Он не входит в расчёты. Если CSV уже начинается с 0, подъём не добавляется.</small>
               </div>
 
               <div className="graph-temperature-choice" role="group" aria-label="Шапка графика">

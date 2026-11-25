@@ -108,6 +108,8 @@ class TestInput:
     plot_temperature: Optional[bool] = None
     # Header lines left out of the graph ("system", "ins_no", "project", "note"). None keeps the config.
     graph_hidden_fields: Optional[List[str]] = None
+    graph_start_from_zero: bool | None = None
+    graph_zero_ramp_seconds: float | None = None
 
 
 @dataclass

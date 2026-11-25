@@ -2515,6 +2515,20 @@ body {
   margin-top: 0.75rem;
 }
 
+.graph-zero-duration {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.graph-zero-duration input {
+  width: 10rem;
+  max-width: 100%;
+  accent-color: var(--accent-cyan);
+}
+
 .graph-temperature-choice-label {
   font-size: 0.8rem;
   color: var(--text-secondary);

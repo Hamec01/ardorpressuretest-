@@ -23,6 +23,19 @@ def checkpoint_index(x_min, minutes: Optional[float]) -> Optional[int]:
     return int(np.argmin(np.abs(x - minutes)))
 
 
+def zero_start_curve(
+    first_minute: float, first_pressure: float, graph_cfg: GraphConfig,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Synthetic display-only lead-in; actual readings and their times stay untouched."""
+    seconds = float(graph_cfg.zero_ramp_seconds)
+    if not np.isfinite(seconds) or not 10 <= seconds <= 50:
+        raise ValueError("Zero-start rise duration must be between 10 and 50 seconds.")
+    if not graph_cfg.start_from_zero or first_pressure <= 0:
+        return np.array([]), np.array([])
+    t = np.linspace(0.0, 1.0, 101)
+    return first_minute - (1.0 - t) * seconds / 60.0, first_pressure * (3 * t**2 - 2 * t**3)
+
+
 def build_pressure_graph(
     df: pd.DataFrame,
     analysis: AnalysisResult,
@@ -33,6 +46,10 @@ def build_pressure_graph(
     """
     Generates and saves a high-quality PNG pressure trend graph matching the required format.
     """
+    x_min = df["time_rel_min"].values
+    y_press = df["pressure_bar"].values
+    ramp_x, ramp_y = zero_start_curve(float(x_min[0]), float(y_press[0]), graph_cfg)
+    has_ramp = len(ramp_x) > 0
     plt.rcParams["font.sans-serif"] = ["Arial", "DejaVu Sans", "Liberation Sans", "sans-serif"]
     plt.rcParams["axes.unicode_minus"] = False
 
@@ -43,9 +60,6 @@ def build_pressure_graph(
     # Main graph coordinates: left=0.08, bottom=0.20, width=0.74, height=0.62
     ax = fig.add_axes([0.08, 0.20, 0.74, 0.60])
 
-    x_min = df["time_rel_min"].values
-    y_press = df["pressure_bar"].values
-
     # Determine Y-axis limits: Auto-scale to fit fluctuations if limits not set or are 0/160 by default
     # But if the user overrides with specific ones, we respect them.
     # To show fluctuations, we zoom in to data bounds with 5% margins if not using a fixed range.
@@ -53,10 +67,14 @@ def build_pressure_graph(
         ax.set_ylim(graph_cfg.y_min_bar, graph_cfg.y_max_bar)
     else:
         p_min, p_max = np.min(y_press), np.max(y_press)
+        if has_ramp:
+            p_min = min(0.0, p_min)
         p_range = p_max - p_min
         if p_range < 0.1:
             p_range = 1.0  # Avoid division by zero/extreme zoom for flat lines
         ax.set_ylim(max(0, p_min - 0.1 * p_range), p_max + 0.1 * p_range)
+    if has_ramp:
+        ax.set_ylim(min(0.0, ax.get_ylim()[0]), ax.get_ylim()[1])
 
     # Highlight hold period if enabled
     if graph_cfg.show_hold_period and analysis.hold_stats and analysis.hold_stats.enabled:
@@ -66,6 +84,13 @@ def build_pressure_graph(
 
     # Main pressure line
     line_press, = ax.plot(x_min, y_press, color="#0055b8", linewidth=2.0, label="Pressure / bar")
+    line_ramp = None
+    if has_ramp:
+        line_ramp, = ax.plot(
+            ramp_x, ramp_y, color="#0055b8", linewidth=2.0, linestyle="-",
+            label=f"Added rise ({graph_cfg.zero_ramp_seconds:g} s)\nNot measured",
+        )
+        ax.set_xlim(left=float(ramp_x[0]))
     ax.set_ylabel("Pressure, bar", fontsize=11, labelpad=10)
     ax.grid(True, linestyle=":", alpha=0.6)
 
@@ -159,6 +184,12 @@ def build_pressure_graph(
         tick_labels = [f"{m:.2f} min" for m in x_min[tick_indices]]
         
     ax.set_xticklabels(tick_labels, rotation=90, fontsize=8)
+    if has_ramp:
+        # Reserve a tick for the added interval without obscuring the first CSV timestamp.
+        ticks = np.concatenate(([ramp_x[0]], x_min[tick_indices[1:]]))
+        labels = [f"Start −{graph_cfg.zero_ramp_seconds:g} s (added)", *list(tick_labels)[1:]]
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(labels, rotation=90, fontsize=8)
 
     # Limit lines
     if graph_cfg.show_limits and analysis.hold_stats and analysis.hold_stats.enabled:
@@ -181,6 +212,8 @@ def build_pressure_graph(
 
     # Legends combined
     lines = [line_press]
+    if line_ramp:
+        lines.append(line_ramp)
     if line_temp:
         lines.append(line_temp)
     labels = [l.get_label() for l in lines]

@@ -56,6 +56,9 @@ class GraphConfig:
     show_pipe_logs: bool = False
     pipe_logs_text: str = ""
     plot_temperature: bool = True
+    # Display-only ramp before the first CSV reading; never used in analysis.
+    start_from_zero: bool = False
+    zero_ramp_seconds: float = 30.0
     # Header lines left out of the graph: any of "system", "ins_no", "project", "note".
     hidden_header_fields: List[str] = field(default_factory=list)
     # Mark the pressure this many minutes after the start (None or 0 = no mark).
@@ -174,6 +177,10 @@ def parse_config_dict(data: Dict[str, Any]) -> AppConfig:
             cfg.graph.pipe_logs_text = str(g_data["tube_logs_text"])
         if "plot_temperature" in g_data:
             cfg.graph.plot_temperature = bool(g_data["plot_temperature"])
+        if "start_from_zero" in g_data:
+            cfg.graph.start_from_zero = bool(g_data["start_from_zero"])
+        if "zero_ramp_seconds" in g_data:
+            cfg.graph.zero_ramp_seconds = float(g_data["zero_ramp_seconds"])
         if "wika_nr_list" in g_data and isinstance(g_data["wika_nr_list"], list):
             cfg.graph.wika_nr_list = [str(x) for x in g_data["wika_nr_list"]]
         if "wika_nr_active" in g_data:

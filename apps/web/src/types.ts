@@ -29,6 +29,9 @@ export interface TestRevision {
     plot_temperature?: boolean;
     /** Header lines left out of the graph: system, ins_no, project, note. */
     graph_hidden_fields?: string[];
+    /** Display-only synthetic lead-in; missing means disabled. */
+    graph_start_from_zero?: boolean;
+    graph_zero_ramp_seconds?: number;
   };
   metrics_json: {
     start_time?: string | null;

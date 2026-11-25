@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from wika_report.analyzer import analyze_data
 from wika_report.column_detector import detect_columns
-from wika_report.config import AppConfig
+from wika_report.config import AppConfig, GraphConfig
 from wika_report.csv_reader import read_wika_csv
 from wika_report.data_cleaner import clean_and_normalize_data
 from wika_report.excel_report import build_excel_report
@@ -73,13 +73,19 @@ def graph_config_for_log(
     config: AppConfig,
     plot_temperature: Optional[bool] = None,
     hidden_header_fields: Optional[List[str]] = None,
-):
+    start_from_zero: bool | None = None,
+    zero_ramp_seconds: float | None = None,
+) -> GraphConfig:
     """Graph settings with the per-log choices applied (None keeps the config value)."""
     changes = {}
     if plot_temperature is not None:
         changes["plot_temperature"] = bool(plot_temperature)
     if hidden_header_fields is not None:
         changes["hidden_header_fields"] = normalize_hidden_header_fields(hidden_header_fields)
+    if start_from_zero is not None:
+        changes["start_from_zero"] = bool(start_from_zero)
+    if zero_ramp_seconds is not None:
+        changes["zero_ramp_seconds"] = float(zero_ramp_seconds)
     return replace(config.graph, **changes) if changes else config.graph
 
 
@@ -89,14 +95,19 @@ def metadata_hidden_header_fields(metadata: dict) -> Optional[List[str]]:
     return None if value is None else normalize_hidden_header_fields(value)
 
 
-def metadata_plot_temperature(metadata: dict) -> Optional[bool]:
-    """Read the stored temperature choice of a log; logs made before the choice existed give None."""
-    value = (metadata or {}).get("plot_temperature")
+def metadata_optional_bool(metadata: dict, key: str) -> bool | None:
+    """Read an optional stored boolean, including legacy string values."""
+    value = (metadata or {}).get(key)
     if value is None or value == "":
         return None
     if isinstance(value, str):
         return value.strip().lower() in ("1", "true", "yes", "on")
     return bool(value)
+
+
+def metadata_plot_temperature(metadata: dict) -> Optional[bool]:
+    """Read the stored temperature choice; None preserves the config for old logs."""
+    return metadata_optional_bool(metadata, "plot_temperature")
 
 
 def render_graph_png(
@@ -140,6 +151,8 @@ def render_graph_png(
             config,
             plot_temperature=metadata_plot_temperature(metadata),
             hidden_header_fields=metadata_hidden_header_fields(metadata),
+            start_from_zero=metadata_optional_bool(metadata, "graph_start_from_zero"),
+            zero_ramp_seconds=metadata.get("graph_zero_ramp_seconds"),
         ),
         output_path=output_path,
         filename_title=csv_path.name,
@@ -259,6 +272,8 @@ def process_test_input(
             config,
             plot_temperature=test_input.plot_temperature,
             hidden_header_fields=test_input.graph_hidden_fields,
+            start_from_zero=test_input.graph_start_from_zero,
+            zero_ramp_seconds=test_input.graph_zero_ramp_seconds,
         )
         build_pressure_graph(
             df=df_clean,
@@ -356,6 +371,8 @@ def process_test_input(
             "pipe_numbers": analysis.custom_meta.pipe_numbers,
             "plot_temperature": bool(graph_cfg.plot_temperature),
             "graph_hidden_fields": list(graph_cfg.hidden_header_fields or []),
+            "graph_start_from_zero": graph_cfg.start_from_zero,
+            "graph_zero_ramp_seconds": graph_cfg.zero_ramp_seconds,
         }
         manifest_metrics = {
             "start_time": analysis.start_time.isoformat() if analysis.start_time else None,
